@@ -14,6 +14,20 @@ node_modules/
 files/
 .netlify/
 
+# Docs and meta not needed for deploys
+docs/
+issues/
+tests/
+scripts/
+agents.md
+CHANGELOG.md
+CONTRIBUTING.md
+CODE_OF_CONDUCT.md
+SECURITY.md
+RELEASE_NOTES.md
+BETA_DOCUMENTATION.md
+LAZY_EXPLANATIONS.md
+
 # Tests and internal tooling (uncomment if desired)
 # tests/
 # scripts/
