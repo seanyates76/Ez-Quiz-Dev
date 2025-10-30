@@ -1,0 +1,73 @@
+name: Publish Public Mirror
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync-to-public:
+    name: Sync to Ez-Quiz-App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checkout public repo (Ez-Quiz-App)
+        uses: actions/checkout@v4
+        with:
+          repository: seanyates76/Ez-Quiz-App
+          path: public-repo
+          ssh-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
+          fetch-depth: 0
+
+      - name: Prepare filtered contents
+        run: |
+          set -euo pipefail
+          # Create a working directory with only the files we want to publish
+          mkdir -p filtered
+          # Use rsync to copy everything except ignored patterns and VCS files
+          RSYNC_EXCLUDES=(
+            "--exclude=.git/"
+            "--exclude=.github/workflows/publish-public.yml"
+          )
+          if [ -f .publicignore ]; then
+            RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
+          fi
+          rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
+
+      - name: Update public repo working tree
+        run: |
+          set -euo pipefail
+          # Keep the public repo's .git dir, wipe tracked contents
+          find public-repo -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          # Copy filtered files into the public repo
+          rsync -a --delete --exclude=.git/ filtered/ public-repo/
+
+      - name: Commit and push changes
+        working-directory: public-repo
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to publish."
+            exit 0
+          fi
+          git commit -m "Publish from private repo: ${GITHUB_SHA}"
+          # Ensure main exists and push
+          if ! git rev-parse --verify main >/dev/null 2>&1; then
+            git branch -M main
+          fi
+          git push origin HEAD:main
+
