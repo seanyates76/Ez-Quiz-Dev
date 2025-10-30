@@ -17,7 +17,9 @@ jobs:
     name: Sync to Ez-Quiz-App
     runs-on: ubuntu-latest
     steps:
+      # Optional: load SSH deploy key if provided
       - name: Start SSH agent (deploy key)
+        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY != '' }}
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
@@ -27,12 +29,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Checkout public repo (Ez-Quiz-App)
+      # If using SSH deploy key
+      - name: Checkout public repo (SSH)
+        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY != '' }}
         uses: actions/checkout@v4
         with:
           repository: seanyates76/Ez-Quiz-App
           path: public-repo
           ssh-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
+          fetch-depth: 0
+
+      # Else checkout via HTTPS (public repo; read-only is fine)
+      - name: Checkout public repo (HTTPS)
+        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY == '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: seanyates76/Ez-Quiz-App
+          path: public-repo
           fetch-depth: 0
 
       - name: Prepare filtered contents
@@ -60,14 +73,23 @@ jobs:
 
       - name: Commit and push changes
         working-directory: public-repo
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Ensure SSH known_hosts has GitHub
           mkdir -p ~/.ssh && ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
-          # Ensure origin uses SSH so the deploy key is used for push
-          git remote set-url origin git@github.com:seanyates76/Ez-Quiz-App.git
+          # Prefer SSH if deploy key is present; otherwise use HTTPS with token
+          if [ -n "${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}" ]; then
+            git remote set-url origin git@github.com:seanyates76/Ez-Quiz-App.git
+          else
+            if [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
+              echo "No deploy key and no PUBLIC_REPO_TOKEN provided." >&2
+              exit 2
+            fi
+            git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
+          fi
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to publish."
