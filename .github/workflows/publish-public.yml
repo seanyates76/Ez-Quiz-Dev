@@ -17,6 +17,11 @@ jobs:
     name: Sync to Ez-Quiz-App
     runs-on: ubuntu-latest
     steps:
+      - name: Start SSH agent (deploy key)
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
+
       - name: Checkout private repo
         uses: actions/checkout@v4
         with:
@@ -59,6 +64,10 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Ensure SSH known_hosts has GitHub
+          mkdir -p ~/.ssh && ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+          # Ensure origin uses SSH so the deploy key is used for push
+          git remote set-url origin git@github.com:seanyates76/Ez-Quiz-App.git
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to publish."
@@ -70,4 +79,3 @@ jobs:
             git branch -M main
           fi
           git push origin HEAD:main
-
