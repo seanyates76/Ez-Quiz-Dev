@@ -100,4 +100,14 @@ jobs:
           if ! git rev-parse --verify main >/dev/null 2>&1; then
             git branch -M main
           fi
-          git push origin HEAD:main
+          # Try push; if SSH fails and a token is available, fall back to HTTPS
+          if ! git push origin HEAD:main; then
+            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+              echo "SSH push failed; falling back to HTTPS token..."
+              git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
+              git push origin HEAD:main
+            else
+              echo "Push failed and no HTTPS token provided." >&2
+              exit 1
+            fi
+          fi
