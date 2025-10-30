@@ -1,5 +1,8 @@
 name: Publish Mirror (Simple)
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [ "main" ]
@@ -14,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout private repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Start SSH agent (deploy key)
-        uses: webfactory/ssh-agent@v0.7.0
+        uses: webfactory/ssh-agent@836c84ec59a0e7bc0eabc79988384eb567561ee2 # v0.7.0
         with:
           ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
 
