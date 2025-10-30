@@ -29,24 +29,27 @@ jobs:
         with:
           fetch-depth: 0
 
-      # If using SSH deploy key
-      - name: Checkout public repo (SSH)
-        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY != '' }}
-        uses: actions/checkout@v4
-        with:
-          repository: seanyates76/Ez-Quiz-App
-          path: public-repo
-          ssh-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
-          fetch-depth: 0
-
-      # Else checkout via HTTPS (public repo; read-only is fine)
-      - name: Checkout public repo (HTTPS)
-        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY == '' }}
-        uses: actions/checkout@v4
-        with:
-          repository: seanyates76/Ez-Quiz-App
-          path: public-repo
-          fetch-depth: 0
+      - name: Init public repo worktree
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          rm -rf public-repo
+          mkdir -p public-repo
+          cd public-repo
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p ~/.ssh && ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+          if [ -n "${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}" ]; then
+            git remote add origin git@github.com:seanyates76/Ez-Quiz-App.git
+          else
+            if [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
+              echo "No deploy key and no PUBLIC_REPO_TOKEN provided." >&2
+              exit 2
+            fi
+            git remote add origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
+          fi
 
       - name: Prepare filtered contents
         run: |
