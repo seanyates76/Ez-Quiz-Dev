@@ -1,0 +1,74 @@
+name: Publish Mirror (Simple)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect deploy key
+        id: detect
+        run: |
+          if [ -n "${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}" ]; then echo "has_key=1" >> "$GITHUB_OUTPUT"; else echo "has_key=0" >> "$GITHUB_OUTPUT"; fi
+
+      - name: Start SSH agent
+        if: ${{ steps.detect.outputs.has_key == '1' }}
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
+
+      - name: Prepare filtered contents
+        run: |
+          set -euo pipefail
+          mkdir -p filtered
+          RSYNC_EXCLUDES=("--exclude=.git/" "--exclude=.github/workflows/publish*.yml")
+          if [ -f .publicignore ]; then RSYNC_EXCLUDES+=("--exclude-from=.publicignore"); fi
+          rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
+
+      - name: Push to Ez-Quiz-App (SSH)
+        if: ${{ steps.detect.outputs.has_key == '1' }}
+        run: |
+          set -euo pipefail
+          mkdir -p public-repo
+          cd public-repo
+          git init
+          git remote add origin git@github.com:seanyates76/Ez-Quiz-App.git
+          git fetch origin main || true
+          git checkout -B main
+          rsync -a --delete --exclude=.git/ ../filtered/ ./
+          git add -A
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Publish from private repo: ${GITHUB_SHA}"
+          git push origin main
+
+      - name: Push to Ez-Quiz-App (HTTPS token)
+        if: ${{ steps.detect.outputs.has_key == '0' }}
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then echo "Missing PUBLIC_REPO_TOKEN" >&2; exit 2; fi
+          mkdir -p public-repo
+          cd public-repo
+          git init
+          git remote add origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
+          git fetch origin main || true
+          git checkout -B main
+          rsync -a --delete --exclude=.git/ ../filtered/ ./
+          git add -A
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Publish from private repo: ${GITHUB_SHA}"
+          git push origin main
+
