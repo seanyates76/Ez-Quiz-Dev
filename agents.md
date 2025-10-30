@@ -120,6 +120,11 @@ Use the local Head coordinator to run sub‑agents, capture artifacts, and (opti
 - App path override: `EZQ_APP_DIR=$(pwd) ../ezq-dev-tools/bin/ezq-head run quick`
 - Apply mode (conflict-sim first): `../ezq-dev-tools/bin/ezq-head apply`
 
+Wrapper:
+- Default tools: /home/arch-bean/Projects/ezq-dev-tools
+- Use wrapper: `./scripts/ezq-head.sh run quick`
+- Override: `EZQ_DEV_TOOLS_DIR=/custom/path ./scripts/ezq-head.sh run quick`
+
 ### Codex bridge (MCP-like toolset)
 
 Codex (CLI) can consume a Context Packet built by the Head and return a JSON summary with proposed patch artifacts. Treat this as a tool, similar in spirit to an MCP action:

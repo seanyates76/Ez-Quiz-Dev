@@ -22,6 +22,14 @@ Testing
 
 Automation & Head CLI (local)
 -----------------------------
+-----------------------------
+
+Dev Tools Wrapper
+------------------
+- Default path: /home/arch-bean/Projects/ezq-dev-tools
+- Run via wrapper: `./scripts/ezq-head.sh run quick`
+- Override path: `EZQ_DEV_TOOLS_DIR=/custom/path ./scripts/ezq-head.sh run quick`
+
 - Tools live in `../ezq-dev-tools`. Install and run quick checks:
   - `cd ../ezq-dev-tools && ./scripts/install.sh`
   - `./bin/ezq-head run quick` (smoke, lint, ui, parser, repo, audit)

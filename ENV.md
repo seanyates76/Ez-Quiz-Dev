@@ -29,3 +29,12 @@ AI Generation providers (optional):
 Notes
 - Update Netlify env vars under Site Settings → Environment.
 - After changing env vars, trigger a redeploy.
+
+Local Dev Tools
+---------------
+- EZQ_DEV_TOOLS_DIR: path to ezq-dev-tools (default: ../ezq-dev-tools)
+- EZQ_APP_DIR: path to this repo when running tools (default: repo root)
+
+Usage:
+- `./scripts/ezq-head.sh run quick`
+- `EZQ_DEV_TOOLS_DIR=/home/arch-bean/Projects/ezq-dev-tools ./scripts/ezq-head.sh run quick`
