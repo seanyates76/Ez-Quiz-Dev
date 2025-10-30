@@ -11,6 +11,7 @@ Highlights
 - Clean, responsive UI with an interactive Editor + live Mirror
 - Results you can trust: color‑coded answers, retake full or missed only
 - Installable PWA with offline shell and cache‑safe updates
+- Quiz length capped at 30 for fast, focused sessions
 - Privacy‑first: no tracking; AI calls only when you opt in
 - Accessible: proper semantics, focus rings, and keyboard flows
 
@@ -47,6 +48,10 @@ Environment
 -----------
 - `AI_PROVIDER`: `gemini`, `openai`, or `echo` (dev)
 - Provider keys as needed; see `ENV.md` for full list
+
+Configuration
+-------------
+- Adjust the quiz length cap by setting `window.__EZQ__.MAX_QUESTIONS` on the client or configuring `GENERATE_CLIENT_MAX` / `GENERATE_MAX_COUNT` for the Netlify Functions.
 
 Developing
 ----------

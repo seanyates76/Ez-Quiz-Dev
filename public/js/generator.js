@@ -1,11 +1,12 @@
 import { S } from './state.js';
-import { $, byQSA, mmSsToMs } from './utils.js';
+import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.19';
+import { generateWithAI } from './api.js?v=1.5.21';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind } from './file-type-validation.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.19';
+import { announce } from './a11y-announcer.js?v=1.5.21';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.21';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
@@ -16,7 +17,7 @@ let __topicAffixDragHandle = null;
 export function runParseFlow(sourceText, topicLabel, fullTitle){
   const mirror = $('mirror');
   const startBtn = $('startBtn');
-  const { questions, errors } = parseEditorInput(sourceText);
+  const { questions, errors, error: limitError } = parseEditorInput(sourceText);
   S.quiz.questions = questions;
   // Preserve the full original question set for future full retakes
   S.quiz.originalQuestions = Array.isArray(questions) ? questions.slice() : [];
@@ -34,15 +35,31 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
   try{ localStorage.setItem('ezq.last', String(sourceText||'')); }catch{}
 
   const statusBox = $('status');
-  if(errors.length){
-    statusBox && (statusBox.textContent = `Parsed ${questions.length} question(s). ${errors.length} error(s). ${errors.slice(0,5).join(' | ')}`);
-    try{ const pe = document.getElementById('parseErrors'); if(pe){ pe.textContent = errors.join(' | '); pe.classList.remove('visually-hidden'); } }catch{}
+  const firstErrors = errors.slice(0, 5);
+  const parseErrorMessages = [];
+  if (limitError) {
+    parseErrorMessages.push(limitError);
+    announce(limitError, 'assertive');
   }
-  else {
-    statusBox && (statusBox.textContent = `Parsed ${questions.length} question(s).`);
-    try{ const pe = document.getElementById('parseErrors'); if(pe){ pe.textContent = ''; pe.classList.add('visually-hidden'); } }catch{}
-  }
-  if(startBtn) startBtn.disabled = questions.length === 0;
+  if (errors.length) parseErrorMessages.push(...errors);
+  const summary = errors.length
+    ? `Parsed ${questions.length} question(s). ${errors.length} error(s). ${firstErrors.join(' | ')}`
+    : `Parsed ${questions.length} question(s).`;
+  const statusMessage = limitError ? `${summary} ${limitError}`.trim() : summary;
+  statusBox && (statusBox.textContent = statusMessage);
+  try {
+    const pe = document.getElementById('parseErrors');
+    if (pe) {
+      if (parseErrorMessages.length) {
+        pe.textContent = parseErrorMessages.join(' | ');
+        pe.classList.remove('visually-hidden');
+      } else {
+        pe.textContent = '';
+        pe.classList.add('visually-hidden');
+      }
+    }
+  } catch {}
+  if(startBtn) startBtn.disabled = questions.length === 0 || !!limitError;
 }
 
 export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
@@ -65,6 +82,38 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const editor = $('editor');
   const mirror = $('mirror');
   const statusBox = $('status');
+
+  function updateCountHint(){
+    const max = getMaxQuestions();
+    try {
+      if (countInput) {
+        countInput.setAttribute('max', String(max));
+        countInput.setAttribute('aria-describedby', 'genCountHint');
+      }
+      const hint = document.getElementById('genCountHint');
+      if (hint) {
+        hint.textContent = `Max ${max} questions`;
+      }
+    } catch {}
+  }
+
+  function readGeneratorForm(){
+    const el = countInput || document.getElementById('countInput');
+    const fallbackCount = clampCount(el?.defaultValue ?? 10);
+    const raw = el ? el.value : '';
+    const count = clampCount(raw, { fallback: fallbackCount });
+    updateCountHint();
+    if (el && String(count) !== String(raw)) {
+      el.value = String(count);
+    }
+    return {
+      topic: (topicInput?.value || '').trim(),
+      difficulty: getDifficultyKey(),
+      count
+    };
+  }
+
+  updateCountHint();
 
   const loadBtn = $('loadBtn');
   const fileInput = $('fileInput');
@@ -432,17 +481,13 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
   // Track last generated params and "dirty since generation" state
   function getParamsSnapshot(){
-    const topicRaw = (topicInput?.value || '').trim();
-    const topic = topicRaw || 'General knowledge';
-    let count = parseInt((countInput?.value || '10'), 10);
-    if(!Number.isFinite(count)) count = 10;
-    count = Math.max(1, Math.min(50, count));
-    const difficulty = getDifficultyKey();
-    return { topic, count, difficulty };
+    const form = readGeneratorForm();
+    const topic = form.topic || 'General knowledge';
+    return { topic, count: form.count, difficulty: form.difficulty };
   }
   function setLastGen(params){
     const ui = (window.EZQ.ui = window.EZQ.ui || {});
-    ui.lastGeneratedParams = { topic: params.topic, count: params.count, difficulty: params.difficulty };
+    ui.lastGeneratedParams = { topic: params.topic, count: clampCount(params.count), difficulty: params.difficulty };
     ui.genDirty = false;
     // Reset primary according to layout state when not dirty
     setPrimaryAction();
@@ -504,19 +549,19 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const snap = getParamsSnapshot();
       const topicRaw = (topicInput?.value || '').trim();
       const topic = snap.topic; if(!topicRaw){ statusBox && (statusBox.textContent = 'Using default topic: General knowledge'); }
-      let count = snap.count;
       const types = [ qtMC?.checked ? 'MC':null, qtTF?.checked? 'TF':null, qtYN?.checked? 'YN':null, qtMT?.checked? 'MT':null ].filter(Boolean);
       const difficulty = getDifficultyKey();
+      const payload = buildGeneratorPayload({ topic, difficulty, count: snap.count });
       try{
         statusBox && (statusBox.textContent = 'Generating via AI…');
         generateBtn.disabled = true; showVeil(Math.floor(Math.random()*MESSAGES.length));
-        const out = await generateWithAI(topic, count, { types, difficulty });
+        const out = await generateWithAI(payload.topic, payload.count, { types, difficulty: payload.difficulty });
         const lines = out && out.lines || '';
         if(!lines){ statusBox && (statusBox.textContent = 'AI did not return any lines. Try again or use the Prompt Builder.'); generateBtn.disabled = false; hideVeil('Nothing yet…'); return; }
         setEditorText(lines); try{ setMirrorVisible(true); }catch{}
         const title = (out && out.title) ? out.title : '';
-        runParseFlow(lines, topic, title);
-        setLastGen({ topic, count, difficulty });
+        runParseFlow(lines, payload.topic, title);
+        setLastGen(payload);
         setPrimaryAction('start');
         if (S.quiz.questions && S.quiz.questions.length){ syncSettingsFromUI(); beginQuiz(); }
       }catch(err){
@@ -533,23 +578,23 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const snap = getParamsSnapshot();
     const topicRaw = (topicInput?.value || '').trim();
     const topic = snap.topic; if(!topicRaw){ statusBox && (statusBox.textContent = 'Using default topic: General knowledge'); }
-    let count = snap.count;
     // Gather options
     const types = [ qtMC?.checked ? 'MC':null, qtTF?.checked? 'TF':null, qtYN?.checked? 'YN':null, qtMT?.checked? 'MT':null ].filter(Boolean);
     const difficulty = getDifficultyKey();
+    const payload = buildGeneratorPayload({ topic, difficulty, count: snap.count });
     try{
       statusBox && (statusBox.textContent = 'Generating via AI…');
       generateBtn.disabled = true;
       showVeil(Math.floor(Math.random()*MESSAGES.length));
-      const out = await generateWithAI(topic, count, { types, difficulty });
+      const out = await generateWithAI(payload.topic, payload.count, { types, difficulty: payload.difficulty });
       const lines = out && out.lines || '';
       if(!lines){ statusBox && (statusBox.textContent = 'AI did not return any lines. Try again or use the Prompt Builder.'); generateBtn.disabled = false; hideVeil('Nothing yet…'); return; }
       setEditorText(lines); /* mirror stays hidden by default */
       // Auto-show Mirror when content exists so it’s visible on mobile too
       try{ setMirrorVisible(true); }catch{}
       const title = (out && out.title) ? out.title : '';
-      runParseFlow(lines, topic, title);
-      setLastGen({ topic, count, difficulty });
+      runParseFlow(lines, payload.topic, title);
+      setLastGen(payload);
       // After (re)generation completes
       if(mode==='start-new'){
         if (S.quiz.questions && S.quiz.questions.length){ syncSettingsFromUI(); beginQuiz(); }
@@ -674,19 +719,34 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   function loadDefaults(){
     try{ const raw=localStorage.getItem(STORAGE_KEYS.defaults); if(!raw) return null; const obj=JSON.parse(raw); return obj && typeof obj==='object' ? obj : null; }catch{ return null; }
   }
-  function saveDefaults(obj){ try{ localStorage.setItem(STORAGE_KEYS.defaults, JSON.stringify(obj||{})); statusBox && (statusBox.textContent='Defaults saved.'); }catch{} }
+  function saveDefaults(obj){
+    try{
+      if(!obj || typeof obj!=='object'){
+        localStorage.setItem(STORAGE_KEYS.defaults, JSON.stringify({}));
+        return;
+      }
+      const { count, ...rest } = obj;
+      const safeCount = clampCount(count);
+      localStorage.setItem(STORAGE_KEYS.defaults, JSON.stringify({ ...rest, count: safeCount }));
+      statusBox && (statusBox.textContent='Defaults saved.');
+    }catch{}
+  }
   function clearDefaults(){ try{ localStorage.removeItem(STORAGE_KEYS.defaults); statusBox && (statusBox.textContent='Defaults cleared.'); }catch{} }
   function getCurrentGenDefaults(){
-    let count = parseInt(countInput?.value||'10',10); if(!Number.isFinite(count)) count=10; count=Math.max(1, Math.min(200, count));
-    const difficulty = getDifficultyKey();
+    const form = readGeneratorForm();
     const types = { MC: !!qtMC?.checked, TF: !!qtTF?.checked, YN: !!qtYN?.checked, MT: !!qtMT?.checked };
-    return { count, difficulty, types };
+    return { count: form.count, difficulty: form.difficulty, types };
   }
   function applyDefaultsToUI(){
-    const d = loadDefaults(); if(!d) return;
-    if(typeof d.count==='number' && countInput){ countInput.value = String(Math.max(1, Math.min(200, d.count))); }
+    const d = loadDefaults();
+    if(!d){ updateCountHint(); return; }
+    if(typeof d.count==='number' && countInput){
+      countInput.value = String(clampCount(d.count));
+      updateCountHint();
+    }
     if(typeof d.difficulty==='string'){ setDifficultyValue(d.difficulty); }
     if(d.types){ if(qtMC) qtMC.checked = !!d.types.MC; if(qtTF) qtTF.checked = !!d.types.TF; if(qtYN) qtYN.checked = !!d.types.YN; if(qtMT) qtMT.checked = !!d.types.MT; }
+    updateCountHint();
   }
   // Apply on init
   applyDefaultsToUI();
@@ -704,9 +764,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   function adjustCount(delta){
     if(!countInput) return;
     const current = parseInt(countInput.value, 10);
-    let next = Number.isFinite(current) ? current + delta : delta;
-    next = Math.max(1, Math.min(200, next));
+    const base = Number.isFinite(current) ? current + delta : delta;
+    const next = clampCount(base);
     countInput.value = String(next);
+    updateCountHint();
+    markDirtyIfChanged();
   }
   countUpBtn?.addEventListener('click', ()=> adjustCount(1));
   countDownBtn?.addEventListener('click', ()=> adjustCount(-1));

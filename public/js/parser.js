@@ -1,7 +1,6 @@
-import { normalizeLettersToIndexes } from './utils.js';
+import { normalizeLettersToIndexes, getMaxQuestions } from './utils.js';
 
-export function parseEditorInput(text){
-  const lines=(text||'').split('\n').map(l=>l.trim()).filter(l=>l.length);
+function parseLines(lines){
   const questions=[], errors=[];
   const MC_RE=/^MC\|(.*)\|(.+?)\|([A-Za-z](?:\s*,\s*[A-Za-z])*)$/i;
   const TF_RE=/^TF\|(.*)\|(T|F)$/i;
@@ -49,6 +48,23 @@ export function parseEditorInput(text){
     }
     errors.push(`Line ${idx}: Unknown or invalid format`);
   }
-  return {questions, errors};
+  return { questions, errors };
+}
+
+export function parseLinesToState(lines){
+  const parsed = parseLines(lines || []);
+  const max = getMaxQuestions();
+  if(parsed.questions.length > max){
+    return {
+      ...parsed,
+      error: `Too many questions (${parsed.questions.length}). Limit is ${max}. Trim your list or split into multiple quizzes.`
+    };
+  }
+  return parsed;
+}
+
+export function parseEditorInput(text){
+  const lines=(text||'').split('\n').map(l=>l.trim()).filter(l=>l.length);
+  return parseLinesToState(lines);
 }
 
