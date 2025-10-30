@@ -12,6 +12,7 @@ node_modules/
 .artifacts/
 .ezq/
 files/
+.netlify/
 
 # Tests and internal tooling (uncomment if desired)
 # tests/

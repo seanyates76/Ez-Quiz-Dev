@@ -1,8 +1,6 @@
-name: Publish Public Mirror
+name: Publish Public Mirror (legacy)
 
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 concurrency:
@@ -17,9 +15,18 @@ jobs:
     name: Sync to Ez-Quiz-App
     runs-on: ubuntu-latest
     steps:
+      - name: Detect deploy key presence
+        id: detect
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}" ]; then
+            echo "key=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "key=0" >> "$GITHUB_OUTPUT"
+          fi
       # Optional: load SSH deploy key if provided
       - name: Start SSH agent (deploy key)
-        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY != '' }}
+        if: ${{ steps.detect.outputs.key == '1' }}
         uses: webfactory/ssh-agent@v0.7.0
         with:
           ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
@@ -31,7 +38,7 @@ jobs:
 
       # Checkout the public repo using SSH if deploy key is present
       - name: Checkout public repo (SSH)
-        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY != '' }}
+        if: ${{ steps.detect.outputs.key == '1' }}
         uses: actions/checkout@v4
         with:
           repository: seanyates76/Ez-Quiz-App
@@ -41,7 +48,7 @@ jobs:
 
       # Otherwise checkout via HTTPS (read-only); push will use PAT later
       - name: Checkout public repo (HTTPS)
-        if: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY == '' }}
+        if: ${{ steps.detect.outputs.key == '0' }}
         uses: actions/checkout@v4
         with:
           repository: seanyates76/Ez-Quiz-App
@@ -82,7 +89,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p ~/.ssh && ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
           # Prefer SSH if deploy key is present; otherwise use HTTPS with token
-          if [ -n "${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}" ]; then
+          if [ "${{ steps.detect.outputs.key }}" = "1" ]; then
             git remote set-url origin git@github.com:seanyates76/Ez-Quiz-App.git
           else
             if [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
@@ -101,12 +108,12 @@ jobs:
           if ! git rev-parse --verify main >/dev/null 2>&1; then
             git branch -M main
           fi
-          # Try push; if SSH fails and a token is available, fall back to HTTPS
-          if ! git push origin HEAD:main; then
+          # Try push (force-with-lease for mirror semantics); if SSH fails and a token is available, fall back to HTTPS
+          if ! git push --force-with-lease origin HEAD:main; then
             if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
               echo "SSH push failed; falling back to HTTPS token..."
               git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
-              git push origin HEAD:main
+              git push --force-with-lease origin HEAD:main
             else
               echo "Push failed and no HTTPS token provided." >&2
               exit 1
