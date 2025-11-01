@@ -1,6 +1,6 @@
 {
   "name": "ez-quiz-app",
-  "version": "1.5.0-beta.12",
+  "version": "3.4.0",
   "private": true,
   "license": "MIT",
   "description": "Static PWA + Netlify Functions for EZ Quiz",

@@ -165,3 +165,16 @@ Changelog
 - FAQ modal: single scrollbar; Close button always visible.
 - Security: no innerHTML for user content; tightened CSP; no inline scripts.
 - PWA: relative paths; SW cache bumps; Netlify headers + HTTPS redirects.
+
+## [3.4.0] - 2025-11-01
+### Added
+- README restored to lean layout with live Netlify deploy badge and upstream synced mirror badge.
+
+### Changed
+- Security hardening for GitHub Actions: least privilege tokens, pinned actions to immutable SHAs.
+- SECURITY.md expanded with advisory link, contact email, and response timelines.
+- Mirror workflows cleaned up for safer sync to public repo.
+- Minor UI text and docs polish.
+
+### Fixed
+- Version mismatch risks in footer and docs by aligning package.json, footer, and release tag.
