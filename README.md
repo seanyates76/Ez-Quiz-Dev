@@ -1,76 +1,102 @@
-EZ Quiz — Beautiful, Fast, Privacy‑First Quizzes
-================================================
+Ez-Quiz App
 
-[![Live](https://img.shields.io/badge/demo-ez--quiz.app-0b7fff)](https://ez-quiz.app/) [![PWA](https://img.shields.io/badge/PWA-installable-blueviolet)](#) [![Netlify Status](https://api.netlify.com/api/v1/badges/35b8697e-f228-4b5f-8065-6286e05246c8/deploy-status)](https://app.netlify.com/sites/ez-quiz/deploys)
+      
 
-Create and play beautiful quizzes in seconds. Mobile‑first, keyboard‑friendly, and open source. Works great online (AI‑powered generation) and gracefully offline.
+Create and play quizzes in seconds with a clean, responsive interface. Keyboard-friendly and offline-ready.
 
-Highlights
----------
-- Instant quizzes from a topic or pasted text; Multiple Choice, True/False, Yes/No, Matching
-- Clean, responsive UI with an interactive Editor + live Mirror
-- Results you can trust: color‑coded answers, retake full or missed only
-- Installable PWA with offline shell and cache‑safe updates
-- Privacy‑first: no tracking; AI calls only when you opt in
-- Accessible: proper semantics, focus rings, and keyboard flows
+Features
 
-Live + Repos
-------------
-- App: https://ez-quiz.app/
-- Public repo (mirror): https://github.com/seanyates76/Ez-Quiz-App
+Generate from a topic or create your own quiz
 
-One‑click Deploy
-----------------
-[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/seanyates76/Ez-Quiz-App)
+Multiple formats: Multiple Choice, True/False, Yes/No, Matching
 
-Quick Start (Local)
--------------------
-- Static preview (no functions): `cd public && python3 -m http.server 8000`
-- Full stack (Netlify Functions): `netlify dev` from the repo root
-  - No keys? Set `AI_PROVIDER=echo` to run without contacting AI providers
-- Tests: `npm i && npm test` (Node + jsdom); UI check: `npm run ui:check`
+Clear results with retake options (full or missed)
 
-Architecture at a Glance
-------------------------
-- Client: `public/` vanilla modules (`js/*.js`) + tokens in `styles.css`
-- Serverless: Netlify Functions in `netlify/functions/*`
-- Generation providers: `netlify/functions/lib/providers.js` (Gemini/OpenAI) via a shared prompt; `AI_PROVIDER=echo` for offline/dev
-- Beta gating: `requireBeta` on the server, `flags.js` on the client
+Installable PWA with cache-safe updates
 
-Key Endpoints (Netlify Functions)
----------------------------------
-- `/.netlify/functions/generate-quiz` → generate from topic/seed text
-- `/.netlify/functions/send-feedback` → email feedback (nodemailer)
-- `/.netlify/functions/health` → quick health probe
+Accessibility by default
+
+Privacy first: no tracking, AI only when you choose
+
+
+Live
+
+https://ez-quiz.app/
+
+
+Quick Start
+
+# Static preview (no functions)
+cd public && python3 -m http.server 8000
+
+# Full stack dev (Netlify functions)
+netlify dev
+# Tip: set AI_PROVIDER=echo to run without provider keys
+
+# Tests and UI snapshots
+npm install
+npm test
+npm run ui:check
+
+Key Endpoints
+
+/.netlify/functions/generate-quiz — generate from topic or seed text
+
+/.netlify/functions/send-feedback — email feedback (nodemailer)
+
+/.netlify/functions/health — health probe
+
 
 Environment
------------
-- `AI_PROVIDER`: `gemini`, `openai`, or `echo` (dev)
-- Provider keys as needed; see `ENV.md` for full list
 
-Developing
-----------
-- Lint/format: `npm run lint` / `npm run fmt:write`
-- UI snapshots: `npm run ui:check` (writes `.artifacts/ui/*`)
-- Local tools: `./scripts/ezq-head.sh run quick` (requires `../ezq-dev-tools`)
+AI_PROVIDER = gemini | openai | echo
 
-Contributing & OSS
-------------------
-- We welcome contributions — please read `CONTRIBUTING.md`
-- Respectful participation is required — see `CODE_OF_CONDUCT.md`
-- Security issues: follow `SECURITY.md`
-- License: MIT (`LICENSE.txt`)
+Provider keys as needed. See ENV.md for details.
 
-Roadmap (Short List)
---------------------
-- Media input (PDF/image) ingestion flow with graceful fallbacks
-- Explain answers UX (graduates from beta) with accessible patterns
-- More DOM/CSS regression checks for toolbar/results layouts
 
-Screenshots
------------
-Add screenshots/GIFs here to showcase the toolbar, editor, and results. For quick local visuals, open `public/ui-kit.html`.
+Tech Stack
 
-Why This Repo Exists
---------------------
-This is the private dev repo that powers the public mirror (`Ez-Quiz-App`). A CI job mirrors a filtered subset of files to keep the public repo lean (no internal scripts/tests), while preserving OSS meta files for eligibility and trust.
+Front end: HTML/CSS/vanilla JS (ES modules), PWA service worker
+
+Back end: Netlify Functions (Node, esbuild)
+
+CI/Security: GitHub Actions, CodeQL, OpenSSF Scorecard, Dependabot
+
+
+Under the Hood
+
+Lightweight, framework-free front end
+
+Versioned service worker with safe updates
+
+Beta flags: server requireBeta, client flags.js
+
+Provider selection in netlify/functions/lib/providers.js
+
+
+Contributing & Policies
+
+See CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, SUPPORT.md
+
+Conventional Commits encouraged; commit lint on PRs
+
+License: MIT (LICENSE)
+
+
+Future Updates
+
+Full UI overhaul: clearer layout, balanced spacing, refined theming
+
+Explain feature: AI-powered, non-blocking answer explanations
+
+Media input (PDF/image) with resilient fallbacks
+
+Expanded DOM/CSS regression checks for toolbar and results
+
+
+Contact
+
+Open an issue or email ez.quizapp@gmail.com.
+
+Trust Matters
+Zero tracking. Zero data sales. AI works on your terms — never in the background.
