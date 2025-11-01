@@ -7,7 +7,7 @@ Ez-Quiz App
 ![Mirror](https://img.shields.io/badge/mirror-automated-blue)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES%20Modules-f7df1e?logo=javascript&logoColor=000&labelColor=f7df1e)
 ![Node.js](https://img.shields.io/badge/Node.js-Functions-3c873a?logo=nodedotjs&logoColor=fff)
-![Netlify](https://img.shields.io/badge/Netlify-Serverless-00ad9f?logo=netlify&logoColor=fff)
+[![Netlify Status](https://api.netlify.com/api/v1/badges/35b8697e-f228-4b5f-8065-6286e05246c8/deploy-status)](https://app.netlify.com/sites/ez-quiz/deploys)
 
 Create and play quizzes in seconds with a clean, responsive interface. Keyboard-friendly and offline-ready.
 
