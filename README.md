@@ -4,7 +4,7 @@ Ez-Quiz App
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/seanyates76/Ez-Quiz-App/badge?style=flat)](https://securityscorecards.dev/viewer/?uri=github.com/seanyates76/Ez-Quiz-App)
 [![License](https://img.shields.io/github/license/seanyates76/Ez-Quiz-App)](LICENSE)
 [![Latest Release](https://img.shields.io/github/v/release/seanyates76/Ez-Quiz-App?include_prereleases)](https://github.com/seanyates76/Ez-Quiz-App/releases)
-![Mirror](https://img.shields.io/badge/mirror-automated-blue)
+![Upstream Synced](https://img.shields.io/badge/Mirror-Upstream%20Synced-blue)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES%20Modules-f7df1e?logo=javascript&logoColor=000&labelColor=f7df1e)
 ![Node.js](https://img.shields.io/badge/Node.js-Functions-3c873a?logo=nodedotjs&logoColor=fff)
 [![Netlify Status](https://api.netlify.com/api/v1/badges/35b8697e-f228-4b5f-8065-6286e05246c8/deploy-status)](https://app.netlify.com/sites/ez-quiz/deploys)
