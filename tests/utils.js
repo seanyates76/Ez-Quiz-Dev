@@ -38,7 +38,10 @@ function loadBrowserModule(relPath, namedExports) {
   const source = readFile(relPath)
     .replace(/export\s+class\s+/g, 'class ')
     .replace(/export\s+async\s+function\s+/g, 'async function ')
-    .replace(/export\s+function\s+/g, 'function ');
+    .replace(/export\s+function\s+/g, 'function ')
+    .replace(/export\s+const\s+/g, 'const ')
+    .replace(/export\s+let\s+/g, 'let ')
+    .replace(/export\s+var\s+/g, 'var ');
   // Evaluate in the current context so browser globals like Blob remain available.
   const factory = new Function(`${source}\nreturn { ${namedExports.join(', ')} };\n//# sourceURL=${absPath}`);
   return factory();

@@ -2,10 +2,66 @@ export const $ = (id) => document.getElementById(id);
 export const byQSA = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
 export function clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }
+
+function readGlobalMaxQuestions() {
+  try {
+    const root = typeof window !== 'undefined' && window
+      ? window
+      : (typeof globalThis !== 'undefined' ? globalThis : null);
+    if (!root) return NaN;
+    const scoped = root.__EZQ__;
+    if (scoped && Number.isFinite(scoped.MAX_QUESTIONS)) {
+      return Math.max(1, Math.trunc(scoped.MAX_QUESTIONS));
+    }
+  } catch {}
+  return NaN;
+}
+
+export function getMaxQuestions() {
+  const configured = readGlobalMaxQuestions();
+  if (Number.isFinite(configured)) return configured;
+  return 30;
+}
+
+export function clampCount(n, options = {}) {
+  const { fallback = null, min = 1 } = options || {};
+  const minValue = Number.isFinite(min) ? Math.max(1, Math.trunc(min)) : 1;
+  const max = Math.max(minValue, getMaxQuestions());
+
+  const useFallback = (value) => {
+    if (!Number.isFinite(value)) return minValue;
+    const intVal = Math.trunc(value);
+    return Math.min(max, Math.max(minValue, intVal));
+  };
+
+  if (n === '' || n === null || n === undefined) {
+    if (Number.isFinite(fallback)) {
+      return useFallback(fallback);
+    }
+    return minValue;
+  }
+
+  if (typeof n === 'string' && n.trim() === '') {
+    if (Number.isFinite(fallback)) {
+      return useFallback(fallback);
+    }
+    return minValue;
+  }
+
+  const x = Number(n);
+  if (!Number.isFinite(x)) {
+    if (Number.isFinite(fallback)) {
+      return useFallback(fallback);
+    }
+    return minValue;
+  }
+
+  return useFallback(x);
+}
 export function pad2(n){ return String(n).padStart(2,'0'); }
 export function formatDuration(ms){ if(!ms || ms < 0) ms = 0; const total = Math.floor(ms/1000); const mm = Math.floor(total/60); const ss = total % 60; return `${pad2(mm)}:${pad2(ss)}`; }
 export function arraysEqual(a,b){ if(!Array.isArray(a)||!Array.isArray(b)||a.length!==b.length) return false; for(let i=0;i<a.length;i++){ if(a[i]!==b[i]) return false; } return true; }
-export function escapeHTML(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll('&#39;','&#39;'); }
+export function escapeHTML(s){ return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
 export function normalizeLettersToIndexes(letterStr){ if(!letterStr) return []; return letterStr.split(',').map(s=>s.trim()).filter(Boolean).map(ch => ch.toUpperCase().charCodeAt(0) - 65).filter(n => n >= 0); }
 export function indexesToLetters(idxs){ return (idxs||[]).map(i => String.fromCharCode(65 + i)); }
 export function msToMmSs(ms){ if(!ms || ms<=0) return ''; const mm = Math.floor(ms/60000), ss = Math.floor((ms%60000)/1000); return `${pad2(mm)}:${pad2(ss)}`; }

@@ -16,3 +16,13 @@ try {
     });
   }
 } catch {}
+
+try {
+  const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
+  if (!Number.isFinite(bag.MAX_QUESTIONS)) {
+    bag.MAX_QUESTIONS = 30;
+  }
+  if (window.EZQ && window.EZQ !== bag && !Number.isFinite(window.EZQ.MAX_QUESTIONS)) {
+    window.EZQ.MAX_QUESTIONS = bag.MAX_QUESTIONS;
+  }
+} catch {}

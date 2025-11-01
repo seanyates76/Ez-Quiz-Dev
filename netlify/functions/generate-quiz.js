@@ -52,7 +52,9 @@ function toPositiveInt(value, fallback) {
 
 const LIMIT = toPositiveInt(process.env.GENERATE_LIMIT, DEFAULT_LIMIT);
 const WINDOW_MS = toPositiveInt(process.env.GENERATE_WINDOW_MS, DEFAULT_WINDOW_MS);
-const MAX_COUNT = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_MAX_COUNT, 100)));
+const CLIENT_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_CLIENT_MAX || process.env.CLIENT_MAX_QUESTIONS, 30)));
+const CONFIGURED_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_MAX_COUNT, CLIENT_MAX)));
+const MAX_COUNT = Math.min(CLIENT_MAX, CONFIGURED_MAX);
 const BEARER_TOKEN = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
 
 function clientIp(event) {
