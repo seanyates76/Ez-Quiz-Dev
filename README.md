@@ -42,9 +42,9 @@ npm run ui:check
 
 Key Endpoints
 -------------
-- `/.netlify/functions/generate-quiz` â€” generate from topic or seed text
-- `/.netlify/functions/send-feedback` â€” email feedback (nodemailer)
-- `/.netlify/functions/health` â€” health probe
+- `/.netlify/functions/generate-quiz` — generate from topic or seed text
+- `/.netlify/functions/send-feedback` — email feedback (nodemailer)
+- `/.netlify/functions/health` — health probe
 
 Environment
 -----------
@@ -82,4 +82,4 @@ Contact
 Open an issue or email ez.quizapp@gmail.com.
 
 **Trust Matters**  
-Zero tracking. Zero data sales. AI works on your terms â€” never in the background.
+Zero tracking. Zero data sales. AI works on your terms — never in the background.
