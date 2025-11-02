@@ -9,7 +9,7 @@
  */
 
 const ASSET_VERSION = '1.5.22';
-const CACHE_NAME = 'ezq-v1205';
+const CACHE_NAME = 'ezq-v1206';
 const PRECACHE_URLS = [
   '/index.html',
   '/styles.css?v=' + ASSET_VERSION,

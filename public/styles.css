@@ -93,7 +93,7 @@
   --c-danger:#cf2e3a;
   --c-danger-active:#a3202a;
   --c-focus-ring:rgba(113,140,255,0.28);
-  color-scheme:light;
+  color-scheme: light;
 }
 /* Soft Outlines visual variant — lighter borders, softer focus, gentler shadow */
 body[data-visual="soft"]{
@@ -140,8 +140,13 @@ body[data-visual="soft"] .gen-toolbar{ background: var(--panel); }
 }
 *,*::before,*::after{box-sizing:border-box}
 html{font-size:var(--fz-2); line-height:var(--lh-2);}
-:root[data-theme="dark"]{color-scheme:dark;}
-:root:not([data-theme]){color-scheme:dark;}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:root:not([data-theme]) {
+  color-scheme: dark;
+}
 
 html[data-theme]:not(.theme-ready) body{visibility:hidden;}
 body{margin:0; min-height:100vh; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); display:flex; flex-direction:column;}
