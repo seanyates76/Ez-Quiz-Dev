@@ -8,40 +8,45 @@
  * page for navigation requests when offline.
  */
 
-const CACHE_NAME = 'ezquiz-cache-v129';
-const RELATIVE_URLS = [
-  'index.html',
-  'js/state.js',
-  'js/utils.js',
-  'js/parser.js',
-  'js/veil.js',
-  'js/api.js?v=1.5.21',
-  'js/settings.js',
-  'js/modals.js',
-  'js/boot-beta.js?v=1.5.21',
-  'js/generator.js?v=1.5.21',
-  'js/generator-payload.js?v=1.5.21',
-  'js/a11y-announcer.js?v=1.5.21',
-  'js/a11y-announcer.js',
-  'js/quiz.js',
-  'js/beta.mjs',
-  // Versioned assets to avoid stale caches on first offline load
-  'styles.css?v=1.5.21',
-  'js/main.js?v=1.5.21',
-  'js/auto-refresh.js?v=1.5.21',
-  'js/patches.js?v=1.5.21',
-  'js/editor.gui.js?v=1.5.21',
-  'manifest.webmanifest',
-  'sw.js',
-  'icons/icon-192.png',
-  'icons/icon-512.png',
-  'icons/brand-title-source.png',
-  'icons/brand-title-source-light.png',
-  'icons/favicon.ico',
-  'icons/favicon-16.png',
-  'icons/favicon-32.png'
+const ASSET_VERSION = '1.5.22';
+const CACHE_NAME = 'ezq-v1206';
+const PRECACHE_URLS = [
+  '/index.html',
+  '/styles.css?v=' + ASSET_VERSION,
+  '/styles.tokens.css?v=' + ASSET_VERSION,
+  '/styles.backdrop.css?v=' + ASSET_VERSION,
+  '/js/boot-beta.js?v=' + ASSET_VERSION,
+  '/js/main.js?v=' + ASSET_VERSION,
+  '/js/auto-refresh.js?v=' + ASSET_VERSION,
+  '/js/patches.js?v=' + ASSET_VERSION,
+  '/js/editor.gui.js?v=' + ASSET_VERSION,
+  '/js/generator.js?v=' + ASSET_VERSION,
+  '/js/generator-payload.js?v=' + ASSET_VERSION,
+  '/js/a11y-announcer.js?v=' + ASSET_VERSION,
+  '/js/api.js?v=' + ASSET_VERSION,
+  '/manifest.webmanifest',
+  '/sw.js',
+  // Module graph (unversioned dependencies imported within versioned entry points)
+  '/js/state.js',
+  '/js/utils.js',
+  '/js/parser.js',
+  '/js/veil.js',
+  '/js/settings.js',
+  '/js/modals.js',
+  '/js/quiz.js',
+  '/js/beta.mjs',
+  '/js/import-controller.js',
+  '/js/file-type-validation.js',
+  '/js/drag-drop.js',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/brand-title-source.png',
+  '/icons/brand-title-source-light.png',
+  '/icons/favicon.ico',
+  '/icons/favicon-16.png',
+  '/icons/favicon-32.png'
 ];
-const URLS_TO_CACHE = RELATIVE_URLS.map((p) => new URL(p, self.registration.scope).toString());
+const URLS_TO_CACHE = PRECACHE_URLS.map((p) => new URL(p, self.registration.scope).toString());
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -84,46 +89,38 @@ self.addEventListener('fetch', (event) => {
   if (req.url.includes('/.netlify/functions/')) return; // let network handle serverless calls
   if (req.method !== 'GET') return;
 
+  const url = new URL(req.url);
+
+  // Cache-first for versioned assets (anything with ?v=)
+  if (url.searchParams.has('v')) {
+    event.respondWith((async () => {
+      const cached = await caches.match(req);
+      if (cached) return cached;
+      const fresh = await fetch(req, { cache: 'no-store' });
+      try {
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(req, fresh.clone());
+      } catch {}
+      return fresh;
+    })());
+    return;
+  }
+
   // Network-first for navigations (guarantee fresh HTML when online)
   if (req.mode === 'navigate') {
     event.respondWith((async () => {
       try {
         const fresh = await fetch(req, { cache: 'no-store' });
-        // refresh cached index for offline
         try {
           const cache = await caches.open(CACHE_NAME);
-          const indexUrl = new URL('index.html', self.registration.scope).toString();
+          const indexUrl = new URL('/index.html', self.registration.scope).toString();
           cache.put(indexUrl, fresh.clone());
         } catch {}
         return fresh;
       } catch (e) {
-        const indexUrl = new URL('index.html', self.registration.scope).toString();
+        const indexUrl = new URL('/index.html', self.registration.scope).toString();
         const offline = await caches.match(indexUrl);
         if (offline) return offline;
-        throw e;
-      }
-    })());
-    return;
-  }
-
-  // For CSS/JS: try network (no-store) first, fallback to cache
-  const url = new URL(req.url);
-  const isCode = url.pathname.endsWith('.css') || url.pathname.endsWith('.js');
-  if (isCode) {
-    event.respondWith((async () => {
-      try {
-        const fresh = await fetch(req, { cache: 'no-store' });
-        try { const cache = await caches.open(CACHE_NAME); cache.put(req, fresh.clone()); } catch {}
-        return fresh;
-      } catch (e) {
-        const cached = await caches.match(req);
-        if (cached) return cached;
-        // Try queryless fallback for versioned files
-        if (url.search) {
-          const bareUrl = new URL(url.pathname, self.registration.scope).toString();
-          const alt = await caches.match(bareUrl);
-          if (alt) return alt;
-        }
         throw e;
       }
     })());

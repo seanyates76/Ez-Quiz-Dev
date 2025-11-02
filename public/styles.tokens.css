@@ -3,16 +3,6 @@
    Variables only. No component styling.
 */
 :root {
-  /* Color */
-  --surface-0: oklch(0.98 0.01 250);   /* app background */
-  --surface-1: oklch(0.97 0.01 250);   /* panels */
-  --surface-2: oklch(0.95 0.01 250);   /* toolbars and wells */
-  --text:      oklch(0.23 0.03 250);
-  --muted:     oklch(0.45 0.02 250);
-  --hairline:  color-mix(in oklab, var(--text) 12%, var(--surface-0));
-  --accent:    oklch(0.64 0.18 250);
-  --accent-contrast: white;
-
   /* Type */
   --fs-h1: 32px;
   --fs-h2: 20px;
@@ -39,15 +29,66 @@
   --s-64: 64px;
 
   /* Elevation */
-  --elev-1: 0 2px 8px rgba(0,0,0,.08);
-  --elev-2: 0 10px 36px rgba(0,0,0,.16);
+  --elev-1: 0 2px 10px rgba(0,0,0,.45);
+  --elev-2: 0 12px 42px rgba(0,0,0,.6);
 
   /* Focus ring color for keyboard only (used in later phases) */
   --ring: var(--accent);
+
+  /* Default to dark theme until data-theme applies */
+  --surface-0: oklch(0.16 0.02 250);
+  --surface-1: oklch(0.18 0.02 250);
+  --surface-2: oklch(0.20 0.02 250);
+  --text:      oklch(0.92 0.02 250);
+  --muted:     oklch(0.72 0.02 250);
+  --hairline:  color-mix(in oklab, var(--text) 12%, var(--surface-0));
+  --accent:    oklch(0.76 0.22 250);
+  --accent-contrast: black;
+}
+
+:root[data-theme="light"] {
+  --surface-0: oklch(0.98 0.01 250);
+  --surface-1: oklch(0.97 0.01 250);
+  --surface-2: oklch(0.95 0.01 250);
+  --text:      oklch(0.23 0.03 250);
+  --muted:     oklch(0.45 0.02 250);
+  --hairline:  color-mix(in oklab, var(--text) 12%, var(--surface-0));
+  --accent:    oklch(0.64 0.18 250);
+  --accent-contrast: white;
+  --elev-1: 0 2px 8px rgba(0,0,0,.08);
+  --elev-2: 0 10px 36px rgba(0,0,0,.16);
+}
+
+:root[data-theme="dark"] {
+  --surface-0: oklch(0.16 0.02 250);
+  --surface-1: oklch(0.18 0.02 250);
+  --surface-2: oklch(0.20 0.02 250);
+  --text:      oklch(0.92 0.02 250);
+  --muted:     oklch(0.72 0.02 250);
+  --hairline:  color-mix(in oklab, var(--text) 12%, var(--surface-0));
+  --accent:    oklch(0.76 0.22 250);
+  --accent-contrast: black;
+  --elev-1: 0 2px 10px rgba(0,0,0,.45);
+  --elev-2: 0 12px 42px rgba(0,0,0,.6);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    --surface-0: oklch(0.98 0.01 250);
+    --surface-1: oklch(0.97 0.01 250);
+    --surface-2: oklch(0.95 0.01 250);
+    --text:      oklch(0.23 0.03 250);
+    --muted:     oklch(0.45 0.02 250);
+    --hairline:  color-mix(in oklab, var(--text) 12%, var(--surface-0));
+    --accent:    oklch(0.64 0.18 250);
+    --accent-contrast: white;
+    --elev-1: 0 2px 8px rgba(0,0,0,.08);
+    --elev-2: 0 10px 36px rgba(0,0,0,.16);
+  }
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     --surface-0: oklch(0.16 0.02 250);
     --surface-1: oklch(0.18 0.02 250);
     --surface-2: oklch(0.20 0.02 250);

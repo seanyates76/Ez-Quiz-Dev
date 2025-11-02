@@ -62,11 +62,11 @@ export function applyTheme(theme){
   if(t==='system'){
     const m=ensureMql(); eff = (m && m.matches) ? 'dark' : 'light';
   }
-  document.body.setAttribute('data-theme', eff);
   try{
     const root = document.documentElement;
-    root.classList.toggle('light', eff === 'light');
-    root.classList.toggle('dark', eff === 'dark');
+    root.setAttribute('data-theme', eff);
+    const preload = window.__EZQ_PRELOADED_THEME || {};
+    window.__EZQ_PRELOADED_THEME = { choice: t, applied: eff, previous: preload.applied };
   }catch{}
   // Swap brand logo asset based on theme, with simple, explicit mapping
   try{

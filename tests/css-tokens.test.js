@@ -18,7 +18,8 @@ describe('public/styles.css core tokens', () => {
 
   test('declares :root light theme overrides', () => {
     expect(css).toMatch(/:root\s*\{/);
-    expect(css).toMatch(/body\[data-theme="light"\]\s*\{/);
+    expect(css).toMatch(/:root\[data-theme="light"\]\s*\{/);
+    expect(css).toMatch(/:root\[data-theme="dark"\]\s*\{/);
     expect(css).toMatch(/--c-page:#f6f8fb;/);
     expect(css).toMatch(/--c-text:#0d1117;/);
   });
