@@ -6,12 +6,52 @@
   <title>EZ Quiz</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="styles.css?v=1.5.21" />
-  <link rel="stylesheet" href="/styles.tokens.css">
-  <link rel="stylesheet" href="/styles.backdrop.css">
-  <script src="js/boot-beta.js?v=1.5.21"></script>
+  <script>
+    (function(){
+      var KEY = 'ezq.theme';
+      var stored = 'system';
+      var applied = 'dark';
+      var choice = 'system';
+      try {
+        var raw = localStorage.getItem(KEY);
+        if (raw === 'light' || raw === 'dark' || raw === 'system') {
+          stored = raw;
+        }
+      } catch (err) {}
+      choice = stored;
+      if (stored === 'light' || stored === 'dark') {
+        applied = stored;
+      } else {
+        try {
+          var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+          applied = mq && mq.matches ? 'dark' : 'light';
+          var handleChange = function(matches){
+            if ((window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.choice) === 'system') {
+              var next = matches ? 'dark' : 'light';
+              document.documentElement.setAttribute('data-theme', next);
+              window.__EZQ_PRELOADED_THEME.applied = next;
+            }
+          };
+          if (mq && mq.addEventListener) {
+            mq.addEventListener('change', function(ev){ handleChange(ev.matches); });
+          } else if (mq && mq.addListener) {
+            mq.addListener(function(ev){ handleChange(ev.matches); });
+          }
+        } catch (err) { applied = 'dark'; }
+      }
+      try {
+        document.documentElement.setAttribute('data-theme', applied);
+        document.documentElement.classList.add('theme-ready');
+      } catch (err) {}
+      window.__EZQ_PRELOADED_THEME = { choice: choice, applied: applied };
+    })();
+  </script>
+  <link rel="stylesheet" href="styles.css?v=1.5.22" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.22">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.22">
+  <script src="js/boot-beta.js?v=1.5.22"></script>
 </head>
-<body data-theme="dark">
+<body>
   <header class="site-header" role="banner">
     <div class="site-header__row">
       <div class="brand">
@@ -640,10 +680,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=1.5.21"></script>
-  <script type="module" src="js/auto-refresh.js?v=1.5.21"></script>
-  <script type="module" src="js/patches.js?v=1.5.21"></script>
-  <script type="module" src="js/editor.gui.js?v=1.5.21"></script>
+  <script type="module" src="js/main.js?v=1.5.22"></script>
+  <script type="module" src="js/auto-refresh.js?v=1.5.22"></script>
+  <script type="module" src="js/patches.js?v=1.5.22"></script>
+  <script type="module" src="js/editor.gui.js?v=1.5.22"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">

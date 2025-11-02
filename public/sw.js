@@ -8,29 +8,30 @@
  * page for navigation requests when offline.
  */
 
-const CACHE_NAME = 'ezquiz-cache-v129';
+const CACHE_NAME = 'ezquiz-cache-v131';
 const RELATIVE_URLS = [
   'index.html',
   'js/state.js',
   'js/utils.js',
   'js/parser.js',
   'js/veil.js',
-  'js/api.js?v=1.5.21',
+  'js/api.js?v=1.5.22',
   'js/settings.js',
   'js/modals.js',
-  'js/boot-beta.js?v=1.5.21',
-  'js/generator.js?v=1.5.21',
-  'js/generator-payload.js?v=1.5.21',
-  'js/a11y-announcer.js?v=1.5.21',
-  'js/a11y-announcer.js',
+  'js/boot-beta.js?v=1.5.22',
+  'js/generator.js?v=1.5.22',
+  'js/generator-payload.js?v=1.5.22',
+  'js/a11y-announcer.js?v=1.5.22',
   'js/quiz.js',
   'js/beta.mjs',
   // Versioned assets to avoid stale caches on first offline load
-  'styles.css?v=1.5.21',
-  'js/main.js?v=1.5.21',
-  'js/auto-refresh.js?v=1.5.21',
-  'js/patches.js?v=1.5.21',
-  'js/editor.gui.js?v=1.5.21',
+  'styles.css?v=1.5.22',
+  'styles.tokens.css?v=1.5.22',
+  'styles.backdrop.css?v=1.5.22',
+  'js/main.js?v=1.5.22',
+  'js/auto-refresh.js?v=1.5.22',
+  'js/patches.js?v=1.5.22',
+  'js/editor.gui.js?v=1.5.22',
   'manifest.webmanifest',
   'sw.js',
   'icons/icon-192.png',
