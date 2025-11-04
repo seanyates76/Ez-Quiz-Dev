@@ -41,6 +41,8 @@
       }
       try {
         document.documentElement.setAttribute('data-theme', applied);
+      } catch (err) {}
+      try {
         document.documentElement.classList.add('theme-ready');
       } catch (err) {}
       window.__EZQ_PRELOADED_THEME = { choice: choice, applied: applied };
