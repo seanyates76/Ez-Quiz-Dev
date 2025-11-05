@@ -27,7 +27,7 @@ jobs:
       # Optional: load SSH deploy key if provided
       - name: Start SSH agent (deploy key)
         if: ${{ steps.detect.outputs.key == '1' }}
-        uses: webfactory/ssh-agent@836c84ec59a0e7bc0eabc79988384eb567561ee2 # v0.7.0
+        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
         with:
           ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
 
