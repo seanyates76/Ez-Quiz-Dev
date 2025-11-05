@@ -82,14 +82,14 @@ self.addEventListener('message', (event) => {
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   // Only handle http/https requests; ignore extension and data schemes
+  let url;
   try {
-    const proto = new URL(req.url).protocol;
+    url = new URL(req.url);
+    const proto = url.protocol;
     if (proto !== 'http:' && proto !== 'https:') return;
   } catch { return; }
   if (req.url.includes('/.netlify/functions/')) return; // let network handle serverless calls
   if (req.method !== 'GET') return;
-
-  const url = new URL(req.url);
 
   // Cache-first for versioned assets (anything with ?v=)
   if (url.searchParams.has('v')) {

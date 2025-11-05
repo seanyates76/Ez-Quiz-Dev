@@ -10,8 +10,21 @@
     (function(){
       var KEY = 'ezq.theme';
       var stored = 'system';
-      var applied = 'dark';
-      var choice = 'system';
+      var applied;
+      var choice;
+      var syncTheme = function(choiceValue, appliedValue){
+        var previous = window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.applied;
+        try { document.documentElement.setAttribute('data-theme', appliedValue); } catch (err) {}
+        try { document.documentElement.classList.add('theme-ready'); } catch (err) {}
+        window.__EZQ_PRELOADED_THEME = { choice: choiceValue, applied: appliedValue, previous: previous };
+      };
+      window.__EZQ_SYNC_THEME = syncTheme;
+      var handleSystemChange = function(matches){
+        if ((window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.choice) === 'system') {
+          syncTheme('system', matches ? 'dark' : 'light');
+        }
+      };
+      window.__EZQ_SYSTEM_THEME_HANDLER = handleSystemChange;
       try {
         var raw = localStorage.getItem(KEY);
         if (raw === 'light' || raw === 'dark' || raw === 'system') {
@@ -22,28 +35,19 @@
       if (stored === 'light' || stored === 'dark') {
         applied = stored;
       } else {
+        applied = 'dark';
         try {
           var mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
           applied = mq && mq.matches ? 'dark' : 'light';
-          var handleChange = function(matches){
-            if ((window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.choice) === 'system') {
-              var next = matches ? 'dark' : 'light';
-              document.documentElement.setAttribute('data-theme', next);
-              window.__EZQ_PRELOADED_THEME.applied = next;
-            }
-          };
+          window.__EZQ_SYSTEM_MQL = mq;
           if (mq && mq.addEventListener) {
-            mq.addEventListener('change', function(ev){ handleChange(ev.matches); });
+            mq.addEventListener('change', function(ev){ handleSystemChange(ev.matches); });
           } else if (mq && mq.addListener) {
-            mq.addListener(function(ev){ handleChange(ev.matches); });
+            mq.addListener(function(ev){ handleSystemChange(ev.matches); });
           }
         } catch (err) { applied = 'dark'; }
       }
-      try {
-        document.documentElement.setAttribute('data-theme', applied);
-        document.documentElement.classList.add('theme-ready');
-      } catch (err) {}
-      window.__EZQ_PRELOADED_THEME = { choice: choice, applied: applied };
+      syncTheme(choice, applied || 'dark');
     })();
   </script>
   <link rel="stylesheet" href="styles.css?v=1.5.22" />
