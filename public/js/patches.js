@@ -74,9 +74,13 @@ function wireBrandSwap(){
     const lightSrc = img.getAttribute('data-light');
     if(!darkSrc || !lightSrc) return; // settings.js will handle default swap
     const set = (theme)=>{ const pick = theme==='light' ? lightSrc : darkSrc; if(img.getAttribute('src')!==pick){ img.setAttribute('src', pick); } };
-    const current = document.body.getAttribute('data-theme') || 'dark'; set(current);
-    const ro = new MutationObserver(()=> set(document.body.getAttribute('data-theme')||'dark'));
-    ro.observe(document.body, { attributes:true, attributeFilter:['data-theme'] });
+    const getTheme = ()=>{
+      const rootTheme = document.documentElement.getAttribute('data-theme');
+      return rootTheme || 'dark';
+    };
+    set(getTheme());
+    const ro = new MutationObserver(()=> set(getTheme()));
+    ro.observe(document.documentElement, { attributes:true, attributeFilter:['data-theme'] });
   }catch{}
 }
 

@@ -15,9 +15,9 @@
     "reiterate": "node ../ezq-dev-tools/reiterate.mjs"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.20.0",
-    "netlify-cli": "^23.9.1",
-    "nodemailer": "^7.0.9"
+    "@google/generative-ai": "^0.24.1",
+    "netlify-cli": "^23.9.5",
+    "nodemailer": "^7.0.10"
   },
   "devDependencies": {
     "jest": "^29.7.0",

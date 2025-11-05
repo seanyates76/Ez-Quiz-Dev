@@ -630,21 +630,17 @@
       // Theme toggle
       const root = document.documentElement;
       const themeToggleBtn = document.getElementById('themeToggle');
-      const updateThemeToggleState = () => {
-        const isLight = root.classList.contains('light');
-        themeToggleBtn.setAttribute('aria-pressed', String(isLight));
-        themeToggleBtn.textContent = isLight ? 'Theme: Light' : 'Theme: Dark';
-        if (isLight) {
-          document.body.setAttribute('data-theme', 'light');
-        } else {
-          document.body.removeAttribute('data-theme');
-        }
+      const updateThemeToggleState = (theme) => {
+        const next = theme === 'light' ? 'light' : 'dark';
+        root.setAttribute('data-theme', next);
+        themeToggleBtn.setAttribute('aria-pressed', String(next === 'light'));
+        themeToggleBtn.textContent = next === 'light' ? 'Theme: Light' : 'Theme: Dark';
       };
       themeToggleBtn.addEventListener('click', () => {
-        root.classList.toggle('light');
-        updateThemeToggleState();
+        const current = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+        updateThemeToggleState(current === 'light' ? 'dark' : 'light');
       });
-      updateThemeToggleState();
+      updateThemeToggleState(root.getAttribute('data-theme'));
 
       // Modal behavior
       const openBtn = document.getElementById('openModalBtn');

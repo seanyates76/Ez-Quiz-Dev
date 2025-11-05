@@ -27,19 +27,20 @@ jobs:
       # Optional: load SSH deploy key if provided
       - name: Start SSH agent (deploy key)
         if: ${{ steps.detect.outputs.key == '1' }}
-        uses: webfactory/ssh-agent@836c84ec59a0e7bc0eabc79988384eb567561ee2 # v0.7.0
+        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
         with:
           ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
 
       - name: Checkout private repo
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       # Checkout the public repo using SSH if deploy key is present
       - name: Checkout public repo (SSH)
         if: ${{ steps.detect.outputs.key == '1' }}
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
         with:
           repository: seanyates76/Ez-Quiz-App
           path: public-repo
@@ -49,7 +50,7 @@ jobs:
       # Otherwise checkout via HTTPS (read-only); push will use PAT later
       - name: Checkout public repo (HTTPS)
         if: ${{ steps.detect.outputs.key == '0' }}
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
         with:
           repository: seanyates76/Ez-Quiz-App
           path: public-repo
@@ -84,7 +85,6 @@ jobs:
           PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
         run: |
           set -euo pipefail
-          set -x
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p ~/.ssh && ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
