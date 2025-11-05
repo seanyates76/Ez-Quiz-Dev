@@ -22,7 +22,7 @@
   "devDependencies": {
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
-    "jsdom": "^27.1.0",
-    "puppeteer": "^22.15.0"
+    "jsdom": "^27.0.0",
+    "puppeteer": "^24.27.0"
   }
 }
