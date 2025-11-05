@@ -60,74 +60,86 @@
 
   /* Default to dark theme until data-theme applies */
   color-scheme: dark;
-  --surface-0: var(--theme-dark-surface-0);
-  --surface-1: var(--theme-dark-surface-1);
-  --surface-2: var(--theme-dark-surface-2);
-  --text:      var(--theme-dark-text);
-  --muted:     var(--theme-dark-muted);
-  --hairline:  var(--theme-dark-hairline);
-  --accent:    var(--theme-dark-accent);
-  --accent-contrast: var(--theme-dark-contrast);
-  --elev-1: var(--theme-dark-elev-1);
-  --elev-2: var(--theme-dark-elev-2);
+  --theme-surface-0: var(--theme-dark-surface-0);
+  --theme-surface-1: var(--theme-dark-surface-1);
+  --theme-surface-2: var(--theme-dark-surface-2);
+  --theme-text:      var(--theme-dark-text);
+  --theme-muted:     var(--theme-dark-muted);
+  --theme-hairline:  var(--theme-dark-hairline);
+  --theme-accent:    var(--theme-dark-accent);
+  --theme-accent-contrast: var(--theme-dark-contrast);
+  --theme-elev-1: var(--theme-dark-elev-1);
+  --theme-elev-2: var(--theme-dark-elev-2);
+
+  /* Public tokens consume the currently active theme aliases */
+  --surface-0: var(--theme-surface-0);
+  --surface-1: var(--theme-surface-1);
+  --surface-2: var(--theme-surface-2);
+  --text:      var(--theme-text);
+  --muted:     var(--theme-muted);
+  --hairline:  var(--theme-hairline);
+  --accent:    var(--theme-accent);
+  --accent-contrast: var(--theme-accent-contrast);
+  --elev-1: var(--theme-elev-1);
+  --elev-2: var(--theme-elev-2);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --surface-0: var(--theme-light-surface-0);
-  --surface-1: var(--theme-light-surface-1);
-  --surface-2: var(--theme-light-surface-2);
-  --text:      var(--theme-light-text);
-  --muted:     var(--theme-light-muted);
-  --hairline:  var(--theme-light-hairline);
-  --accent:    var(--theme-light-accent);
-  --accent-contrast: var(--theme-light-contrast);
-  --elev-1: var(--theme-light-elev-1);
-  --elev-2: var(--theme-light-elev-2);
+  --theme-surface-0: var(--theme-light-surface-0);
+  --theme-surface-1: var(--theme-light-surface-1);
+  --theme-surface-2: var(--theme-light-surface-2);
+  --theme-text:      var(--theme-light-text);
+  --theme-muted:     var(--theme-light-muted);
+  --theme-hairline:  var(--theme-light-hairline);
+  --theme-accent:    var(--theme-light-accent);
+  --theme-accent-contrast: var(--theme-light-contrast);
+  --theme-elev-1: var(--theme-light-elev-1);
+  --theme-elev-2: var(--theme-light-elev-2);
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --surface-0: var(--theme-dark-surface-0);
-  --surface-1: var(--theme-dark-surface-1);
-  --surface-2: var(--theme-dark-surface-2);
-  --text:      var(--theme-dark-text);
-  --muted:     var(--theme-dark-muted);
-  --hairline:  var(--theme-dark-hairline);
-  --accent:    var(--theme-dark-accent);
-  --accent-contrast: var(--theme-dark-contrast);
-  --elev-1: var(--theme-dark-elev-1);
-  --elev-2: var(--theme-dark-elev-2);
+  --theme-surface-0: var(--theme-dark-surface-0);
+  --theme-surface-1: var(--theme-dark-surface-1);
+  --theme-surface-2: var(--theme-dark-surface-2);
+  --theme-text:      var(--theme-dark-text);
+  --theme-muted:     var(--theme-dark-muted);
+  --theme-hairline:  var(--theme-dark-hairline);
+  --theme-accent:    var(--theme-dark-accent);
+  --theme-accent-contrast: var(--theme-dark-contrast);
+  --theme-elev-1: var(--theme-dark-elev-1);
+  --theme-elev-2: var(--theme-dark-elev-2);
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) {
     color-scheme: light;
-    --surface-0: var(--theme-light-surface-0);
-    --surface-1: var(--theme-light-surface-1);
-    --surface-2: var(--theme-light-surface-2);
-    --text:      var(--theme-light-text);
-    --muted:     var(--theme-light-muted);
-    --hairline:  var(--theme-light-hairline);
-    --accent:    var(--theme-light-accent);
-    --accent-contrast: var(--theme-light-contrast);
-    --elev-1: var(--theme-light-elev-1);
-    --elev-2: var(--theme-light-elev-2);
+    --theme-surface-0: var(--theme-light-surface-0);
+    --theme-surface-1: var(--theme-light-surface-1);
+    --theme-surface-2: var(--theme-light-surface-2);
+    --theme-text:      var(--theme-light-text);
+    --theme-muted:     var(--theme-light-muted);
+    --theme-hairline:  var(--theme-light-hairline);
+    --theme-accent:    var(--theme-light-accent);
+    --theme-accent-contrast: var(--theme-light-contrast);
+    --theme-elev-1: var(--theme-light-elev-1);
+    --theme-elev-2: var(--theme-light-elev-2);
   }
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme]) {
     color-scheme: dark;
-    --surface-0: var(--theme-dark-surface-0);
-    --surface-1: var(--theme-dark-surface-1);
-    --surface-2: var(--theme-dark-surface-2);
-    --text:      var(--theme-dark-text);
-    --muted:     var(--theme-dark-muted);
-    --hairline:  var(--theme-dark-hairline);
-    --accent:    var(--theme-dark-accent);
-    --accent-contrast: var(--theme-dark-contrast);
-    --elev-1: var(--theme-dark-elev-1);
-    --elev-2: var(--theme-dark-elev-2);
+    --theme-surface-0: var(--theme-dark-surface-0);
+    --theme-surface-1: var(--theme-dark-surface-1);
+    --theme-surface-2: var(--theme-dark-surface-2);
+    --theme-text:      var(--theme-dark-text);
+    --theme-muted:     var(--theme-dark-muted);
+    --theme-hairline:  var(--theme-dark-hairline);
+    --theme-accent:    var(--theme-dark-accent);
+    --theme-accent-contrast: var(--theme-dark-contrast);
+    --theme-elev-1: var(--theme-dark-elev-1);
+    --theme-elev-2: var(--theme-dark-elev-2);
   }
 }

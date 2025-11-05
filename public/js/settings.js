@@ -64,17 +64,21 @@ export function applyTheme(theme){
   }
   // window.__EZQ_PRELOADED_THEME synchronises the inline preload script with runtime updates.
   // Shape: { choice: 'light'|'dark'|'system', applied: 'light'|'dark', previous?: 'light'|'dark' }
+  // The inline script also reads `choice` to decide whether to follow system changes, so always
+  // keep that field aligned with the latest preference.
   try{
     const sync = (typeof window !== 'undefined' && window.__EZQ_SYNC_THEME);
-    if(typeof sync === 'function'){
-      sync(t, eff);
-    }else{
+    const fallbackSync = (choiceValue, appliedValue)=>{
       const root = document.documentElement;
       const previous = (window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.applied) || root.getAttribute('data-theme');
-      root.setAttribute('data-theme', eff);
+      root.setAttribute('data-theme', appliedValue);
       root.classList.add('theme-ready');
-      window.__EZQ_PRELOADED_THEME = { choice: t, applied: eff, previous };
-    }
+      root.removeAttribute('data-theme-pending');
+      root.removeAttribute('aria-busy');
+      window.__EZQ_PRELOADED_THEME = { choice: choiceValue, applied: appliedValue, previous };
+    };
+    const effectiveSync = (typeof sync === 'function') ? sync : fallbackSync;
+    effectiveSync(t, eff);
   }catch{}
   // Swap brand logo asset based on theme, with simple, explicit mapping
   try{
@@ -97,30 +101,42 @@ export function applyTheme(theme){
     const m=ensureMql();
     if(m){
       if(t==='system'){
-        const handler = (typeof window !== 'undefined' && window.__EZQ_SYSTEM_THEME_HANDLER) || ((matches)=>{
+        const factory = (typeof window !== 'undefined' && window.__EZQ_CREATE_SYSTEM_THEME_HANDLER);
+        const fallbackFactory = (syncFn)=>((matches)=>{
           if((window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.choice) === 'system'){
-            const sync = window.__EZQ_SYNC_THEME;
             const next = matches ? 'dark' : 'light';
-            if(typeof sync === 'function'){
-              sync('system', next);
-            }else{
-              const root = document.documentElement;
-              root.setAttribute('data-theme', next);
-              root.classList.add('theme-ready');
-              const prev = window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.applied;
-              window.__EZQ_PRELOADED_THEME = { choice: 'system', applied: next, previous: prev };
-            }
+            syncFn('system', next);
           }
         });
+        const sync = (typeof window !== 'undefined' && window.__EZQ_SYNC_THEME);
+        const fallbackSync = (choiceValue, appliedValue)=>{
+          const root = document.documentElement;
+          root.setAttribute('data-theme', appliedValue);
+          root.classList.add('theme-ready');
+          root.removeAttribute('data-theme-pending');
+          root.removeAttribute('aria-busy');
+          const prev = window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.applied;
+          window.__EZQ_PRELOADED_THEME = { choice: choiceValue, applied: appliedValue, previous: prev };
+        };
+        const effectiveSync = (typeof sync === 'function') ? sync : fallbackSync;
+        const handlerFactory = (typeof factory === 'function') ? factory : fallbackFactory;
+        const handler = handlerFactory(effectiveSync);
+        if(typeof window !== 'undefined'){ window.__EZQ_SYSTEM_THEME_HANDLER = handler; }
         if(!applyTheme._bound){
-          const listener = (ev)=>{ if(S.settings.theme==='system'){ handler(ev.matches); } };
-          if(m.addEventListener){
-            m.addEventListener('change', listener);
-          }else if(m.addListener){
-            m.addListener(listener);
+          const existing = (typeof window !== 'undefined' && window.__EZQ_SYSTEM_THEME_LISTENER);
+          if(existing){
+            applyTheme._listener = existing;
+            applyTheme._bound = true;
+          }else{
+            const listener = (ev)=>{ if(S.settings.theme==='system'){ handler(ev.matches); } };
+            if(m.addEventListener){
+              m.addEventListener('change', listener);
+            }else if(m.addListener){
+              m.addListener(listener);
+            }
+            applyTheme._listener = listener;
+            applyTheme._bound = true;
           }
-          applyTheme._listener = listener;
-          applyTheme._bound = true;
         }
         handler(m.matches);
       }else if(applyTheme._bound && applyTheme._listener){
