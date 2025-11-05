@@ -62,6 +62,16 @@
   [headers.values]
     Cache-Control = "public, max-age=31536000, immutable"
 
+[[headers]]
+  for = "/styles.tokens.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/styles.backdrop.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
 # ---------- Redirects / Functions ----------
 [[redirects]]
   from = "/api/generate"

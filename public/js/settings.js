@@ -62,11 +62,19 @@ export function applyTheme(theme){
   if(t==='system'){
     const m=ensureMql(); eff = (m && m.matches) ? 'dark' : 'light';
   }
-  document.body.setAttribute('data-theme', eff);
+  // window.__EZQ_PRELOADED_THEME synchronises the inline preload script with runtime updates.
+  // Shape: { choice: 'light'|'dark'|'system', applied: 'light'|'dark', previous?: 'light'|'dark' }
   try{
-    const root = document.documentElement;
-    root.classList.toggle('light', eff === 'light');
-    root.classList.toggle('dark', eff === 'dark');
+    const sync = (typeof window !== 'undefined' && window.__EZQ_SYNC_THEME);
+    if(typeof sync === 'function'){
+      sync(t, eff);
+    }else{
+      const root = document.documentElement;
+      const previous = (window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.applied) || root.getAttribute('data-theme');
+      root.setAttribute('data-theme', eff);
+      root.classList.add('theme-ready');
+      window.__EZQ_PRELOADED_THEME = { choice: t, applied: eff, previous };
+    }
   }catch{}
   // Swap brand logo asset based on theme, with simple, explicit mapping
   try{
@@ -89,11 +97,40 @@ export function applyTheme(theme){
     const m=ensureMql();
     if(m){
       if(t==='system'){
+        const handler = (typeof window !== 'undefined' && window.__EZQ_SYSTEM_THEME_HANDLER) || ((matches)=>{
+          if((window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.choice) === 'system'){
+            const sync = window.__EZQ_SYNC_THEME;
+            const next = matches ? 'dark' : 'light';
+            if(typeof sync === 'function'){
+              sync('system', next);
+            }else{
+              const root = document.documentElement;
+              root.setAttribute('data-theme', next);
+              root.classList.add('theme-ready');
+              const prev = window.__EZQ_PRELOADED_THEME && window.__EZQ_PRELOADED_THEME.applied;
+              window.__EZQ_PRELOADED_THEME = { choice: 'system', applied: next, previous: prev };
+            }
+          }
+        });
         if(!applyTheme._bound){
-          m.addEventListener ? m.addEventListener('change', ()=>{ if(S.settings.theme==='system'){ applyTheme('system'); } })
-                             : m.addListener && m.addListener(()=>{ if(S.settings.theme==='system'){ applyTheme('system'); } });
+          const listener = (ev)=>{ if(S.settings.theme==='system'){ handler(ev.matches); } };
+          if(m.addEventListener){
+            m.addEventListener('change', listener);
+          }else if(m.addListener){
+            m.addListener(listener);
+          }
+          applyTheme._listener = listener;
           applyTheme._bound = true;
         }
+        handler(m.matches);
+      }else if(applyTheme._bound && applyTheme._listener){
+        if(m.removeEventListener){
+          m.removeEventListener('change', applyTheme._listener);
+        }else if(m.removeListener){
+          m.removeListener(applyTheme._listener);
+        }
+        applyTheme._bound = false;
+        applyTheme._listener = null;
       }
     }
   }catch{}
