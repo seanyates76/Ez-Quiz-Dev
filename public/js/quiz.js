@@ -271,7 +271,7 @@ function wireExplainDelegation(){
     const btn = e.target && (e.target.closest ? e.target.closest('.explain-btn') : null);
     if(!btn) return;
     e.preventDefault();
-    showToastNear(btn, 'Explanations are coming soon.');
+    showToastNear(btn, 'Explanations are coming soon!');
   });
 }
 
