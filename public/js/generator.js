@@ -1,15 +1,52 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.24';
+import { generateWithAI } from './api.js?v=1.5.25';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind } from './file-type-validation.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.24';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.24';
+import { announce } from './a11y-announcer.js?v=1.5.25';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.25';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
+
+function sanitizeShareLines(text){
+  return String(text || '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
+function buildAnswerKeySnapshot(questions){
+  if(!Array.isArray(questions)) return [];
+  return questions.map((q) => {
+    if(!q || typeof q !== 'object') return null;
+    if(q.type === 'MC'){
+      const correct = Array.isArray(q.correct) ? q.correct.slice() : [];
+      return { type: 'MC', correct };
+    }
+    if(q.type === 'TF' || q.type === 'YN'){
+      return { type: q.type, correct: !!q.correct };
+    }
+    if(q.type === 'MT'){
+      const pairs = Array.isArray(q.pairs)
+        ? q.pairs.map((pair) => Array.isArray(pair) ? pair.slice(0, 2) : pair)
+        : [];
+      return { type: 'MT', pairs };
+    }
+    return null;
+  });
+}
+
+function notifyShareHooks(snapshot){
+  try {
+    const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
+    if(typeof bag.onQuizReady === 'function'){
+      bag.onQuizReady(snapshot);
+    }
+  } catch {}
+}
 
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;
@@ -60,6 +97,15 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
     }
   } catch {}
   if(startBtn) startBtn.disabled = questions.length === 0 || !!limitError;
+
+  if(questions.length){
+    const shareLines = sanitizeShareLines(sourceText);
+    if(shareLines.length){
+      const shareTitle = (S.quiz.title || fullTitle || topicLabel || '').trim();
+      const answers = buildAnswerKeySnapshot(questions);
+      notifyShareHooks({ title: shareTitle, questions: shareLines, answers });
+    }
+  }
 }
 
 export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
