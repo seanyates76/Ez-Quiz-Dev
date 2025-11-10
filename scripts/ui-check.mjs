@@ -21,6 +21,10 @@ function servePublic(port = PORT) {
   const server = http.createServer((req, res) => {
     try {
       const url = new URL(req.url, `http://localhost:${port}`);
+      if (url.search && /\.(?:html|css|js|mjs|json|png|svg|webmanifest)$/i.test(url.pathname)) {
+        // Ignore cache-buster query strings when serving static assets for the harness
+        req.url = url.pathname;
+      }
       let filePath = decodeURIComponent(url.pathname);
       if (filePath === '/') filePath = '/index.html';
       const abs = resolve(root, '.' + filePath);
