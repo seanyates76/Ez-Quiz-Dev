@@ -1,7 +1,0 @@
-title = "Ez-Quiz baseline"
-[allowlist]
-description = "Common false positives"
-regexes = [
-  '''(?i)example(_|-)key''',
-  '''(?i)dummy(secret|token)''',
-]
