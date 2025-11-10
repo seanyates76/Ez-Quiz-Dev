@@ -144,6 +144,38 @@ async function run() {
     return;
   }
   const page = await browser.newPage();
+  const allowPrefixes = [];
+  if (server) {
+    const localhost = `http://127.0.0.1:${resolvedPort}`;
+    allowPrefixes.push(localhost, localhost.replace('127.0.0.1', 'localhost'));
+  }
+  allowPrefixes.push('data:', 'about:', 'file:');
+
+  try {
+    await page.setRequestInterception(true);
+    const allowList = allowPrefixes.slice();
+    page.on('request', (req) => {
+      const url = req.url();
+      const shouldAllow = allowList.some((prefix) => url.startsWith(prefix));
+      if (shouldAllow) {
+        try { req.continue(); } catch {}
+        return;
+      }
+      if (process.env.DEBUG_UI_CHECK) {
+        console.warn('[ui-check] block external request', url);
+      }
+      const type = req.resourceType();
+      const isImage = type === 'image' || url.match(/\.(?:png|jpg|jpeg|gif|svg)$/i);
+      try {
+        if (isImage) {
+          req.respond({ status: 204, contentType: 'image/png', body: '' });
+        } else {
+          req.abort('failed');
+        }
+      } catch {}
+    });
+  } catch {}
+
   if (process.env.DEBUG_UI_CHECK) {
     page.on('pageerror', (err) => {
       console.error('[ui-check] pageerror', err && err.message ? err.message : err);
