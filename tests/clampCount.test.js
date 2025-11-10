@@ -5,32 +5,29 @@ const { loadBrowserModule } = require('./utils');
 describe('clampCount', () => {
   let clampCount;
   let getMaxQuestions;
-  let originalWindow;
 
   beforeAll(() => {
-    originalWindow = global.window;
+    const base = { __EZQ__: { MAX_QUESTIONS: 30 } };
+    global.window = base;
+    globalThis.window = base;
+    globalThis.__EZQ__ = base.__EZQ__;
     ({ clampCount, getMaxQuestions } = loadBrowserModule('public/js/utils.js', ['clampCount', 'getMaxQuestions']));
   });
 
   beforeEach(() => {
-    if (originalWindow) {
-      global.window = originalWindow;
-    }
-    if (!global.window) {
-      global.window = {};
-    }
-    global.window.__EZQ__ = { MAX_QUESTIONS: 30 };
+    const base = (typeof global.window === 'object' && global.window) ? global.window : {};
+    const ezq = (typeof base.__EZQ__ === 'object' && base.__EZQ__) ? base.__EZQ__ : {};
+    base.__EZQ__ = { MAX_QUESTIONS: Number.isFinite(ezq.MAX_QUESTIONS) ? ezq.MAX_QUESTIONS : 30 };
+    globalThis.__EZQ__ = base.__EZQ__;
+    global.window = base;
+    globalThis.window = base;
   });
 
   afterEach(() => {
-    if (global.window && global.window.__EZQ__) {
-      delete global.window.__EZQ__;
-    }
-    if (originalWindow) {
-      global.window = originalWindow;
-    } else {
-      delete global.window;
-    }
+    delete global.window;
+    delete globalThis.window;
+    delete global.__EZQ__;
+    delete globalThis.__EZQ__;
   });
 
   test('returns fallback when input is empty', () => {

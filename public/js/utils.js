@@ -28,35 +28,29 @@ export function clampCount(n, options = {}) {
   const minValue = Number.isFinite(min) ? Math.max(1, Math.trunc(min)) : 1;
   const max = Math.max(minValue, getMaxQuestions());
 
-  const useFallback = (value) => {
-    if (!Number.isFinite(value)) return minValue;
-    const intVal = Math.trunc(value);
-    return Math.min(max, Math.max(minValue, intVal));
+  const clampToBounds = (val) => {
+    if (!Number.isFinite(val)) return minValue;
+    const intVal = Math.trunc(val);
+    return Math.max(minValue, Math.min(max, intVal));
   };
 
   if (n === '' || n === null || n === undefined) {
-    if (Number.isFinite(fallback)) {
-      return useFallback(fallback);
-    }
+    if (Number.isFinite(fallback)) return clampToBounds(fallback);
     return minValue;
   }
 
   if (typeof n === 'string' && n.trim() === '') {
-    if (Number.isFinite(fallback)) {
-      return useFallback(fallback);
-    }
+    if (Number.isFinite(fallback)) return clampToBounds(fallback);
     return minValue;
   }
 
   const x = Number(n);
   if (!Number.isFinite(x)) {
-    if (Number.isFinite(fallback)) {
-      return useFallback(fallback);
-    }
+    if (Number.isFinite(fallback)) return clampToBounds(fallback);
     return minValue;
   }
 
-  return useFallback(x);
+  return clampToBounds(x);
 }
 export function pad2(n){ return String(n).padStart(2,'0'); }
 export function formatDuration(ms){ if(!ms || ms < 0) ms = 0; const total = Math.floor(ms/1000); const mm = Math.floor(total/60); const ss = total % 60; return `${pad2(mm)}:${pad2(ss)}`; }
