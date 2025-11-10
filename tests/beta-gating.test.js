@@ -2,6 +2,12 @@
 
 describe('beta gating helper', () => {
   afterEach(() => {
+    if (typeof document !== 'undefined' && document?.body) {
+      document.body.removeAttribute?.('data-beta');
+      if (document.body.dataset) {
+        delete document.body.dataset.beta;
+      }
+    }
     delete global.document;
   });
 
@@ -12,7 +18,11 @@ describe('beta gating helper', () => {
 
   test('returns true when data-beta attribute is present', async () => {
     const { isBetaEnabled } = await import('../public/js/beta.mjs');
-    global.document = { body: { hasAttribute: () => false, dataset: { beta: '' } } };
+    if (typeof document !== 'undefined' && document?.body) {
+      document.body.setAttribute?.('data-beta', '');
+    } else {
+      global.document = { body: { hasAttribute: () => true, dataset: { beta: '' } } };
+    }
     expect(isBetaEnabled({ betaEnabled: false })).toBe(true);
   });
 
