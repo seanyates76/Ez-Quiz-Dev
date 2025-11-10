@@ -86,13 +86,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   function updateCountHint(){
     const max = getMaxQuestions();
     try {
-      if (countInput) {
-        countInput.setAttribute('max', String(max));
-        countInput.setAttribute('aria-describedby', 'genCountHint');
-      }
-      const hint = document.getElementById('genCountHint');
-      if (hint) {
-        hint.textContent = `Max ${max} questions`;
+      const el = countInput || document.getElementById('countInput');
+      if (el) {
+        el.setAttribute('max', String(max));
       }
     } catch {}
   }
