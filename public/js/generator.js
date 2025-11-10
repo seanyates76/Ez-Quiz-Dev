@@ -1,12 +1,12 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.24';
+import { generateWithAI } from './api.js?v=1.5.27';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind } from './file-type-validation.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.24';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.24';
+import { announce } from './a11y-announcer.js?v=1.5.27';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.27';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
@@ -66,6 +66,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const generateBtn = $('generateBtn');
   const topicInput = $('topicInput');
   const countInput = $('countInput');
+  const startBtn = $('startBtn');
   const countUpBtn = document.querySelector('[data-step="up"]');
   const countDownBtn = document.querySelector('[data-step="down"]');
   const importBtn = $('importBtn');
@@ -83,6 +84,52 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const mirror = $('mirror');
   const statusBox = $('status');
 
+  let countTipSeq = 0;
+  const countSoftTargets = [];
+  function registerCountSoftTarget(button){
+    if(!button) return;
+    if(countSoftTargets.some((entry)=> entry.button === button)) return;
+    let tipId = button.dataset.countTipId;
+    if(!tipId){
+      const suffix = button.id ? `${button.id}SoftTip` : `countSoftTip${++countTipSeq}`;
+      tipId = suffix;
+      try { button.dataset.countTipId = tipId; } catch {}
+    }
+    let tipEl = document.getElementById(tipId);
+    if(tipEl && tipEl.parentElement !== button){
+      try { tipEl.remove(); } catch {}
+      tipEl = null;
+    }
+    if(!tipEl){
+      tipEl = document.createElement('span');
+      tipEl.id = tipId;
+      tipEl.className = 'sr-only';
+      try {
+        button.appendChild(tipEl);
+      } catch {
+        // If the button cannot accept children (unlikely), fall back to parent append
+        try { (button.parentElement || document.body).appendChild(tipEl); }
+        catch {}
+      }
+    }
+    if(tipEl){ tipEl.textContent = ''; }
+    countSoftTargets.push({
+      button,
+      tipId,
+      tipEl,
+      prevDisabled: undefined,
+      prevDescribedBy: undefined,
+      active: false,
+    });
+  }
+  registerCountSoftTarget(generateBtn);
+  registerCountSoftTarget(startBtn);
+  const startToolbarBtn = document.getElementById('startToolbarBtn');
+  registerCountSoftTarget(startToolbarBtn);
+  function getCountInvalidMessage(){
+    const max = getMaxQuestions();
+    return `Enter 1 to ${max} questions before starting.`;
+  }
   function updateCountHint(){
     const max = getMaxQuestions();
     try {
@@ -96,14 +143,72 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       }
     } catch {}
   }
+  function isCountSoftInvalid(){
+    if(!countInput) return false;
+    if(document.activeElement !== countInput) return false;
+    const raw = countInput.value == null ? '' : String(countInput.value);
+    const trimmed = raw.trim();
+    return trimmed === '' || trimmed === '0';
+  }
+  function applyCountSoftInvalid(active){
+    const message = active ? getCountInvalidMessage() : '';
+    countSoftTargets.forEach((target)=>{
+      const { button, tipEl, tipId } = target;
+      if(!button) return;
+      if(active){
+        target.active = true;
+        if(target.prevDisabled === undefined){
+          target.prevDisabled = button.disabled;
+        }
+        if(target.prevDescribedBy === undefined){
+          target.prevDescribedBy = button.getAttribute('aria-describedby') || '';
+        }
+        if(tipEl){ tipEl.textContent = message; }
+        button.setAttribute('data-tip', message);
+        const prev = target.prevDescribedBy || '';
+        const tokens = prev ? prev.split(/\s+/).filter(Boolean) : [];
+        if(!tokens.includes(tipId)) tokens.push(tipId);
+        if(tokens.length){ button.setAttribute('aria-describedby', tokens.join(' ')); }
+        else { button.removeAttribute('aria-describedby'); }
+        button.disabled = true;
+      } else if(target.active){
+        target.active = false;
+        if(tipEl){ tipEl.textContent = ''; }
+        button.removeAttribute('data-tip');
+        if(target.prevDescribedBy !== undefined){
+          if(target.prevDescribedBy){ button.setAttribute('aria-describedby', target.prevDescribedBy); }
+          else { button.removeAttribute('aria-describedby'); }
+        }
+        if(target.prevDisabled === false){ button.disabled = false; }
+        target.prevDisabled = undefined;
+        target.prevDescribedBy = undefined;
+      }
+    });
+  }
+  let wasCountSoftInvalid = false;
+  function updateCountAvailability(){
+    if(!countSoftTargets.length) return;
+    const invalid = isCountSoftInvalid();
+    if(invalid){
+      applyCountSoftInvalid(true);
+    } else if(wasCountSoftInvalid){
+      applyCountSoftInvalid(false);
+    }
+    wasCountSoftInvalid = invalid;
+  }
 
   function readGeneratorForm(){
     const el = countInput || document.getElementById('countInput');
     const fallbackCount = clampCount(el?.defaultValue ?? 10);
     const raw = el ? el.value : '';
-    const count = clampCount(raw, { fallback: fallbackCount });
+    const focused = el && document.activeElement === el;
+    const trimmed = typeof raw === 'string' ? raw.trim() : '';
+    const allowSoftEmpty = !!focused && (trimmed === '' || trimmed === '0');
+    let count = clampCount(raw, { fallback: fallbackCount });
     updateCountHint();
-    if (el && String(count) !== String(raw)) {
+    if (allowSoftEmpty) {
+      count = clampCount(fallbackCount);
+    } else if (el && String(count) !== String(raw)) {
       el.value = String(count);
     }
     return {
@@ -114,6 +219,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   }
 
   updateCountHint();
+  updateCountAvailability();
 
   const loadBtn = $('loadBtn');
   const fileInput = $('fileInput');
@@ -360,7 +466,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const qtTF = $('qtTF');
   const qtYN = $('qtYN');
   const qtMT = $('qtMT');
-  const startBtn2 = $('startBtn');
+  const startBtn2 = startBtn;
 
   // Primary action: Start | Generate | Regenerate
   function snapshotChanged(last, curr){
@@ -504,8 +610,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   }
   // Mark dirty when topic, count, or difficulty changes after a generation
   topicInput?.addEventListener('input', markDirtyIfChanged);
-  countInput?.addEventListener('input', markDirtyIfChanged);
+  countInput?.addEventListener('input', ()=>{ markDirtyIfChanged(); updateCountAvailability(); });
   difficultySlider?.addEventListener('input', markDirtyIfChanged);
+  countInput?.addEventListener('focus', updateCountAvailability);
+  countInput?.addEventListener('blur', ()=>{ readGeneratorForm(); updateCountAvailability(); });
 
   loadBtn?.addEventListener('click', ()=> fileInput?.click());
   fileInput?.addEventListener('change', ()=>{
@@ -528,7 +636,20 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     setEditorText(demo); try{ setMirrorVisible(true); }catch{}; runParseFlow(demo, 'Demo', '');
   });
 
-  clearBtn?.addEventListener('click', ()=>{ setEditorText(''); const startBtn=$('startBtn'); if(startBtn) startBtn.disabled = true; statusBox && (statusBox.textContent = 'Cleared.'); try{ const ui=(window.EZQ.ui=window.EZQ.ui||{}); ui.lastGeneratedParams=null; ui.genDirty=false; const hint=document.getElementById('regenHint'); if(hint) hint.hidden=true; }catch{} setPrimaryAction(); });
+  clearBtn?.addEventListener('click', ()=>{
+    setEditorText('');
+    if(startBtn) startBtn.disabled = true;
+    statusBox && (statusBox.textContent = 'Cleared.');
+    try{
+      const ui = (window.EZQ.ui = window.EZQ.ui || {});
+      ui.lastGeneratedParams = null;
+      ui.genDirty = false;
+      const hint = document.getElementById('regenHint');
+      if(hint) hint.hidden = true;
+    }catch{}
+    setPrimaryAction();
+    updateCountAvailability();
+  });
   loadLastBtn?.addEventListener('click', ()=>{ try{ const last = localStorage.getItem('ezq.last')||''; if(!last){ statusBox && (statusBox.textContent='No previous quiz found.'); return; } setEditorText(last); try{ setMirrorVisible(true); }catch{}; runParseFlow(last, topicInput?.value||'Last', ''); statusBox && (statusBox.textContent = 'Loaded last quiz.'); }catch{} });
 
   generateBtn?.addEventListener('click', async ()=>{
@@ -739,10 +860,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   }
   function applyDefaultsToUI(){
     const d = loadDefaults();
-    if(!d){ updateCountHint(); return; }
+    if(!d){ updateCountHint(); updateCountAvailability(); return; }
     if(typeof d.count==='number' && countInput){
       countInput.value = String(clampCount(d.count));
       updateCountHint();
+      updateCountAvailability();
     }
     if(typeof d.difficulty==='string'){ setDifficultyValue(d.difficulty); }
     if(d.types){ if(qtMC) qtMC.checked = !!d.types.MC; if(qtTF) qtTF.checked = !!d.types.TF; if(qtYN) qtYN.checked = !!d.types.YN; if(qtMT) qtMT.checked = !!d.types.MT; }
@@ -769,6 +891,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     countInput.value = String(next);
     updateCountHint();
     markDirtyIfChanged();
+    updateCountAvailability();
   }
   countUpBtn?.addEventListener('click', ()=> adjustCount(1));
   countDownBtn?.addEventListener('click', ()=> adjustCount(-1));

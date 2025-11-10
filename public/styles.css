@@ -292,6 +292,11 @@ input[type="radio"]:focus-visible{ outline:2px solid var(--ring); outline-offset
 .btn:hover{filter:brightness(1.06);}
 .btn:active{transform:translateY(1px);}
 .btn[disabled]{opacity:.6; cursor:not-allowed;}
+.btn[data-tip]{position:relative;}
+.btn[data-tip]::after{content:attr(data-tip); position:absolute; left:50%; bottom:calc(100% + 8px); transform:translate(-50%,4px); background:var(--panel-3); color:var(--text); padding:6px 12px; border-radius:var(--r-2); box-shadow:0 8px 24px rgba(0,0,0,0.28); white-space:nowrap; font-size:var(--fz-1); line-height:var(--lh-2); opacity:0; pointer-events:none; transition:opacity var(--dur-1) var(--easing), transform var(--dur-1) var(--easing); z-index:24;}
+.btn[data-tip]::before{content:""; position:absolute; left:50%; bottom:calc(100% + 2px); transform:translateX(-50%); width:10px; height:6px; background:var(--panel-3); clip-path:polygon(0 100%, 50% 0, 100% 100%); opacity:0; pointer-events:none; transition:opacity var(--dur-1) var(--easing); z-index:23;}
+.btn[data-tip]:is(:hover,:focus-visible)::after{opacity:1; transform:translate(-50%,0);}
+.btn[data-tip]:is(:hover,:focus-visible)::before{opacity:1;}
 .btn-solid{background:var(--primary); border-color:transparent; color:#0b1220; font-weight:600;}
 :root[data-theme="light"] body .btn-solid{color:#f7f9ff;}
 .btn-solid:active{background:var(--primary-press);}
