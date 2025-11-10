@@ -136,6 +136,12 @@ Codex (CLI) can consume a Context Packet built by the Head and return a JSON sum
 - Review then apply patches manually (or wire auto‑apply later behind conflict simulation)
 
 ## Next Agent Agenda
+- Share Flow follow-up (branch `feature/share-editor-page` off `feature/neon-share-v0`):
+  - Build a dedicated "Create & Share" experience (separate page at `/create` or similar) so the main quiz runner stays focused.
+  - Add a CTA (e.g., "Create & Share") on the home toolbar that links to the new page; it should feel distinct from the in-place Share button.
+  - New page should load the editor UI only, reuse existing save/share Netlify functions, and show the confirmation dialog before storing quizzes.
+  - Enhance the editor with per-question ✨ autofill buttons (right-aligned) that suggest/auto-fill answers for that question box.
+  - Ensure `/q/:id` continues to hydrate quizzes client-side (no server redirect) and that assets resolve correctly (we now set `<base href="/">`).
 - UI Visual Refresh: soften outlined wrappers (tokens + shadows) with accessible focus states.
 - Media Input (Phase 1): PDF/Image import UI stub with drag-drop and file picker; graceful fallback if function not deployed.
 - Tests: add DOM/css sanity cases for new UI; keep Jest in-band.
