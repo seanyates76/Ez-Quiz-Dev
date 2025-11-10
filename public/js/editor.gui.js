@@ -1,6 +1,6 @@
 // Interactive Editor (beta) — rebuilt v2
 // Simple, robust, no global delegation; uses pointerdown to beat Options capture
-import { runParseFlow } from './generator.js?v=1.5.23';
+import { runParseFlow } from './generator.js?v=1.5.24';
 
 const IE2 = (()=>{
   const SKEY = 'ezq.ie.v2.on';
