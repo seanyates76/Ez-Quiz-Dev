@@ -2,22 +2,22 @@
 :root {
   --brand:#FFC94A;
   --brand-press:#E5B03F;
-  --c-accent:#6270f3;
-  --c-accent-active:#4f5be9;
-  --c-page:#0d111a;
-  --c-surface-1:#151b27;
-  --c-surface-2:#1b2232;
-  --c-surface-3:#212a3d;
-  --c-input:#111623;
-  --c-border-weak:rgba(255,255,255,0.10);
-  --c-border-strong:rgba(255,255,255,0.18);
-  --c-text:#e9eef6;
-  --c-text-muted:#a5aec2;
-  --c-danger:#ff5d6c;
-  --c-danger-active:#d83545;
-  --c-success:#34d399;
-  --c-success-active:#16a34a;
-  --c-focus-ring:rgba(113,140,255,0.40);
+  --c-accent:var(--accent);
+  --c-accent-active:var(--accent-press);
+  --c-page:var(--surface-0);
+  --c-surface-1:var(--surface-1);
+  --c-surface-2:var(--surface-2);
+  --c-surface-3:color-mix(in oklab, var(--surface-2) 85%, var(--text) 15%);
+  --c-input:color-mix(in oklab, var(--surface-0) 90%, var(--text) 10%);
+  --c-border-weak:var(--hairline);
+  --c-border-strong:color-mix(in oklab, var(--hairline) 70%, var(--text) 30%);
+  --c-text:var(--text);
+  --c-text-muted:var(--muted);
+  --c-danger:var(--negative);
+  --c-danger-active:var(--negative-strong);
+  --c-success:var(--positive);
+  --c-success-active:var(--positive-strong);
+  --c-focus-ring:var(--focus-outer);
   --sp-0:0;
   --sp-1:4px;
   --sp-2:8px;
@@ -77,22 +77,22 @@
   --adv-box-min: 260px;
 }
 :root[data-theme="light"] {
-  --c-page:#f6f8fb;
-  --c-surface-1:#ffffff;
-  --c-surface-2:#eef2f9;
-  --c-surface-3:#e0e7f5;
-  --c-input:#e9edf7;
-  --c-border-weak:rgba(15,23,42,0.12);
-  --c-border-strong:rgba(15,23,42,0.18);
-  --c-text:#0d1117;
-  --c-text-muted:#4b5565;
-  --c-accent:#5261ee;
-  --c-accent-active:#4251d8;
-  --c-success:#16a34a;
-  --c-success-active:#0f7a32;
-  --c-danger:#cf2e3a;
-  --c-danger-active:#a3202a;
-  --c-focus-ring:rgba(113,140,255,0.28);
+  --c-page:var(--surface-0);
+  --c-surface-1:var(--surface-1);
+  --c-surface-2:var(--surface-2);
+  --c-surface-3:color-mix(in oklab, var(--surface-2) 85%, var(--text) 15%);
+  --c-input:color-mix(in oklab, var(--surface-0) 90%, var(--text) 10%);
+  --c-border-weak:var(--hairline);
+  --c-border-strong:color-mix(in oklab, var(--hairline) 70%, var(--text) 30%);
+  --c-text:var(--text);
+  --c-text-muted:var(--muted);
+  --c-accent:var(--accent);
+  --c-accent-active:var(--accent-press);
+  --c-success:var(--positive);
+  --c-success-active:var(--positive-strong);
+  --c-danger:var(--negative);
+  --c-danger-active:var(--negative-strong);
+  --c-focus-ring:var(--focus-outer);
   color-scheme: light;
 }
 /* Soft Outlines visual variant — lighter borders, softer focus, gentler shadow */

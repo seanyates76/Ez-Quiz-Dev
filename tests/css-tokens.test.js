@@ -8,6 +8,9 @@ describe('public/styles.css core tokens', () => {
   const tokenAssertions = [
     ['--field', /--field\s*:\s*var\(--c-input\)/],
     ['--text', /--text\s*:\s*var\(--c-text\)/],
+    ['--c-page', /--c-page\s*:\s*var\(--surface-0\)/],
+    ['--c-accent', /--c-accent\s*:\s*var\(--accent\)/],
+    ['--c-success', /--c-success\s*:\s*var\(--positive\)/],
     ['--radius-card', /--radius-card\s*:\s*calc\(/],
     ['--shadow-card', /--shadow-card\s*:\s*0\s+4px\s+14px/],
   ];
@@ -20,7 +23,6 @@ describe('public/styles.css core tokens', () => {
     expect(css).toMatch(/:root\s*\{/);
     expect(css).toMatch(/:root\[data-theme="light"\]\s*\{/);
     expect(css).toMatch(/:root\[data-theme="dark"\]\s*\{/);
-    expect(css).toMatch(/--c-page:#f6f8fb;/);
-    expect(css).toMatch(/--c-text:#0d1117;/);
+    expect(css).toMatch(/:root\[data-theme="light"\][^}]*--c-accent-active:var\(--accent-press\)/);
   });
 });

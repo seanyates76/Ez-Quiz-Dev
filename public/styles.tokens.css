@@ -46,6 +46,12 @@
   --theme-dark-contrast:  black;
   --theme-dark-elev-1: 0 2px 10px rgba(0,0,0,.45);
   --theme-dark-elev-2: 0 12px 42px rgba(0,0,0,.6);
+  --theme-dark-accent-press: color-mix(in oklab, var(--theme-dark-accent) 86%, black 14%);
+  --theme-dark-positive: #34d399;
+  --theme-dark-positive-strong: #16a34a;
+  --theme-dark-negative: #ff5d6c;
+  --theme-dark-negative-strong: #d83545;
+  --theme-dark-focus-outer: color-mix(in oklab, var(--theme-dark-accent) 52%, transparent);
 
   --theme-light-surface-0: oklch(0.98 0.01 250);
   --theme-light-surface-1: oklch(0.97 0.01 250);
@@ -57,6 +63,12 @@
   --theme-light-contrast:  white;
   --theme-light-elev-1: 0 2px 8px rgba(0,0,0,.08);
   --theme-light-elev-2: 0 10px 36px rgba(0,0,0,.16);
+  --theme-light-accent-press: color-mix(in oklab, var(--theme-light-accent) 84%, black 16%);
+  --theme-light-positive: #16a34a;
+  --theme-light-positive-strong: #0f7a32;
+  --theme-light-negative: #cf2e3a;
+  --theme-light-negative-strong: #a3202a;
+  --theme-light-focus-outer: color-mix(in oklab, var(--theme-light-accent) 36%, transparent);
 
   /* Default to dark theme until data-theme applies */
   color-scheme: dark;
@@ -70,6 +82,12 @@
   --theme-accent-contrast: var(--theme-dark-contrast);
   --theme-elev-1: var(--theme-dark-elev-1);
   --theme-elev-2: var(--theme-dark-elev-2);
+  --theme-accent-press: var(--theme-dark-accent-press);
+  --theme-positive: var(--theme-dark-positive);
+  --theme-positive-strong: var(--theme-dark-positive-strong);
+  --theme-negative: var(--theme-dark-negative);
+  --theme-negative-strong: var(--theme-dark-negative-strong);
+  --theme-focus-outer: var(--theme-dark-focus-outer);
 
   /* Public tokens consume the currently active theme aliases */
   --surface-0: var(--theme-surface-0);
@@ -82,6 +100,12 @@
   --accent-contrast: var(--theme-accent-contrast);
   --elev-1: var(--theme-elev-1);
   --elev-2: var(--theme-elev-2);
+  --accent-press: var(--theme-accent-press);
+  --positive: var(--theme-positive);
+  --positive-strong: var(--theme-positive-strong);
+  --negative: var(--theme-negative);
+  --negative-strong: var(--theme-negative-strong);
+  --focus-outer: var(--theme-focus-outer);
 }
 
 :root[data-theme="light"] {
@@ -96,6 +120,12 @@
   --theme-accent-contrast: var(--theme-light-contrast);
   --theme-elev-1: var(--theme-light-elev-1);
   --theme-elev-2: var(--theme-light-elev-2);
+  --theme-accent-press: var(--theme-light-accent-press);
+  --theme-positive: var(--theme-light-positive);
+  --theme-positive-strong: var(--theme-light-positive-strong);
+  --theme-negative: var(--theme-light-negative);
+  --theme-negative-strong: var(--theme-light-negative-strong);
+  --theme-focus-outer: var(--theme-light-focus-outer);
 }
 
 :root[data-theme="dark"] {
@@ -110,6 +140,12 @@
   --theme-accent-contrast: var(--theme-dark-contrast);
   --theme-elev-1: var(--theme-dark-elev-1);
   --theme-elev-2: var(--theme-dark-elev-2);
+  --theme-accent-press: var(--theme-dark-accent-press);
+  --theme-positive: var(--theme-dark-positive);
+  --theme-positive-strong: var(--theme-dark-positive-strong);
+  --theme-negative: var(--theme-dark-negative);
+  --theme-negative-strong: var(--theme-dark-negative-strong);
+  --theme-focus-outer: var(--theme-dark-focus-outer);
 }
 
 @media (prefers-color-scheme: light) {
@@ -125,6 +161,12 @@
     --theme-accent-contrast: var(--theme-light-contrast);
     --theme-elev-1: var(--theme-light-elev-1);
     --theme-elev-2: var(--theme-light-elev-2);
+    --theme-accent-press: var(--theme-light-accent-press);
+    --theme-positive: var(--theme-light-positive);
+    --theme-positive-strong: var(--theme-light-positive-strong);
+    --theme-negative: var(--theme-light-negative);
+    --theme-negative-strong: var(--theme-light-negative-strong);
+    --theme-focus-outer: var(--theme-light-focus-outer);
   }
 }
 
@@ -141,5 +183,11 @@
     --theme-accent-contrast: var(--theme-dark-contrast);
     --theme-elev-1: var(--theme-dark-elev-1);
     --theme-elev-2: var(--theme-dark-elev-2);
+    --theme-accent-press: var(--theme-dark-accent-press);
+    --theme-positive: var(--theme-dark-positive);
+    --theme-positive-strong: var(--theme-dark-positive-strong);
+    --theme-negative: var(--theme-dark-negative);
+    --theme-negative-strong: var(--theme-dark-negative-strong);
+    --theme-focus-outer: var(--theme-dark-focus-outer);
   }
 }

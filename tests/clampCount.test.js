@@ -5,17 +5,32 @@ const { loadBrowserModule } = require('./utils');
 describe('clampCount', () => {
   let clampCount;
   let getMaxQuestions;
+  let originalWindow;
 
   beforeAll(() => {
+    originalWindow = global.window;
     ({ clampCount, getMaxQuestions } = loadBrowserModule('public/js/utils.js', ['clampCount', 'getMaxQuestions']));
   });
 
   beforeEach(() => {
-    global.window = { __EZQ__: { MAX_QUESTIONS: 30 } };
+    if (originalWindow) {
+      global.window = originalWindow;
+    }
+    if (!global.window) {
+      global.window = {};
+    }
+    global.window.__EZQ__ = { MAX_QUESTIONS: 30 };
   });
 
   afterEach(() => {
-    delete global.window;
+    if (global.window && global.window.__EZQ__) {
+      delete global.window.__EZQ__;
+    }
+    if (originalWindow) {
+      global.window = originalWindow;
+    } else {
+      delete global.window;
+    }
   });
 
   test('returns fallback when input is empty', () => {
