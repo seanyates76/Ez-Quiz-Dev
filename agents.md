@@ -100,6 +100,7 @@ We sometimes ship new features in “beta” mode (same build; beta is a runtime
 - Before promoting quiz v2 to end users: update the client fetch path to send `format=quiz-json`, surface the structured data in UI, and add regression tests for the new payload.
 - Next exploration: story-board the explanations UI (visual spec + API hook) before wiring it up so we can document the flow alongside implementation.
 - Next agent: append your updates here (date + highlight) so this stays a living log.
+- Tests depend on `tests/setupTests.js` to seed `window.__EZQ__` defaults and stub `navigator.serviceWorker`; keep those defaults aligned with app expectations when tweaking beta or service worker behavior.
 
 ### Agent playbook (quick)
 - Local smoke: `npm test` (Node tests + DOM/CSS sanity)
