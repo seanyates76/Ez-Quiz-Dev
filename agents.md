@@ -143,6 +143,11 @@ Codex (CLI) can consume a Context Packet built by the Head and return a JSON sum
   - New page should load the editor UI only, reuse existing save/share Netlify functions, and show the confirmation dialog before storing quizzes.
   - Enhance the editor with per-question ✨ autofill buttons (right-aligned) that suggest/auto-fill answers for that question box.
   - Ensure `/q/:id` continues to hydrate quizzes client-side (no server redirect) and that assets resolve correctly (we now set `<base href="/">`).
+  - Bump asset cache tokens + `public/sw.js` when adding `/create` scripts/styles so clients get the new bundles; redeploy and hard-refresh.
+  - Reuse the existing share module (`bag.onQuizReady`, beta gate, confirmation modal) rather than duplicating logic.
+  - Define ✨ behavior: prefills sensible answers per question type, idempotent on repeated clicks.
+  - UX polish: include a clear "Back to Quiz" link and ensure header/footer/CTA remain keyboard accessible on `/create`.
+  - Docs/tests: update README/help text to mention `/create` + Share flow, and add a basic DOM test for the new CTA/page.
 - UI Visual Refresh: soften outlined wrappers (tokens + shadows) with accessible focus states.
 - Media Input (Phase 1): PDF/Image import UI stub with drag-drop and file picker; graceful fallback if function not deployed.
 - Tests: add DOM/css sanity cases for new UI; keep Jest in-band.
