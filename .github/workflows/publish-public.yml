@@ -98,22 +98,32 @@ jobs:
             fi
             git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
           fi
+          SYNC_BRANCH="${SYNC_BRANCH:-main}"
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to publish."
             exit 0
           fi
           git commit -m "Publish from private repo: ${GITHUB_SHA}"
-          # Ensure main exists and push
-          if ! git rev-parse --verify main >/dev/null 2>&1; then
-            git branch -M main
+          COMMIT_SHA=$(git rev-parse HEAD)
+          FETCHED=0
+          if git fetch origin "$SYNC_BRANCH"; then
+            FETCHED=1
+          else
+            echo "Fetch of origin/$SYNC_BRANCH failed; proceeding with local branch." >&2
           fi
+          if [ "$FETCHED" -eq 1 ]; then
+            git checkout -B "$SYNC_BRANCH" "origin/$SYNC_BRANCH"
+          else
+            git checkout -B "$SYNC_BRANCH"
+          fi
+          git reset --hard "$COMMIT_SHA"
           # Try push (force-with-lease for mirror semantics); if SSH fails and a token is available, fall back to HTTPS
-          if ! git push --force-with-lease origin HEAD:main; then
+          if ! git push --force-with-lease origin "$SYNC_BRANCH"; then
             if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
               echo "SSH push failed; falling back to HTTPS token..."
               git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
-              git push --force-with-lease origin HEAD:main
+              git push --force-with-lease origin "$SYNC_BRANCH"
             else
               echo "Push failed and no HTTPS token provided." >&2
               exit 1
