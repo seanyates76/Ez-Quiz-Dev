@@ -1,8 +1,5 @@
 name: Publish Mirror (Simple)
 
-permissions:
-  contents: read
-
 on:
   push:
     branches: [ "main" ]
@@ -14,6 +11,10 @@ concurrency:
 
 jobs:
   mirror:
+    permissions:
+      contents: read
+    env:
+      PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout private repo
@@ -51,25 +52,57 @@ jobs:
             cd public-repo
             git init
             git remote add origin git@github.com:seanyates76/Ez-Quiz-App.git
-            git checkout -B main
+            git checkout -B mirror/main
           fi
 
-      - name: Sync and push
+      - name: Sync and push staging branch
+        id: sync
+        env:
+          SYNC_BRANCH: mirror/main
         run: |
           set -euo pipefail
           cd public-repo
-          # Ensure branch exists locally
-          git fetch origin main || true
-          git checkout -B main || git checkout -B main
-          # Replace working tree with filtered files
+          git fetch origin "$SYNC_BRANCH" || true
+          git checkout -B "$SYNC_BRANCH"
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           rsync -a --delete --exclude=.git/ ../filtered/ ./
           git add -A
           if git diff --cached --quiet; then
             echo "No changes to publish."
+            echo "has_changes=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Publish from private repo: ${GITHUB_SHA}"
-          git push --force-with-lease origin HEAD:main
+          git push --force-with-lease origin HEAD:"$SYNC_BRANCH"
+          echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update pull request
+        if: ${{ env.PUBLIC_REPO_TOKEN != '' && steps.sync.outputs.has_changes == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+          SYNC_BRANCH: mirror/main
+        run: |
+          set -euo pipefail
+          cd public-repo
+          PR_TITLE="Mirror: ${GITHUB_SHA:0:12} → main"
+          PR_BODY=$(cat <<EOF
+Automated mirror update from \`seanyates76/Ez-Quiz-Dev\`.
+
+- Source commit: ${GITHUB_SHA}
+- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+EOF
+          )
+          if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
+            PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
+            gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
+          else
+            gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"
+          fi
+
+      - name: Require PUBLIC_REPO_TOKEN for PR creation
+        if: ${{ env.PUBLIC_REPO_TOKEN == '' && steps.sync.outputs.has_changes == 'true' }}
+        run: |
+          echo "PUBLIC_REPO_TOKEN is required to open the mirror pull request." >&2
+          exit 1
