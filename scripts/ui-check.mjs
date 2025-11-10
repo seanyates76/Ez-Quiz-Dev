@@ -16,6 +16,57 @@ import { extname, resolve, join } from 'node:path';
 const root = resolve(process.cwd(), 'public');
 const artifactsDir = resolve(process.cwd(), '.artifacts', 'ui');
 const PORT = Number(process.env.UI_CHECK_PORT || 0); // 0 = ephemeral
+const UI_CHECK_USE_SYSTEM_CHROMIUM = process.env.UI_CHECK_USE_SYSTEM_CHROMIUM === '1';
+
+async function loadLambdaChromium() {
+  try {
+    const mod = await import('@sparticuz/chromium');
+    return mod?.default ?? mod;
+  } catch (err) {
+    if (process.env.DEBUG_UI_CHECK) {
+      console.warn('[ui-check] Lambda Chromium unavailable:', err?.message || err);
+    }
+    return null;
+  }
+}
+
+async function launchBrowser(puppeteer) {
+  const baseArgs = ['--no-sandbox','--disable-setuid-sandbox','--no-zygote','--single-process','--disable-gpu'];
+  if (!UI_CHECK_USE_SYSTEM_CHROMIUM) {
+    const chromium = await loadLambdaChromium();
+    if (chromium) {
+      try {
+        const executablePath = await chromium.executablePath();
+        if (executablePath) {
+          const args = Array.isArray(chromium.args) && chromium.args.length ? [...chromium.args] : [];
+          for (const flag of baseArgs) {
+            if (!args.includes(flag)) args.push(flag);
+          }
+          if (!args.includes('--disable-dev-shm-usage')) args.push('--disable-dev-shm-usage');
+          return await puppeteer.launch({
+            headless: typeof chromium.headless === 'boolean' ? chromium.headless : 'new',
+            defaultViewport: chromium.defaultViewport ?? null,
+            executablePath,
+            args,
+          });
+        }
+      } catch (err) {
+        console.warn('[ui-check] Lambda Chromium launch failed; falling back to Puppeteer default:', err?.message || err);
+      }
+    }
+  }
+
+  try {
+    return await puppeteer.launch({
+      headless: 'new',
+      defaultViewport: null,
+      args: baseArgs,
+    });
+  } catch (err) {
+    console.warn('[ui-check] Puppeteer launch failed:', err?.message || err);
+    return null;
+  }
+}
 
 function servePublic(port = PORT) {
   const server = http.createServer((req, res) => {
@@ -78,11 +129,14 @@ async function run() {
     resolvedPort = (addr && addr.port) || resolvedPort;
   } catch {}
 
-  const browser = await puppeteer.launch({
-    headless: 'new',
-    defaultViewport: null,
-    args: ['--no-sandbox','--disable-setuid-sandbox','--no-zygote','--single-process','--disable-gpu']
-  });
+  const browser = await launchBrowser(puppeteer);
+  if (!browser) {
+    console.warn('[ui-check] Unable to launch a headless browser; skipping UI sweep (install Chromium libs or set UI_CHECK_USE_SYSTEM_CHROMIUM=1).');
+    if (server) {
+      try { server.close(); } catch {}
+    }
+    return;
+  }
   const page = await browser.newPage();
 
   ensureDir(artifactsDir);
