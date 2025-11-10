@@ -90,6 +90,11 @@
   status = 200
   force = true
 
+[[redirects]]
+  from = "/create"
+  to = "/create.html"
+  status = 200
+
 # SPA fallback. Note: Edge Functions run before redirects,
 # so /beta is handled by the edge function and won't be swallowed by this.
 [[redirects]]

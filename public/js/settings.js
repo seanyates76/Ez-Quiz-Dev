@@ -14,6 +14,13 @@ function setCookie(name, value){
 function getCookie(name){ try{ return document.cookie.split(';').map(s=>s.trim()).filter(Boolean).map(s=>s.split('='))
   .reduce((acc,[k,v])=>{ acc[decodeURIComponent(k)] = decodeURIComponent(v||''); return acc; }, {})[name] || ''; }catch{ return ''; } }
 
+function dispatchBetaChange(){
+  try{
+    if(typeof document === 'undefined') return;
+    document.dispatchEvent(new CustomEvent('ezq:beta-change', { detail: { enabled: !!S.settings.betaEnabled } }));
+  }catch{}
+}
+
 export function saveSettingsToStorage(){
   try{
     localStorage.setItem(STORAGE_KEYS.theme, S.settings.theme);
@@ -198,6 +205,7 @@ export function wireSettingsPanel(els){
         g.__betaRefreshPending = false;
       }
     }catch{}
+    dispatchBetaChange();
   });
 
 }

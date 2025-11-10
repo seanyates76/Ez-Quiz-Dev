@@ -1,6 +1,6 @@
 // Interactive Editor (beta) — rebuilt v2
 // Simple, robust, no global delegation; uses pointerdown to beat Options capture
-import { runParseFlow } from './generator.js?v=1.5.25';
+import { runParseFlow } from './generator.js?v=1.5.26';
 
 const IE2 = (()=>{
   const SKEY = 'ezq.ie.v2.on';
@@ -10,6 +10,9 @@ const IE2 = (()=>{
   let summaryHintTimer = null;
   const typeLabels = { MC:'Multiple Choice', TF:'True/False', YN:'Yes/No', MT:'Matching' };
   const friendlyType = (type)=> typeLabels[type] || type;
+  function isCreatePage(){
+    try{ return document.body?.dataset?.page === 'create'; }catch{ return false; }
+  }
 
   const qs = (id) => document.getElementById(id);
   const qSel = (sel) => document.querySelector(sel);
@@ -79,6 +82,78 @@ const IE2 = (()=>{
     if(type==='YN'){ return { type:'YN', prompt:'', answer:false }; }
     if(type==='MT'){ return normalizeMT({ type:'MT', prompt:'', left:['',''], right:['',''], matches:[-1,-1] }); }
     return { type:'MC', prompt:'', options:[{text:'',correct:false},{text:'',correct:false}] };
+  }
+
+  function autoFillQuestion(q, idx){
+    if(!q) return false;
+    const base = (typeof q.prompt === 'string' && q.prompt.trim()) ? q.prompt.trim() : `Question ${idx+1}`;
+    let changed = false;
+    if(q.type === 'MC'){
+      q.options = Array.isArray(q.options)
+        ? q.options.map((opt)=>({ text: opt?.text || '', correct: !!opt?.correct }))
+        : [];
+      while(q.options.length < 2){ q.options.push({ text:'', correct:false }); }
+      q.options.forEach((opt, i) => {
+        if(!(opt.text||'').trim()){
+          opt.text = `${base} option ${String.fromCharCode(65 + i)}`;
+          changed = true;
+        }
+      });
+      if(!q.options.some(opt => opt.correct)){
+        q.options[0].correct = true;
+        changed = true;
+      }
+      if(!(q.prompt||'').trim()){
+        q.prompt = base;
+        changed = true;
+      }
+      return changed;
+    }
+    if(q.type === 'TF' || q.type === 'YN'){
+      if(!(q.prompt||'').trim()){
+        q.prompt = `${base}?`;
+        changed = true;
+      }
+      if(q.answer !== true){
+        q.answer = true;
+        changed = true;
+      }
+      return changed;
+    }
+    if(q.type === 'MT'){
+      normalizeMT(q);
+      if(!(q.prompt||'').trim()){
+        q.prompt = base;
+        changed = true;
+      }
+      q.left = Array.isArray(q.left) ? q.left : [];
+      q.right = Array.isArray(q.right) ? q.right : [];
+      for(let li=0; li<q.left.length; li++){
+        if(!(q.left[li]||'').trim()){
+          q.left[li] = `${base} Left ${li+1}`;
+          changed = true;
+        }
+      }
+      for(let ri=0; ri<q.right.length; ri++){
+        if(!(q.right[ri]||'').trim()){
+          q.right[ri] = `${base} Match ${String.fromCharCode(65 + ri)}`;
+          changed = true;
+        }
+      }
+      if(!Array.isArray(q.matches)){
+        q.matches = new Array(q.left.length).fill(-1);
+        changed = true;
+      }
+      const limit = Math.min(q.left.length, q.right.length);
+      for(let li=0; li<limit; li++){
+        if(q.matches[li] !== li){
+          q.matches[li] = li;
+          changed = true;
+        }
+      }
+      return changed;
+    }
+    return false;
   }
 
   // Formatting (match app parser rules)
@@ -332,7 +407,27 @@ const IE2 = (()=>{
       const row=document.createElement('div'); row.className='ie-row';
       const type=document.createElement('select'); type.className='toolbar-input ie-type'; ['MC','TF','YN','MT'].forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=typeLabels[t] || t; if(q.type===t) o.selected=true; type.appendChild(o); });
       const actions=document.createElement('div'); actions.className='ie-actions'; const up=btn('↑','Move up','btn-ghost ie-action-btn'), down=btn('↓','Move down','btn-ghost ie-action-btn'), dup=btn('⧉','Duplicate','btn-ghost ie-action-btn'), del=btn('✕','Delete','btn-ghost ie-action-btn danger'); actions.append(up,down,dup,del); row.append(type, actions); card.appendChild(row);
-      const prompt=document.createElement('input'); prompt.type='text'; prompt.className='toolbar-input ie-prompt'; prompt.placeholder='Question prompt'; prompt.value=q.prompt||''; card.appendChild(prompt);
+      const prompt=document.createElement('input'); prompt.type='text'; prompt.className='toolbar-input ie-prompt'; prompt.placeholder='Question prompt'; prompt.value=q.prompt||'';
+      let promptHost = prompt;
+      if(isCreatePage()){
+        const promptRow=document.createElement('div'); promptRow.className='ie-prompt-row';
+        promptRow.appendChild(prompt);
+        const autofillBtn=btn('✨','Autofill answers','btn-ghost ie-autofill-btn');
+        autofillBtn.addEventListener('click', ()=>{
+          const changed = autoFillQuestion(q, idx);
+          if(changed){
+            syncToEditor();
+            renderCards();
+            renderSummary();
+            setSummaryHint('Autofilled question details');
+          } else {
+            setSummaryHint('Already looks complete.');
+          }
+        });
+        promptRow.appendChild(autofillBtn);
+        promptHost = promptRow;
+      }
+      card.appendChild(promptHost);
       const area=document.createElement('div'); area.className='ie-choices';
       if(q.type==='MC'){
         q.options=q.options||[]; if(q.options.length<2) q.options=[{text:'',correct:false},{text:'',correct:false}];

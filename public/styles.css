@@ -281,6 +281,71 @@ input[type="radio"]:focus-visible{ outline:2px solid var(--ring); outline-offset
 .hidden{display:none!important;}
 .is-open{display:block!important;}
 .container{width:min(var(--app-w),100%); max-width:1060px; margin:var(--sp-6) auto; padding:0 var(--sp-4);}
+body.create-page .container{ max-width:960px; padding-bottom:56px; }
+.create-card{
+  padding:32px 32px 40px;
+}
+@media (max-width:640px){
+  .create-card{ padding:24px 20px 32px; }
+  .create-card__head{ flex-direction:column; }
+  .create-card__cta{ align-items:flex-start; }
+  .create-card__cta small{ text-align:left; }
+}
+.create-card__head{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:24px;
+}
+.create-card__copy{
+  flex:1 1 320px;
+}
+.create-card__copy h1{
+  margin:4px 0;
+  font-size:clamp(1.6rem, 2vw, 2.1rem);
+}
+.create-card__cta{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  gap:8px;
+  min-width:200px;
+}
+.create-card__cta .btn{
+  min-width:0;
+}
+.create-card__cta small{
+  max-width:220px;
+  text-align:right;
+}
+.create-card__cta small,
+.create-card__cta .btn{
+  width:auto;
+}
+.create-back-link{
+  min-width:0;
+  border-radius:999px;
+}
+.eyebrow{
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  font-size:.78rem;
+  color:var(--muted);
+  margin:0 0 4px;
+  font-weight:600;
+}
+.create-share-cta{
+  margin-top:16px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+  align-items:flex-start;
+}
+.create-share-cta .btn{
+  min-width:0;
+}
 .surface{background:var(--panel); border:1px solid var(--border); border-radius:var(--radius-card); box-shadow:var(--shadow-card);}
 .flow-xs > * + *{margin-top:var(--sp-2);}
 .flow-sm > * + *{margin-top:var(--sp-3);}
@@ -1584,6 +1649,22 @@ body[data-busy="true"] #interactiveEditor{ z-index:0; pointer-events:none; }
 @media (max-width:600px){ .ie-card{ padding:18px; } }
 
 .ie-prompt{ width:100%; }
+.ie-prompt-row{
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+.ie-prompt-row .ie-prompt{
+  flex:1 1 auto;
+}
+.ie-autofill-btn{
+  min-width:44px;
+  padding:6px 14px;
+  border-radius:999px;
+  font-size:1rem;
+  line-height:1;
+  margin-left:auto;
+}
 .ie-choices{ display:grid; gap:12px }
 .ie-card > .ie-choices:last-of-type{ margin-bottom:0 }
 .ie-choice{ display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:12px; align-items:center }

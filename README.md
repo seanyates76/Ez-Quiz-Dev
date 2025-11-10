@@ -14,6 +14,7 @@ Create and play quizzes in seconds with a clean, responsive interface. Keyboard-
 Features
 --------
 - Generate from a topic or create your own quiz
+- Dedicated `/create` workspace (beta) with share-ready editor and ✨ autofill helpers
 - Multiple formats: Multiple Choice, True/False, Yes/No, Matching
 - Clear results with retake options (full or missed)
 - Installable PWA with cache-safe updates

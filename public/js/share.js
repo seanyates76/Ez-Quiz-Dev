@@ -1,9 +1,28 @@
 import { S } from './state.js';
-import { runParseFlow } from './generator.js?v=1.5.25';
+import { runParseFlow } from './generator.js?v=1.5.26';
+import { isBetaEnabled } from './beta.mjs';
 
 const shareBtn = document.getElementById('shareQuizBtn');
 const shareLink = document.getElementById('shareLink');
 const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
+
+export function updateShareVisibility(force){
+  const shareControls = document.getElementById('shareControls');
+  const allow = typeof force === 'boolean' ? force : isBetaEnabled(S.settings);
+  if(shareControls){
+    shareControls.hidden = !allow;
+    shareControls.setAttribute('aria-hidden', allow ? 'false' : 'true');
+  }
+  if(shareBtn){
+    if(allow){ shareBtn.removeAttribute('disabled'); }
+    else { shareBtn.setAttribute('disabled','true'); shareBtn.classList.add('hidden'); }
+  }
+  if(shareLink && !allow){
+    shareLink.classList.add('hidden');
+    shareLink.value = '';
+  }
+  return allow;
+}
 
 const prevOnQuizReady = typeof bag.onQuizReady === 'function' ? bag.onQuizReady : null;
 bag.onQuizReady = function handleQuizReady(quiz){
@@ -12,7 +31,7 @@ bag.onQuizReady = function handleQuizReady(quiz){
   }
   if(!quiz || !Array.isArray(quiz.questions) || !Array.isArray(quiz.answers)) return;
   bag._lastQuiz = quiz;
-  if(shareBtn){
+  if(shareBtn && updateShareVisibility()){
     shareBtn.classList.remove('hidden');
     shareBtn.disabled = false;
   }
@@ -45,6 +64,10 @@ bag.loadQuestions = function loadQuestions(lines){
 };
 
 async function saveAndShare(){
+  if(!updateShareVisibility()){
+    alert('Sharing is beta-only right now. Enable beta to continue.');
+    return;
+  }
   if(!bag._lastQuiz){
     alert('Generate or parse a quiz first.');
     return;
@@ -90,6 +113,8 @@ async function saveAndShare(){
 }
 
 shareBtn?.addEventListener('click', saveAndShare);
+document.addEventListener('ezq:beta-change', () => updateShareVisibility());
+updateShareVisibility();
 
 (async function bootShared(){
   const match = window.location.pathname.match(/^\/q\/([a-f0-9]{16})$/i);
