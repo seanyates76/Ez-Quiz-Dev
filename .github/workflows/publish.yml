@@ -17,6 +17,15 @@ jobs:
       PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
     runs-on: ubuntu-latest
     steps:
+      - name: Detect deploy key presence
+        id: detect
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}" ]; then
+            echo "key=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "key=0" >> "$GITHUB_OUTPUT"
+          fi
       - name: Checkout private repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
         with:
@@ -24,6 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: Start SSH agent (deploy key)
+        if: ${{ steps.detect.outputs.key == '1' }}
         uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
         with:
           ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
@@ -41,18 +51,24 @@ jobs:
           if [ -f .publicignore ]; then RSYNC_EXCLUDES+=("--exclude-from=.publicignore"); fi
           rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
 
-      - name: Clone public repo via SSH
+      - name: Clone public repo
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
         run: |
           set -euo pipefail
-          # Clone if exists; otherwise init
-          if git ls-remote git@github.com:seanyates76/Ez-Quiz-App.git HEAD >/dev/null 2>&1; then
-            git clone git@github.com:seanyates76/Ez-Quiz-App.git public-repo
+          if [ "${{ steps.detect.outputs.key }}" = "1" ]; then
+            CLONE_URL="git@github.com:seanyates76/Ez-Quiz-App.git"
           else
-            mkdir -p public-repo
-            cd public-repo
-            git init
-            git remote add origin git@github.com:seanyates76/Ez-Quiz-App.git
-            git checkout -B mirror/main
+            CLONE_URL="https://github.com/seanyates76/Ez-Quiz-App.git"
+          fi
+          if git ls-remote "$CLONE_URL" HEAD >/dev/null 2>&1; then
+            git clone "$CLONE_URL" public-repo
+          else
+            echo "Unable to access seanyates76/Ez-Quiz-App via $CLONE_URL" >&2
+            if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
+              echo "Provide PUBLIC_REPO_TOKEN with repo:public_repo scope or configure a deploy key." >&2
+            fi
+            exit 1
           fi
 
       - name: Sync and push staging branch
@@ -63,7 +79,11 @@ jobs:
           set -euo pipefail
           cd public-repo
           git fetch origin "$SYNC_BRANCH" || true
-          git checkout -B "$SYNC_BRANCH"
+          if git rev-parse --verify "origin/$SYNC_BRANCH" >/dev/null 2>&1; then
+            git checkout -B "$SYNC_BRANCH" "origin/$SYNC_BRANCH"
+          else
+            git checkout -B "$SYNC_BRANCH"
+          fi
           find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
           rsync -a --delete --exclude=.git/ ../filtered/ ./
           git add -A
@@ -75,7 +95,25 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Publish from private repo: ${GITHUB_SHA}"
-          git push --force-with-lease origin HEAD:"$SYNC_BRANCH"
+          TARGET_URL="git@github.com:seanyates76/Ez-Quiz-App.git"
+          if [ "${{ steps.detect.outputs.key }}" = "0" ]; then
+            if [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
+              echo "No deploy key and no PUBLIC_REPO_TOKEN provided." >&2
+              exit 2
+            fi
+            TARGET_URL="https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
+          fi
+          git remote set-url origin "$TARGET_URL"
+          if ! git push --force-with-lease origin HEAD:"$SYNC_BRANCH"; then
+            if [ "${{ steps.detect.outputs.key }}" = "1" ] && [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+              echo "SSH push failed; falling back to HTTPS token..."
+              git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
+              git push --force-with-lease origin HEAD:"$SYNC_BRANCH"
+            else
+              echo "Push failed." >&2
+              exit 1
+            fi
+          fi
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Open or update pull request
