@@ -1,6 +1,6 @@
 import { S } from './state.js';
-import { runParseFlow } from './generator.js?v=1.5.25';
-import { isBetaEnabled } from './beta.mjs?v=1.5.25';
+import { runParseFlow } from './generator.js?v=1.5.26';
+import { isBetaEnabled } from './beta.mjs?v=1.5.26';
 
 const shareBtn = document.getElementById('shareQuizBtn');
 const shareLink = document.getElementById('shareLink');
