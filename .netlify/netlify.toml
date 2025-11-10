@@ -125,18 +125,6 @@ force = true
 [redirects.headers]
 
 [[redirects]]
-from = "/q/:id"
-to = "/.netlify/functions/get-quiz?id=:id"
-status = 200.0
-force = false
-
-[redirects.query]
-
-[redirects.conditions]
-
-[redirects.headers]
-
-[[redirects]]
 from = "/*"
 to = "/index.html"
 status = 200.0
