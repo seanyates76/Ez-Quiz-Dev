@@ -1,15 +1,18 @@
-functionsDirectory = "/home/arch-bean/ez-quiz-app/netlify/functions"
+functionsDirectory = "/home/arch-bean/Projects/Ez-Quiz-Dev/netlify/functions"
 functionsDirectoryOrigin = "config"
+headersOrigin = "config"
 redirectsOrigin = "config"
 plugins = []
-headers = []
 
 [build]
-publish = "/home/arch-bean/ez-quiz-app"
+edge_functions = "/home/arch-bean/Projects/Ez-Quiz-Dev/netlify/edge-functions"
+publish = "/home/arch-bean/Projects/Ez-Quiz-Dev/public"
 publishOrigin = "config"
-functions = "/home/arch-bean/ez-quiz-app/netlify/functions"
+ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- public/ src/ netlify/functions/ package*.json netlify.toml"
+functions = "/home/arch-bean/Projects/Ez-Quiz-Dev/netlify/functions"
 
 [build.environment]
+EZQ_ENV = "production"
 
 [build.processing]
 
@@ -23,14 +26,119 @@ functions = "/home/arch-bean/ez-quiz-app/netlify/functions"
 
 [build.services]
 
+[[edge_functions]]
+function = "beta"
+path = "/beta"
+
 [functions]
 
 [functions."*"]
+external_node_modules = ["@google/generative-ai", "nodemailer"]
 node_bundler = "esbuild"
 
+[[headers]]
+for = "/*"
+
+[headers.values]
+X-Content-Type-Options = "nosniff"
+Referrer-Policy = "strict-origin-when-cross-origin"
+Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.buymeacoffee.com; font-src 'self' data:; connect-src 'self' https://ez-quiz.netlify.app https://eq-quiz.netlify.app https://ezquiz.dev https://cdn.buymeacoffee.com https://app.netlify.com; frame-src 'self' https://app.netlify.com;"
+
+[[headers]]
+for = "/index.html"
+
+[headers.values]
+Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+for = "/"
+
+[headers.values]
+Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+for = "/js/*"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+for = "/icons/*"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+for = "/styles.css"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+for = "/styles.tokens.css"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+for = "/styles.backdrop.css"
+
+[headers.values]
+Cache-Control = "public, max-age=31536000, immutable"
+
 [[redirects]]
-from = "/api/*"
-to = "/.netlify/functions/:splat"
+from = "/api/generate"
+to = "/.netlify/functions/generate-quiz"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/health"
+to = "/.netlify/functions/health"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/api/mcp"
+to = "/.netlify/functions/mcp"
+status = 200.0
+force = true
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/q/:id"
+to = "/.netlify/functions/get-quiz?id=:id"
+status = 200.0
+force = false
+
+[redirects.query]
+
+[redirects.conditions]
+
+[redirects.headers]
+
+[[redirects]]
+from = "/*"
+to = "/index.html"
 status = 200.0
 force = false
 
