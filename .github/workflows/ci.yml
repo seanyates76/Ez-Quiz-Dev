@@ -1,9 +1,5 @@
 name: ci
 
-permissions:
-  contents: read
-  actions: read
-
 on:
   push:
     branches: [ "main", "beta", "feature/**" ]
@@ -16,6 +12,9 @@ concurrency:
 
 jobs:
   verify:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4

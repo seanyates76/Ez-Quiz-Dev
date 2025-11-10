@@ -7,13 +7,12 @@ on:
     branches: [ "main" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  security-events: write
-  id-token: write
-
 jobs:
   analysis:
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
     runs-on: ubuntu-latest
     steps:
       - name: Run OpenSSF Scorecard
