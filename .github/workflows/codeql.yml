@@ -9,9 +9,8 @@ on:
     - cron: '21 3 * * 1'
 
 permissions:
-  actions: read
-  contents: read
-  security-events: write
+  contents: read          # required to checkout repository code
+  security-events: write  # required to upload CodeQL/SARIF results
 
 jobs:
   analyze:
