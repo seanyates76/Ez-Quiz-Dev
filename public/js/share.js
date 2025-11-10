@@ -1,12 +1,20 @@
 import { S } from './state.js';
 import { runParseFlow } from './generator.js?v=1.5.25';
+import { isBetaEnabled } from './beta.mjs?v=1.5.25';
 
 const shareBtn = document.getElementById('shareQuizBtn');
 const shareLink = document.getElementById('shareLink');
 const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
+const shareEnabled = isBetaEnabled(S.settings);
+
+if (!shareEnabled) {
+  shareBtn?.classList.add('hidden');
+  shareLink?.classList.add('hidden');
+}
 
 const prevOnQuizReady = typeof bag.onQuizReady === 'function' ? bag.onQuizReady : null;
 bag.onQuizReady = function handleQuizReady(quiz){
+  if(!shareEnabled) return;
   if(prevOnQuizReady){
     try { prevOnQuizReady(quiz); } catch {}
   }
@@ -89,7 +97,9 @@ async function saveAndShare(){
   }
 }
 
-shareBtn?.addEventListener('click', saveAndShare);
+if (shareEnabled) {
+  shareBtn?.addEventListener('click', saveAndShare);
+}
 
 (async function bootShared(){
   const match = window.location.pathname.match(/^\/q\/([a-f0-9]{16})$/i);

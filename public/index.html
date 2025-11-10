@@ -89,11 +89,6 @@
         </div>
     </div>
 
-      <div id="shareControls" class="row gap wrap">
-        <button id="shareQuizBtn" class="btn hidden" type="button">Share</button>
-        <input id="shareLink" class="toolbar-input hidden" type="text" readonly aria-label="Share link" />
-      </div>
-
       <!-- Subtle hint when inputs change after generation -->
       <div id="regenHint" class="regen-hint" role="status" aria-live="polite" hidden>
         Updated inputs — press Regenerate
@@ -219,6 +214,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       <div class="row gap results-actions">
         <button id="backToMenuBtn" class="btn">Back to Menu</button>
         <span class="flex-spacer"></span>
+        <div class="row gap" id="shareActionGroup">
+          <button id="shareQuizBtn" class="btn hidden" type="button" disabled>Share</button>
+          <input id="shareLink" class="toolbar-input hidden" type="text" readonly aria-label="Share link" />
+        </div>
         <div id="retakeControl" class="retake-control" role="group" aria-label="Retake options">
           <button id="retakePrimary"
                   class="retake-primary"
