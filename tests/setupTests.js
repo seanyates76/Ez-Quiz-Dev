@@ -1,5 +1,5 @@
 const root = typeof globalThis !== 'undefined' ? globalThis : global;
-const FLAG = Symbol.for('ezq.tests.setup.installed');
+const STATE_KEY = Symbol.for('ezq.tests.setup.state');
 
 const defaultState = Object.freeze({
   MAX_QUESTIONS: 30,
@@ -113,22 +113,29 @@ const bootstrap = () => {
 
 bootstrap();
 
-if (!root[FLAG]) {
-  root[FLAG] = true;
-  const installHooks = () => {
-    if (typeof beforeEach === 'function') {
-      beforeEach(() => {
-        bootstrap();
-      });
-    }
-    if (typeof afterEach === 'function') {
-      afterEach(() => {
-        const win = ensureWindow();
-        applyEzqDefaults(win);
-        ensureNavigator(win);
-      });
-    }
-  };
+const state = (() => {
+  const existing = root[STATE_KEY];
+  if (existing && typeof existing === 'object') return existing;
+  const next = { beforeEachInstalled: false, afterEachInstalled: false };
+  root[STATE_KEY] = next;
+  return next;
+})();
 
-  installHooks();
-}
+const installHooks = () => {
+  if (typeof beforeEach === 'function' && !state.beforeEachInstalled) {
+    beforeEach(() => {
+      bootstrap();
+    });
+    state.beforeEachInstalled = true;
+  }
+  if (typeof afterEach === 'function' && !state.afterEachInstalled) {
+    afterEach(() => {
+      const win = ensureWindow();
+      applyEzqDefaults(win);
+      ensureNavigator(win);
+    });
+    state.afterEachInstalled = true;
+  }
+};
+
+installHooks();
