@@ -497,6 +497,18 @@ textarea:focus,
   .gen-toolbar > .toolbar-left{ grid-template-columns:minmax(180px,1fr) minmax(160px,.8fr) max-content; }
 }
 
+@media (min-width: 1024px){
+  .gen-toolbar > .toolbar-left .number-field{ position:relative; padding-bottom:var(--space-1); }
+  .gen-toolbar > .toolbar-left .number-field .hint{
+    position:absolute;
+    left:0;
+    top:calc(100% + 2px);
+    font-size:.75rem;
+    color:var(--muted);
+    pointer-events:none;
+  }
+}
+
 @media (max-width:912px){
   .gen-toolbar{
     grid-template-columns:1fr;

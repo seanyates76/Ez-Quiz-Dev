@@ -72,6 +72,9 @@ function servePublic(port = PORT) {
   const server = http.createServer((req, res) => {
     try {
       const url = new URL(req.url, `http://localhost:${port}`);
+      if (process.env.DEBUG_UI_CHECK) {
+        console.log('[ui-check] request', url.pathname + (url.search || ''));
+      }
       if (url.search && /\.(?:html|css|js|mjs|json|png|svg|webmanifest)$/i.test(url.pathname)) {
         // Ignore cache-buster query strings when serving static assets for the harness
         req.url = url.pathname;
@@ -84,9 +87,12 @@ function servePublic(port = PORT) {
         return;
       }
       const ext = extname(abs).toLowerCase();
-      const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json' };
+      const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.mjs': 'application/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json' };
       const type = types[ext] || 'application/octet-stream';
       statSync(abs); // throws if missing
+      if (process.env.DEBUG_UI_CHECK) {
+        console.log('[ui-check] serve', abs.replace(root, ''), '->', type);
+      }
       res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
       createReadStream(abs).pipe(res);
     } catch (err) {
@@ -138,6 +144,18 @@ async function run() {
     return;
   }
   const page = await browser.newPage();
+  if (process.env.DEBUG_UI_CHECK) {
+    page.on('pageerror', (err) => {
+      console.error('[ui-check] pageerror', err && err.message ? err.message : err);
+    });
+    page.on('console', (msg) => {
+      try {
+        console.log('[ui-check] console', msg.type(), msg.text());
+      } catch {
+        console.log('[ui-check] console', msg.type(), String(msg));
+      }
+    });
+  }
 
   ensureDir(artifactsDir);
 
