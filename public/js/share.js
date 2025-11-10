@@ -5,21 +5,23 @@ import { isBetaEnabled } from './beta.mjs?v=1.5.25';
 const shareBtn = document.getElementById('shareQuizBtn');
 const shareLink = document.getElementById('shareLink');
 const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
-const shareEnabled = isBetaEnabled(S.settings);
 
-if (!shareEnabled) {
-  shareBtn?.classList.add('hidden');
-  shareLink?.classList.add('hidden');
+function isShareEnabled(){
+  return isBetaEnabled(S.settings);
 }
 
-const prevOnQuizReady = typeof bag.onQuizReady === 'function' ? bag.onQuizReady : null;
-bag.onQuizReady = function handleQuizReady(quiz){
-  if(!shareEnabled) return;
-  if(prevOnQuizReady){
-    try { prevOnQuizReady(quiz); } catch {}
+function hideShareControls(){
+  if(shareBtn){
+    shareBtn.classList.add('hidden');
+    shareBtn.disabled = true;
   }
-  if(!quiz || !Array.isArray(quiz.questions) || !Array.isArray(quiz.answers)) return;
-  bag._lastQuiz = quiz;
+  if(shareLink){
+    shareLink.classList.add('hidden');
+    shareLink.value = '';
+  }
+}
+
+function showShareControls(){
   if(shareBtn){
     shareBtn.classList.remove('hidden');
     shareBtn.disabled = false;
@@ -28,6 +30,38 @@ bag.onQuizReady = function handleQuizReady(quiz){
     shareLink.classList.add('hidden');
     shareLink.value = '';
   }
+}
+
+hideShareControls();
+
+try {
+  const body = document.body;
+  if (body) {
+    const observer = new MutationObserver(() => {
+      if (isShareEnabled()) {
+        if (bag._lastQuiz) {
+          showShareControls();
+        }
+      } else {
+        hideShareControls();
+      }
+    });
+    observer.observe(body, { attributes: true, attributeFilter: ['data-beta'] });
+  }
+} catch {}
+
+const prevOnQuizReady = typeof bag.onQuizReady === 'function' ? bag.onQuizReady : null;
+bag.onQuizReady = function handleQuizReady(quiz){
+  if(prevOnQuizReady){
+    try { prevOnQuizReady(quiz); } catch {}
+  }
+  if(!quiz || !Array.isArray(quiz.questions) || !Array.isArray(quiz.answers)) return;
+  bag._lastQuiz = quiz;
+  if(!isShareEnabled()){
+    hideShareControls();
+    return;
+  }
+  showShareControls();
 };
 
 bag.loadQuestions = function loadQuestions(lines){
@@ -53,6 +87,10 @@ bag.loadQuestions = function loadQuestions(lines){
 };
 
 async function saveAndShare(){
+  if(!isShareEnabled()){
+    alert('Sharing is beta-only right now. Enable Beta in Settings to continue.');
+    return;
+  }
   if(!bag._lastQuiz){
     alert('Generate or parse a quiz first.');
     return;
@@ -97,9 +135,7 @@ async function saveAndShare(){
   }
 }
 
-if (shareEnabled) {
-  shareBtn?.addEventListener('click', saveAndShare);
-}
+shareBtn?.addEventListener('click', saveAndShare);
 
 (async function bootShared(){
   const match = window.location.pathname.match(/^\/q\/([a-f0-9]{16})$/i);
@@ -114,6 +150,9 @@ if (shareEnabled) {
     if(!q || !Array.isArray(q.questions)) throw new Error('Invalid payload');
     S.title = q.title || 'Shared Quiz';
     bag.loadQuestions(q.questions);
+    if(isShareEnabled()){
+      showShareControls();
+    }
   } catch (err) {
     console.error('load shared quiz failed', err);
     alert('Shared quiz not found.');
