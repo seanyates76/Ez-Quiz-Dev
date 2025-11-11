@@ -46,9 +46,35 @@ jobs:
       - name: Prepare filtered contents
         run: |
           set -euo pipefail
+          # Guardrail: the mirror must never publish private artifacts. `.publicignore`
+          # is required so repo maintainers can audit the allowlist, and key patterns
+          # must always be present even if the file is edited in-flight.
+          REQUIRED_PUBLIC_IGNORE=(
+            "files/"
+            "issues/"
+            "scripts/"
+            ".ezq/"
+          )
+          if [ ! -f .publicignore ]; then
+            echo "Missing .publicignore. This file documents the public mirror exclusions." >&2
+            exit 1
+          fi
+          for required_pattern in "${REQUIRED_PUBLIC_IGNORE[@]}"; do
+            if ! grep -Fxq "$required_pattern" .publicignore; then
+              echo "\"$required_pattern\" must remain listed in .publicignore to protect private content." >&2
+              exit 1
+            fi
+          done
+
           mkdir -p filtered
           RSYNC_EXCLUDES=("--exclude=.git/" "--exclude=.github/workflows/publish*.yml")
-          if [ -f .publicignore ]; then RSYNC_EXCLUDES+=("--exclude-from=.publicignore"); fi
+          # Built-in safety net so temporary edits to .publicignore cannot leak
+          # sensitive directories.
+          GUARDED_PATHS=("files/" "issues/" "scripts/" ".ezq/")
+          for guarded in "${GUARDED_PATHS[@]}"; do
+            RSYNC_EXCLUDES+=("--exclude=${guarded}")
+          done
+          RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
           rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
 
       - name: Clone public repo
