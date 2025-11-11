@@ -56,20 +56,32 @@ jobs:
           PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
         run: |
           set -euo pipefail
+          CANDIDATES=()
           if [ "${{ steps.detect.outputs.key }}" = "1" ]; then
-            CLONE_URL="git@github.com:seanyates76/Ez-Quiz-App.git"
-          else
-            CLONE_URL="https://github.com/seanyates76/Ez-Quiz-App.git"
-          fi
-          if git ls-remote "$CLONE_URL" HEAD >/dev/null 2>&1; then
-            git clone "$CLONE_URL" public-repo
-          else
-            echo "Unable to access seanyates76/Ez-Quiz-App via $CLONE_URL" >&2
-            if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
-              echo "Provide PUBLIC_REPO_TOKEN with repo:public_repo scope or configure a deploy key." >&2
+            CANDIDATES+=("git@github.com:seanyates76/Ez-Quiz-App.git")
+            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+              CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
             fi
-            exit 1
+          else
+            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+              CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
+            else
+              CANDIDATES+=("https://github.com/seanyates76/Ez-Quiz-App.git")
+            fi
           fi
+
+          for CLONE_URL in "${CANDIDATES[@]}"; do
+            if git ls-remote "$CLONE_URL" HEAD >/dev/null 2>&1; then
+              git clone "$CLONE_URL" public-repo
+              exit 0
+            fi
+          done
+
+          echo "Unable to access seanyates76/Ez-Quiz-App with the provided credentials." >&2
+          if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
+            echo "Provide PUBLIC_REPO_TOKEN with repo:public_repo scope or configure a deploy key." >&2
+          fi
+          exit 1
 
       - name: Sync and push staging branch
         id: sync
