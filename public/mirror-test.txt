@@ -1,1 +1,0 @@
-This placeholder file exists to validate the mirror pipeline. Merge the branch carrying this change into main to trigger the publish workflow and confirm the update propagates to the public mirror/main branch.
