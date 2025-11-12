@@ -143,13 +143,13 @@ jobs:
           set -euo pipefail
           cd public-repo
           PR_TITLE="Mirror: ${GITHUB_SHA:0:12} → main"
-          PR_BODY=$(cat <<EOF
-Automated mirror update from \`seanyates76/Ez-Quiz-Dev\`.
+          printf -v PR_BODY '%s\n\n- Source commit: %s\n- Workflow run: %s/%s/actions/runs/%s' \
+            'Automated mirror update from `seanyates76/Ez-Quiz-Dev`.' \
+            "${GITHUB_SHA}" \
+            "${GITHUB_SERVER_URL}" \
+            "${GITHUB_REPOSITORY}" \
+            "${GITHUB_RUN_ID}"
 
-- Source commit: ${GITHUB_SHA}
-- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-EOF
-          )
           if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
             PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
             gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
