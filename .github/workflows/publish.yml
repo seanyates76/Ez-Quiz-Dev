@@ -15,6 +15,7 @@ jobs:
       contents: read
     env:
       PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+      HAS_PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN != '' }}
     runs-on: ubuntu-latest
     steps:
       - name: Detect deploy key presence
@@ -85,11 +86,11 @@ jobs:
           CANDIDATES=()
           if [ "${{ steps.detect.outputs.key }}" = "1" ]; then
             CANDIDATES+=("git@github.com:seanyates76/Ez-Quiz-App.git")
-            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+            if [ "${HAS_PUBLIC_REPO_TOKEN}" = "true" ]; then
               CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
             fi
           else
-            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+            if [ "${HAS_PUBLIC_REPO_TOKEN}" = "true" ]; then
               CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
             else
               CANDIDATES+=("https://github.com/seanyates76/Ez-Quiz-App.git")
@@ -104,7 +105,7 @@ jobs:
           done
 
           echo "Unable to access seanyates76/Ez-Quiz-App with the provided credentials." >&2
-          if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
+          if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ "${HAS_PUBLIC_REPO_TOKEN}" != "true" ]; then
             echo "Provide PUBLIC_REPO_TOKEN with repo:public_repo scope or configure a deploy key." >&2
           fi
           exit 1
@@ -135,7 +136,7 @@ jobs:
           git commit -m "Publish from private repo: ${GITHUB_SHA}"
           TARGET_URL="git@github.com:seanyates76/Ez-Quiz-App.git"
           if [ "${{ steps.detect.outputs.key }}" = "0" ]; then
-            if [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
+            if [ "${HAS_PUBLIC_REPO_TOKEN}" != "true" ]; then
               echo "No deploy key and no PUBLIC_REPO_TOKEN provided." >&2
               exit 2
             fi
@@ -143,7 +144,7 @@ jobs:
           fi
           git remote set-url origin "$TARGET_URL"
           if ! git push --force-with-lease origin HEAD:"$SYNC_BRANCH"; then
-            if [ "${{ steps.detect.outputs.key }}" = "1" ] && [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+            if [ "${{ steps.detect.outputs.key }}" = "1" ] && [ "${HAS_PUBLIC_REPO_TOKEN}" = "true" ]; then
               echo "SSH push failed; falling back to HTTPS token..."
               git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
               git push --force-with-lease origin HEAD:"$SYNC_BRANCH"
@@ -155,7 +156,7 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Open or update pull request
-        if: ${{ env.PUBLIC_REPO_TOKEN != '' && steps.sync.outputs.has_changes == 'true' }}
+        if: ${{ env.HAS_PUBLIC_REPO_TOKEN == 'true' && steps.sync.outputs.has_changes == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
           SYNC_BRANCH: mirror/main
@@ -163,13 +164,12 @@ jobs:
           set -euo pipefail
           cd public-repo
           PR_TITLE="Mirror: ${GITHUB_SHA:0:12} → main"
-          PR_BODY=$(cat <<-'EOF'
-	Automated mirror update from \`seanyates76/Ez-Quiz-Dev\`.
-	
-	- Source commit: ${GITHUB_SHA}
-	- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-EOF
-          )
+          printf -v PR_BODY '%s\n\n- Source commit: %s\n- Workflow run: %s/%s/actions/runs/%s' \
+            'Automated mirror update from `seanyates76/Ez-Quiz-Dev`.' \
+            "${GITHUB_SHA}" \
+            "${GITHUB_SERVER_URL}" \
+            "${GITHUB_REPOSITORY}" \
+            "${GITHUB_RUN_ID}"
           if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
             PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
             gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
@@ -177,8 +177,8 @@ EOF
             gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"
           fi
 
-      - name: Require PUBLIC_REPO_TOKEN for PR creation
-        if: ${{ env.PUBLIC_REPO_TOKEN == '' && steps.sync.outputs.has_changes == 'true' }}
+      - name: Fail when PUBLIC_REPO_TOKEN is missing
+        if: ${{ env.HAS_PUBLIC_REPO_TOKEN != 'true' && steps.sync.outputs.has_changes == 'true' }}
         run: |
-          echo "PUBLIC_REPO_TOKEN is required to open the mirror pull request." >&2
+          echo "::error::PUBLIC_REPO_TOKEN is required to open or update the mirror pull request. Configure the secret and re-run." >&2
           exit 1
