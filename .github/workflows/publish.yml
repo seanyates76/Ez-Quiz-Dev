@@ -10,175 +10,190 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  mirror:
-    permissions:
-      contents: read
-    env:
-      PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Detect deploy key presence
-        id: detect
-        shell: bash
-        run: |
-          if [ -n "${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}" ]; then
-            echo "key=1" >> "$GITHUB_OUTPUT"
-          else
-            echo "key=0" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Checkout private repo
-        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+    mirror:
+      permissions:
+        contents: read
+      env:
+        PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+      runs-on: ubuntu-latest
+      steps:
+        - name: Checkout private repo
+          uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
+          with:
+            fetch-depth: 0
+            persist-credentials: false
 
-      - name: Start SSH agent (deploy key)
-        if: ${{ steps.detect.outputs.key == '1' }}
-        uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
-        with:
-          ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
+        - name: Detect mirror credentials
+          id: detect
+          env:
+            PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+            PUBLIC_REPO_DEPLOY_KEY: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
+          run: |
+            set -euo pipefail
+            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+              echo "has_pat=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_pat=false" >> "$GITHUB_OUTPUT"
+            fi
+            if [ -n "${PUBLIC_REPO_DEPLOY_KEY:-}" ]; then
+              echo "has_deploy_key=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "has_deploy_key=false" >> "$GITHUB_OUTPUT"
+            fi
 
-      - name: Trust github.com host
-        run: |
-          mkdir -p ~/.ssh
-          ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+        - name: Start SSH agent (deploy key)
+          if: ${{ steps.detect.outputs.has_deploy_key == 'true' }}
+          uses: webfactory/ssh-agent@a6f90b1f127823b31d4d4a8d96047790581349bd # v0.9.1
+          with:
+            ssh-private-key: ${{ secrets.PUBLIC_REPO_DEPLOY_KEY }}
 
-      - name: Prepare filtered contents
-        run: |
-          set -euo pipefail
-          # Guardrail: the mirror must never publish private artifacts. `.publicignore`
-          # is required so repo maintainers can audit the allowlist, and key patterns
-          # must always be present even if the file is edited in-flight.
-          REQUIRED_PUBLIC_IGNORE=(
-            "files/"
-            "issues/"
-            "scripts/"
-            ".ezq/"
-          )
-          if [ ! -f .publicignore ]; then
-            echo "Missing .publicignore. This file documents the public mirror exclusions." >&2
-            exit 1
-          fi
-          for required_pattern in "${REQUIRED_PUBLIC_IGNORE[@]}"; do
-            if ! grep -Fxq "$required_pattern" .publicignore; then
-              echo "\"$required_pattern\" must remain listed in .publicignore to protect private content." >&2
+        - name: Trust github.com host
+          run: |
+            mkdir -p ~/.ssh
+            ssh-keyscan -H github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+
+        - name: Prepare filtered contents
+          run: |
+            set -euo pipefail
+            # Guardrail: the mirror must never publish private artifacts. `.publicignore`
+            # is required so repo maintainers can audit the allowlist, and key patterns
+            # must always be present even if the file is edited in-flight.
+            REQUIRED_PUBLIC_IGNORE=(
+              "files/"
+              "issues/"
+              "scripts/"
+              ".ezq/"
+            )
+            if [ ! -f .publicignore ]; then
+              echo "Missing .publicignore. This file documents the public mirror exclusions." >&2
               exit 1
             fi
-          done
+            for required_pattern in "${REQUIRED_PUBLIC_IGNORE[@]}"; do
+              if ! grep -Fxq "$required_pattern" .publicignore; then
+                echo "\"$required_pattern\" must remain listed in .publicignore to protect private content." >&2
+                exit 1
+              fi
+            done
 
-          mkdir -p filtered
-          RSYNC_EXCLUDES=("--exclude=.git/" "--exclude=.github/workflows/publish*.yml")
-          # Built-in safety net so temporary edits to .publicignore cannot leak
-          # sensitive directories.
-          GUARDED_PATHS=("files/" "issues/" "scripts/" ".ezq/")
-          for guarded in "${GUARDED_PATHS[@]}"; do
-            RSYNC_EXCLUDES+=("--exclude=${guarded}")
-          done
-          RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
-          rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
+            mkdir -p filtered
+            RSYNC_EXCLUDES=("--exclude=.git/" "--exclude=.github/workflows/publish*.yml")
+            # Built-in safety net so temporary edits to .publicignore cannot leak
+            # sensitive directories.
+            GUARDED_PATHS=("files/" "issues/" "scripts/" ".ezq/")
+            for guarded in "${GUARDED_PATHS[@]}"; do
+              RSYNC_EXCLUDES+=("--exclude=${guarded}")
+            done
+            RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
+            rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
 
-      - name: Clone public repo
-        env:
-          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-        run: |
-          set -euo pipefail
-          CANDIDATES=()
-          if [ "${{ steps.detect.outputs.key }}" = "1" ]; then
-            CANDIDATES+=("git@github.com:seanyates76/Ez-Quiz-App.git")
-            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
-              CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
-            fi
-          else
-            if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
-              CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
+        - name: Clone public repo
+          env:
+            HAS_PAT: ${{ steps.detect.outputs.has_pat }}
+            HAS_DEPLOY_KEY: ${{ steps.detect.outputs.has_deploy_key }}
+          run: |
+            set -euo pipefail
+            HAS_PAT="${HAS_PAT:-false}"
+            HAS_DEPLOY_KEY="${HAS_DEPLOY_KEY:-false}"
+            CANDIDATES=()
+            if [ "$HAS_DEPLOY_KEY" = "true" ]; then
+              CANDIDATES+=("git@github.com:seanyates76/Ez-Quiz-App.git")
+              if [ "$HAS_PAT" = "true" ]; then
+                CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
+              fi
             else
-              CANDIDATES+=("https://github.com/seanyates76/Ez-Quiz-App.git")
+              if [ "$HAS_PAT" = "true" ]; then
+                CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
+              else
+                CANDIDATES+=("https://github.com/seanyates76/Ez-Quiz-App.git")
+              fi
             fi
-          fi
 
-          for CLONE_URL in "${CANDIDATES[@]}"; do
-            if git ls-remote "$CLONE_URL" HEAD >/dev/null 2>&1; then
-              git clone "$CLONE_URL" public-repo
+            for CLONE_URL in "${CANDIDATES[@]}"; do
+              if git ls-remote "$CLONE_URL" HEAD >/dev/null 2>&1; then
+                git clone "$CLONE_URL" public-repo
+                exit 0
+              fi
+            done
+
+            echo "Unable to access seanyates76/Ez-Quiz-App with the provided credentials." >&2
+            if [ "$HAS_DEPLOY_KEY" != "true" ] && [ "$HAS_PAT" != "true" ]; then
+              echo "Provide PUBLIC_REPO_TOKEN with repo:public_repo scope or configure a deploy key." >&2
+            fi
+            exit 1
+
+        - name: Sync and push staging branch
+          id: sync
+          env:
+            SYNC_BRANCH: mirror/main
+            HAS_PAT: ${{ steps.detect.outputs.has_pat }}
+            HAS_DEPLOY_KEY: ${{ steps.detect.outputs.has_deploy_key }}
+          run: |
+            set -euo pipefail
+            HAS_PAT="${HAS_PAT:-false}"
+            HAS_DEPLOY_KEY="${HAS_DEPLOY_KEY:-false}"
+            cd public-repo
+            git fetch origin "$SYNC_BRANCH" || true
+            if git rev-parse --verify "origin/$SYNC_BRANCH" >/dev/null 2>&1; then
+              git checkout -B "$SYNC_BRANCH" "origin/$SYNC_BRANCH"
+            else
+              git checkout -B "$SYNC_BRANCH"
+            fi
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            rsync -a --delete --exclude=.git/ ../filtered/ ./
+            git add -A
+            if git diff --cached --quiet; then
+              echo "No changes to publish."
+              echo "has_changes=false" >> "$GITHUB_OUTPUT"
               exit 0
             fi
-          done
-
-          echo "Unable to access seanyates76/Ez-Quiz-App with the provided credentials." >&2
-          if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
-            echo "Provide PUBLIC_REPO_TOKEN with repo:public_repo scope or configure a deploy key." >&2
-          fi
-          exit 1
-
-      - name: Sync and push staging branch
-        id: sync
-        env:
-          SYNC_BRANCH: mirror/main
-        run: |
-          set -euo pipefail
-          cd public-repo
-          git fetch origin "$SYNC_BRANCH" || true
-          if git rev-parse --verify "origin/$SYNC_BRANCH" >/dev/null 2>&1; then
-            git checkout -B "$SYNC_BRANCH" "origin/$SYNC_BRANCH"
-          else
-            git checkout -B "$SYNC_BRANCH"
-          fi
-          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-          rsync -a --delete --exclude=.git/ ../filtered/ ./
-          git add -A
-          if git diff --cached --quiet; then
-            echo "No changes to publish."
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Publish from private repo: ${GITHUB_SHA}"
-          TARGET_URL="git@github.com:seanyates76/Ez-Quiz-App.git"
-          if [ "${{ steps.detect.outputs.key }}" = "0" ]; then
-            if [ -z "${PUBLIC_REPO_TOKEN:-}" ]; then
-              echo "No deploy key and no PUBLIC_REPO_TOKEN provided." >&2
-              exit 2
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Publish from private repo: ${GITHUB_SHA}"
+            TARGET_URL="git@github.com:seanyates76/Ez-Quiz-App.git"
+            if [ "$HAS_DEPLOY_KEY" != "true" ]; then
+              if [ "$HAS_PAT" != "true" ]; then
+                echo "No deploy key and no PUBLIC_REPO_TOKEN provided." >&2
+                exit 2
+              fi
+              TARGET_URL="https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
             fi
-            TARGET_URL="https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
-          fi
-          git remote set-url origin "$TARGET_URL"
-          if ! git push --force-with-lease origin HEAD:"$SYNC_BRANCH"; then
-            if [ "${{ steps.detect.outputs.key }}" = "1" ] && [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
-              echo "SSH push failed; falling back to HTTPS token..."
-              git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
-              git push --force-with-lease origin HEAD:"$SYNC_BRANCH"
+            git remote set-url origin "$TARGET_URL"
+            if ! git push --force-with-lease origin HEAD:"$SYNC_BRANCH"; then
+              if [ "$HAS_DEPLOY_KEY" = "true" ] && [ "$HAS_PAT" = "true" ]; then
+                echo "SSH push failed; falling back to HTTPS token..."
+                git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
+                git push --force-with-lease origin HEAD:"$SYNC_BRANCH"
+              else
+                echo "Push failed." >&2
+                exit 1
+              fi
+            fi
+            echo "has_changes=true" >> "$GITHUB_OUTPUT"
+
+        - name: Open or update pull request
+          if: ${{ steps.detect.outputs.has_pat == 'true' && steps.sync.outputs.has_changes == 'true' }}
+          env:
+            GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+            SYNC_BRANCH: mirror/main
+          run: |
+            set -euo pipefail
+            cd public-repo
+            PR_TITLE="Mirror: ${GITHUB_SHA:0:12} → main"
+            printf -v PR_BODY '%s\n\n- Source commit: %s\n- Workflow run: %s/%s/actions/runs/%s' \
+              'Automated mirror update from `seanyates76/Ez-Quiz-Dev`.' \
+              "${GITHUB_SHA}" \
+              "${GITHUB_SERVER_URL}" \
+              "${GITHUB_REPOSITORY}" \
+              "${GITHUB_RUN_ID}"
+            if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
+              PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
+              gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
             else
-              echo "Push failed." >&2
-              exit 1
+              gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"
             fi
-          fi
-          echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
-      - name: Open or update pull request
-        if: ${{ env.PUBLIC_REPO_TOKEN != '' && steps.sync.outputs.has_changes == 'true' }}
-        env:
-          GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-          SYNC_BRANCH: mirror/main
-        run: |
-          set -euo pipefail
-          cd public-repo
-          PR_TITLE="Mirror: ${GITHUB_SHA:0:12} → main"
-          PR_BODY=$(cat <<-'EOF'
-	Automated mirror update from \`seanyates76/Ez-Quiz-Dev\`.
-	
-	- Source commit: ${GITHUB_SHA}
-	- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-EOF
-          )
-          if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
-            PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
-            gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
-          else
-            gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"
-          fi
-
-      - name: Require PUBLIC_REPO_TOKEN for PR creation
-        if: ${{ env.PUBLIC_REPO_TOKEN == '' && steps.sync.outputs.has_changes == 'true' }}
-        run: |
-          echo "PUBLIC_REPO_TOKEN is required to open the mirror pull request." >&2
-          exit 1
+        - name: Fail when PUBLIC_REPO_TOKEN is missing
+          if: ${{ steps.detect.outputs.has_pat != 'true' && steps.sync.outputs.has_changes == 'true' }}
+          run: |
+            echo "::error::PUBLIC_REPO_TOKEN is required to open or update the mirror pull request. Configure the secret and re-run." >&2
+            exit 1
