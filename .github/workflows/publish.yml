@@ -187,7 +187,8 @@ jobs:
             gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"
           fi
 
-      - name: Skip pull request update (token not configured)
+      - name: Fail when PUBLIC_REPO_TOKEN is missing
         if: ${{ steps.token.outputs.has_pat != 'true' && steps.sync.outputs.has_changes == 'true' }}
         run: |
-          echo "::warning::PUBLIC_REPO_TOKEN is not configured; the mirror branch was updated but no pull request could be created." >&2
+          echo "::error::PUBLIC_REPO_TOKEN is required to open or update the mirror pull request. Configure the secret and re-run." >&2
+          exit 1
