@@ -26,16 +26,6 @@ jobs:
           else
             echo "key=0" >> "$GITHUB_OUTPUT"
           fi
-      - name: Detect PUBLIC_REPO_TOKEN presence
-        id: token
-        env:
-          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-        run: |
-          if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
-            echo "has_pat=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_pat=false" >> "$GITHUB_OUTPUT"
-          fi
       - name: Checkout private repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
         with:
@@ -88,19 +78,20 @@ jobs:
           rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
 
       - name: Clone public repo
-        env:
-          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-          HAS_PAT: ${{ steps.token.outputs.has_pat }}
         run: |
           set -euo pipefail
+          HAS_PAT=false
+          if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+            HAS_PAT=true
+          fi
           CANDIDATES=()
           if [ "${{ steps.detect.outputs.key }}" = "1" ]; then
             CANDIDATES+=("git@github.com:seanyates76/Ez-Quiz-App.git")
-            if [ "${HAS_PAT:-false}" = "true" ]; then
+            if [ "$HAS_PAT" = "true" ]; then
               CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
             fi
           else
-            if [ "${HAS_PAT:-false}" = "true" ]; then
+            if [ "$HAS_PAT" = "true" ]; then
               CANDIDATES+=("https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git")
             else
               CANDIDATES+=("https://github.com/seanyates76/Ez-Quiz-App.git")
@@ -115,7 +106,7 @@ jobs:
           done
 
           echo "Unable to access seanyates76/Ez-Quiz-App with the provided credentials." >&2
-          if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ "${HAS_PAT:-false}" != "true" ]; then
+          if [ "${{ steps.detect.outputs.key }}" = "0" ] && [ "$HAS_PAT" != "true" ]; then
             echo "Provide PUBLIC_REPO_TOKEN with repo:public_repo scope or configure a deploy key." >&2
           fi
           exit 1
@@ -124,7 +115,6 @@ jobs:
         id: sync
         env:
           SYNC_BRANCH: mirror/main
-          HAS_PAT: ${{ steps.token.outputs.has_pat }}
         run: |
           set -euo pipefail
           cd public-repo
@@ -145,9 +135,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Publish from private repo: ${GITHUB_SHA}"
+          HAS_PAT=false
+          if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+            HAS_PAT=true
+          fi
           TARGET_URL="git@github.com:seanyates76/Ez-Quiz-App.git"
           if [ "${{ steps.detect.outputs.key }}" = "0" ]; then
-            if [ "${HAS_PAT:-false}" != "true" ]; then
+            if [ "$HAS_PAT" != "true" ]; then
               echo "No deploy key and no PUBLIC_REPO_TOKEN provided." >&2
               exit 2
             fi
@@ -155,7 +149,7 @@ jobs:
           fi
           git remote set-url origin "$TARGET_URL"
           if ! git push --force-with-lease origin HEAD:"$SYNC_BRANCH"; then
-            if [ "${{ steps.detect.outputs.key }}" = "1" ] && [ "${HAS_PAT:-false}" = "true" ]; then
+            if [ "${{ steps.detect.outputs.key }}" = "1" ] && [ "$HAS_PAT" = "true" ]; then
               echo "SSH push failed; falling back to HTTPS token..."
               git remote set-url origin "https://x-access-token:${PUBLIC_REPO_TOKEN}@github.com/seanyates76/Ez-Quiz-App.git"
               git push --force-with-lease origin HEAD:"$SYNC_BRANCH"
@@ -167,7 +161,7 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Open or update pull request
-        if: ${{ steps.token.outputs.has_pat == 'true' && steps.sync.outputs.has_changes == 'true' }}
+        if: ${{ env.PUBLIC_REPO_TOKEN != '' && steps.sync.outputs.has_changes == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
           SYNC_BRANCH: mirror/main
@@ -189,7 +183,7 @@ jobs:
           fi
 
       - name: Fail when PUBLIC_REPO_TOKEN is missing
-        if: ${{ steps.token.outputs.has_pat != 'true' && steps.sync.outputs.has_changes == 'true' }}
+        if: ${{ env.PUBLIC_REPO_TOKEN == '' && steps.sync.outputs.has_changes == 'true' }}
         run: |
           echo "::error::PUBLIC_REPO_TOKEN is required to open or update the mirror pull request. Configure the secret and re-run." >&2
           exit 1
