@@ -177,6 +177,6 @@ jobs:
           fi
 
       - name: Skip pull request update (token not configured)
-        if: ${{ secrets.PUBLIC_REPO_TOKEN == '' && steps.sync.outputs.has_changes == 'true' }}
+        if: ${{ env.PUBLIC_REPO_TOKEN == '' && steps.sync.outputs.has_changes == 'true' }}
         run: |
           echo "::warning::PUBLIC_REPO_TOKEN is not configured; the mirror branch was updated but no pull request could be created." >&2
