@@ -26,6 +26,17 @@ jobs:
           else
             echo "key=0" >> "$GITHUB_OUTPUT"
           fi
+      - name: Detect PUBLIC_REPO_TOKEN presence
+        id: token
+        shell: bash
+        env:
+          PUBLIC_REPO_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
+        run: |
+          if [ -n "${PUBLIC_REPO_TOKEN:-}" ]; then
+            echo "has_pat=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_pat=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Checkout private repo
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v4
         with:
@@ -155,7 +166,7 @@ jobs:
           echo "has_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Open or update pull request
-        if: ${{ env.PUBLIC_REPO_TOKEN != '' && steps.sync.outputs.has_changes == 'true' }}
+        if: ${{ steps.token.outputs.has_pat == 'true' && steps.sync.outputs.has_changes == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
           SYNC_BRANCH: mirror/main
@@ -163,13 +174,12 @@ jobs:
           set -euo pipefail
           cd public-repo
           PR_TITLE="Mirror: ${GITHUB_SHA:0:12} → main"
-          PR_BODY=$(cat <<-'EOF'
-	Automated mirror update from \`seanyates76/Ez-Quiz-Dev\`.
-	
-	- Source commit: ${GITHUB_SHA}
-	- Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-EOF
-          )
+          printf -v PR_BODY '%s\n\n- Source commit: %s\n- Workflow run: %s/%s/actions/runs/%s' \
+            'Automated mirror update from `seanyates76/Ez-Quiz-Dev`.' \
+            "${GITHUB_SHA}" \
+            "${GITHUB_SERVER_URL}" \
+            "${GITHUB_REPOSITORY}" \
+            "${GITHUB_RUN_ID}"
           if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
             PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
             gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
@@ -177,8 +187,7 @@ EOF
             gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"
           fi
 
-      - name: Require PUBLIC_REPO_TOKEN for PR creation
-        if: ${{ env.PUBLIC_REPO_TOKEN == '' && steps.sync.outputs.has_changes == 'true' }}
+      - name: Skip pull request update (token not configured)
+        if: ${{ steps.token.outputs.has_pat != 'true' && steps.sync.outputs.has_changes == 'true' }}
         run: |
-          echo "PUBLIC_REPO_TOKEN is required to open the mirror pull request." >&2
-          exit 1
+          echo "::warning::PUBLIC_REPO_TOKEN is not configured; the mirror branch was updated but no pull request could be created." >&2
