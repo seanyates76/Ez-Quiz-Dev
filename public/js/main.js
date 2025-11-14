@@ -6,6 +6,14 @@ import { wireGenerator } from './generator.js?v=1.5.27';
 import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI } from './quiz.js';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
+function debugLog(message){
+  try {
+    if (localStorage.getItem('EZQ_DEBUG')) {
+      console.debug('[ezq:dev]', message);
+    }
+  } catch {}
+}
+
 function getEls(){
   return {
     themeRadios: byQSA('input[name="theme"]'),
@@ -20,6 +28,7 @@ function getEls(){
 }
 
 function init(){
+  debugLog('main:init begin');
   // Measure header height for light theme brand placement
   (function headerMetrics(){
     function updateHeaderVars(){
