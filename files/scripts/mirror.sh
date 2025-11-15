@@ -2,6 +2,9 @@
 set -euo pipefail
 PUBLIC_GH_SSH="${PUBLIC_GH_SSH:-git@github.com:seanyates76/Ez-Quiz-App.git}"
 PUB_DIR="${PUB_DIR:-.mirror-push}"
+# Push the export to a dedicated mirror branch on the public repo so we don't
+# blast its default branch. Override by exporting `MIRROR_BRANCH`.
+MIRROR_BRANCH="${MIRROR_BRANCH:-mirror/main}"
 
 # 1) Build a clean export of the current tree
 rm -rf "$PUB_DIR"
@@ -19,7 +22,8 @@ git remote add origin "$PUBLIC_GH_SSH"
 git add .
 git commit -m "Sync from private repo"
 git branch -M main
-git push -f origin main
+echo "Pushing mirror export to ${MIRROR_BRANCH} on ${PUBLIC_GH_SSH}"
+git push -f origin "main:${MIRROR_BRANCH}"
 popd >/dev/null
 
 # 4) Push tags from private to public
