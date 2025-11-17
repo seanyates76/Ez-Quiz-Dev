@@ -40,6 +40,12 @@ npm test
 npm run ui:check
 ```
 
+Syncing with Ez-Quiz-App (Public)
+---------------------------------
+- **Pull public → dev**: run `npm run sync:public` (or `files/scripts/pull-public.sh`). It clones `seanyates76/Ez-Quiz-App` main and overlays those files onto this repo while protecting anything listed in `.publicignore` (docs, scripts, internal tooling, etc.). Set `PUBLIC_BRANCH`, `PUBLIC_GH_URL`, or `CLEAN_SYNC=true` if you need different behavior.
+- **Push dev → public**: keep using `.github/workflows/publish.yml` or `files/scripts/mirror.sh` which export a filtered tree defined by `.publicignore`.
+- Always review the diff after running either command so you can commit or revert intentional changes before opening a PR.
+
 Key Endpoints
 -------------
 - `/.netlify/functions/generate-quiz` — generate from topic or seed text

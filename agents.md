@@ -14,6 +14,11 @@ Hey future helper! This repo ships the [ez-quiz.app](https://ez-quiz.app) PWA pl
 - Full stack: `netlify dev` from repo root; copy env vars from `ENV.md`. Use `AI_PROVIDER=echo` if you lack API keys.
 - Health: `/.netlify/functions/health` when running through Netlify.
 
+## Public ↔ Private Sync
+- **Pull Ez-Quiz-App → this repo**: run `npm run sync:public` (wrapper for `files/scripts/pull-public.sh`). It clones `seanyates76/Ez-Quiz-App` `main`, overlays files here, and automatically preserves anything excluded via `.publicignore` (files/, issues/, scripts/, docs-heavy dirs, etc.). Set `PUBLIC_BRANCH`, `PUBLIC_GH_URL`, or `CLEAN_SYNC=true` if you need a different branch, remote, or a delete-sync.
+- **Push this repo → Ez-Quiz-App**: keep using `files/scripts/mirror.sh` locally or `.github/workflows/publish.yml` in CI. Both honor `.publicignore` and enforce guardrails so private assets never leave.
+- Always inspect `git status` after either direction; commit or drop changes intentionally.
+
 ## Visual UI Checks (toolbar + results)
 
 We now ship a viewport‑aware UI check that validates the generator toolbar layout at multiple widths and writes screenshots + measured metrics. It’s designed to prevent regressions where the Difficulty→Length gap grows, or the Length control visually hugs the action buttons at tablet sizes.

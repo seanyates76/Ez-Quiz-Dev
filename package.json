@@ -12,7 +12,8 @@
     "fmt:check": "prettier -c . || true",
     "fmt:write": "prettier -w . || true",
     "test:parser": "node ./tests/parser.corpus.mjs || echo Parser corpus missing",
-    "reiterate": "node ../ezq-dev-tools/reiterate.mjs"
+    "reiterate": "node ../ezq-dev-tools/reiterate.mjs",
+    "sync:public": "./files/scripts/pull-public.sh"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
