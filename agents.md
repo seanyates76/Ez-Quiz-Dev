@@ -2,6 +2,11 @@
 
 Hey future helper! This repo ships the [ez-quiz.app](https://ez-quiz.app) PWA plus a few Netlify Functions. It’s a static front end under `public/` (vanilla ES modules) with serverless handlers in `netlify/functions/` for quiz generation and feedback email.
 
+## Branch: new-maintenance-branch
+- Rebuilding `public/ui-kit.html` to serve as a production-accurate style guide. Current snapshot mirrors the live markup (toolbar, results, inputs, fieldgroups, attachment affix) but still reports `ui-kit-overflow` in `npm run ui:check` because the shell width + glow exceed 360 px. If you pick up this branch, tighten the layout (reduce fixed width/padding on `.kit-shell` or relax the check) and re-run the sweep.
+- Theme/Beta toggles are wired up (localStorage + `data-theme`/`data-beta`), yet they still don’t flip the palette in the Netlify dev preview—looks like `applyTheme` isn’t being called early enough. Plan: trace what `main.js` does on the live site (preload script sets `data-theme` before paint, then `applyTheme` syncs CSS vars) and port that logic.
+- Puppeteer currently fails on `results-w360` because the module import occasionally gets interrupted when navigating between `/` and `/ui-kit.html`. If you continue the UI kit work, make sure the results render step still passes after layout tweaks.
+
 ## Orientation
 - **Entry point**: `public/index.html` loads slim modules from `public/js/`. State lives in `public/js/state.js`; the generator wiring is in `public/js/generator.js` and delegates to `public/js/api.js` (prefers `/.netlify/functions/generate-quiz`, falls back to `/api/generate`).
 - **Styling**: global tokens set in `public/styles.css` (see top-of-file CSS variables); cards/toolbars/veils use shared radius + shadow tokens (`--radius-*`, `--shadow-*`). Keep those consistent when you tweak UI.
