@@ -2,6 +2,12 @@
 
 Hey future helper! This repo ships the [ez-quiz.app](https://ez-quiz.app) PWA plus a few Netlify Functions. It’s a static front end under `public/` (vanilla ES modules) with serverless handlers in `netlify/functions/` for quiz generation and feedback email.
 
+## Branch: new-maintenance-branch
+- ✅ **UI Kit Enhanced**: `public/ui-kit.html` now includes Quiz Runner elements, colored correctness chips (`.pill.success`/`.pill.danger`), and working Theme/Beta toggles.
+- ✅ **CSS Refactored**: Consolidated redundant status color definitions (chip, pill, ie-status, ie-summary) into shared block to reduce duplication.
+- ✅ **CSP Fix**: Moved inline toggle script to `public/js/ui-kit.js` to comply with Content Security Policy enforced by `netlify dev`.
+- ✅ **UI Checks Passing**: All viewport checks pass (`npm run ui:check`).
+
 ## Orientation
 - **Entry point**: `public/index.html` loads slim modules from `public/js/`. State lives in `public/js/state.js`; the generator wiring is in `public/js/generator.js` and delegates to `public/js/api.js` (prefers `/.netlify/functions/generate-quiz`, falls back to `/api/generate`).
 - **Styling**: global tokens set in `public/styles.css` (see top-of-file CSS variables); cards/toolbars/veils use shared radius + shadow tokens (`--radius-*`, `--shadow-*`). Keep those consistent when you tweak UI.

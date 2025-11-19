@@ -29,7 +29,16 @@ function servePublic(port = PORT) {
         return;
       }
       const ext = extname(abs).toLowerCase();
-      const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json; charset=utf-8', '.webmanifest': 'application/manifest+json' };
+      const types = {
+        '.html': 'text/html; charset=utf-8',
+        '.css': 'text/css; charset=utf-8',
+        '.js': 'application/javascript; charset=utf-8',
+        '.mjs': 'application/javascript; charset=utf-8',
+        '.png': 'image/png',
+        '.svg': 'image/svg+xml',
+        '.json': 'application/json; charset=utf-8',
+        '.webmanifest': 'application/manifest+json'
+      };
       const type = types[ext] || 'application/octet-stream';
       statSync(abs); // throws if missing
       res.writeHead(200, { 'Content-Type': type, 'Cache-Control': 'no-cache' });
@@ -290,6 +299,70 @@ async function run() {
     writeFileSync(join(artifactsDir, `toolbar-${vp.name}.png`), snap);
     try { writeFileSync(join(artifactsDir, `toolbar-${vp.name}.json`), JSON.stringify(metrics, null, 2)); } catch {}
 
+    // --- Quiz option radio alignment check ---
+    let radioMetrics = null;
+    try {
+      radioMetrics = await page.evaluate(() => {
+        const mountId = 'ui-check-radio';
+        const quizView = document.getElementById('quizView');
+        let restoredHidden = false;
+        if (quizView && quizView.classList.contains('is-hidden')) {
+          quizView.classList.remove('is-hidden');
+          restoredHidden = true;
+        }
+        let mount = document.getElementById(mountId);
+        if (mount) mount.remove();
+        mount = document.createElement('div');
+        mount.id = mountId;
+        mount.style.opacity = '0';
+        mount.style.pointerEvents = 'none';
+        mount.innerHTML = `
+          <div class="options" data-ui-check="radios">
+            <label class="opt">
+              <input type="radio" name="ui-check-radio" />
+              <span>Sample option to verify radio alignment.</span>
+            </label>
+          </div>
+        `;
+        if (quizView) {
+          quizView.appendChild(mount);
+        } else {
+          document.body.appendChild(mount);
+        }
+        const label = mount.querySelector('label.opt');
+        const input = label ? label.querySelector('input[type="radio"]') : null;
+        const span = label ? label.querySelector('span') : null;
+        if (!label || !input || !span) {
+          mount.remove();
+          if (quizView && restoredHidden) quizView.classList.add('is-hidden');
+          return { error: 'radio-sample-missing' };
+        }
+        const rectLabel = label.getBoundingClientRect();
+        const rectInput = input.getBoundingClientRect();
+        const rectText = span.getBoundingClientRect();
+        const inputCenter = rectInput.top + rectInput.height / 2;
+        const labelCenter = rectLabel.top + rectLabel.height / 2;
+        const textCenter = rectText.top + rectText.height / 2;
+        const result = {
+          alignDeltaLabel: +(inputCenter - labelCenter).toFixed(2),
+          alignDeltaText: +(inputCenter - textCenter).toFixed(2),
+        };
+        mount.remove();
+        if (quizView && restoredHidden) quizView.classList.add('is-hidden');
+        return result;
+      });
+    } catch (err) {
+      radioMetrics = { error: String(err && err.message || err || 'radio-metrics-failed') };
+    }
+    if (!radioMetrics || radioMetrics.error) {
+      failures.push({ viewport: vp.name, reason: 'radio-metrics-error', details: radioMetrics });
+    } else {
+      const allowedDelta = 2; // px
+      if (Math.abs(radioMetrics.alignDeltaLabel) > allowedDelta || Math.abs(radioMetrics.alignDeltaText) > allowedDelta) {
+        failures.push({ viewport: vp.name, reason: 'radio-misaligned', details: radioMetrics });
+      }
+    }
+
     // --- Results phase: render a synthetic results view and validate layout ---
     let rmetrics = null;
     try {
@@ -360,6 +433,64 @@ async function run() {
       }
       if (rmetrics.hasExplain) {
         failures.push({ viewport: vp.name, reason: 'results-explain-gating', details: rmetrics });
+      }
+    }
+
+    // --- UI Kit page sanity (overflow + required sections) ---
+    let kitMetrics = null;
+    if (server) {
+      const kitPage = await browser.newPage();
+      await kitPage.setViewport({ width: vp.width, height: vp.height, deviceScaleFactor: 1 });
+      try {
+        await kitPage.goto(`http://127.0.0.1:${resolvedPort}/ui-kit.html`, { waitUntil: 'domcontentloaded' });
+        await kitPage.waitForSelector('.kit-shell', { timeout: 2000 }).catch(()=>{});
+        kitMetrics = await kitPage.evaluate(() => {
+          const docScroll = document.documentElement.scrollWidth;
+          const docClient = document.documentElement.clientWidth;
+          const bodyScroll = document.body.scrollWidth;
+          const bodyClient = document.body.clientWidth;
+          const overflowTolerance = 12;
+          const overflowDoc = docScroll > docClient + overflowTolerance;
+          const overflowBody = bodyScroll > bodyClient + overflowTolerance;
+          const hero = document.querySelector('.kit-hero');
+          const panels = document.querySelectorAll('.kit-shell section.card');
+          const toolbar = document.querySelector('#kit-toolbar .gen-toolbar');
+          const attachment = document.querySelector('#kit-attachment .input-affix');
+          return {
+            overflowDoc,
+            overflowBody,
+            docScroll,
+            docClient,
+            bodyScroll,
+            bodyClient,
+            panelCount: panels.length,
+            hasHero: !!hero,
+            hasToolbar: !!toolbar,
+            hasAttachment: !!attachment,
+          };
+        });
+        const ksnap = await kitPage.screenshot({ fullPage: false });
+        writeFileSync(join(artifactsDir, `ui-kit-${vp.name}.png`), ksnap);
+        try { writeFileSync(join(artifactsDir, `ui-kit-${vp.name}.json`), JSON.stringify(kitMetrics, null, 2)); } catch {}
+      } catch (err) {
+        kitMetrics = { error: String(err && err.message || err || 'ui-kit-check-failed') };
+      } finally {
+        await kitPage.close().catch(()=>{});
+      }
+    } else {
+      kitMetrics = { skipped: 'no-server' };
+    }
+
+    if (kitMetrics) {
+      if (kitMetrics.error) {
+        failures.push({ viewport: vp.name, reason: 'ui-kit-error', details: kitMetrics });
+      } else if (!kitMetrics.skipped) {
+        if (kitMetrics.overflowDoc || kitMetrics.overflowBody) {
+          failures.push({ viewport: vp.name, reason: 'ui-kit-overflow', details: kitMetrics });
+        }
+        if (!kitMetrics.hasHero || !kitMetrics.hasToolbar || !kitMetrics.hasAttachment || (kitMetrics.panelCount || 0) < 7) {
+          failures.push({ viewport: vp.name, reason: 'ui-kit-missing-elements', details: kitMetrics });
+        }
       }
     }
   }

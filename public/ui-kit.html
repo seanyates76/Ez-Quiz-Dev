@@ -1,741 +1,377 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="dark" class="theme-ready">
+
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>EZQ UI Kit</title>
-  <link rel="stylesheet" href="./styles.css?v=dev">
-  <!-- Material Symbols (variable icon font) for icon previews only -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL,wght,GRAD,opsz@0..1,300..700,-50..200,20..48&display=swap" rel="stylesheet">
+  <title>EZ Quiz UI Kit</title>
+  <script src="js/theme-preload.js?v=1.5.27"></script>
+  <link rel="stylesheet" href="styles.css?v=1.5.27">
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.27">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.27">
   <style>
-    .section { margin-block: 2rem; }
-    .row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
-    .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
-    /* Material Symbols helper */
-    .ms { font-family: 'Material Symbols Rounded', sans-serif; font-weight: normal; font-style: normal; font-size: 24px; line-height: 1; letter-spacing: normal; text-transform: none; display: inline-block; white-space: nowrap; direction: ltr; -webkit-font-smoothing: antialiased; }
-    .ms.outline { font-variation-settings: 'FILL' 0, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
-    .ms.filled { font-variation-settings: 'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24; }
-    .affix-demo { --toolbar-height: 40px; min-width: 260px; }
+    body.kit-body {
+      background: radial-gradient(circle at top, rgba(24, 28, 46, 0.95), rgba(6, 8, 16, 0.98));
+      color: var(--text);
+      min-height: 100vh;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .kit-shell {
+      width: min(1120px, calc(100% - 32px));
+      margin: 0 auto 3rem;
+      padding-top: 2rem;
+      display: grid;
+      gap: 2rem;
+    }
+
+    .kit-hero.card {
+      background: linear-gradient(135deg, rgba(33, 44, 82, 0.95), rgba(66, 83, 137, 0.9));
+      color: #f6f7ff;
+      box-shadow: 0 30px 80px rgba(4, 6, 12, 0.55);
+      border: none;
+    }
+
+    .kit-hero h1 {
+      margin: 0;
+      font-size: clamp(2rem, 4vw, 2.8rem);
+    }
+
+    .kit-hero p {
+      margin: 0;
+      line-height: 1.5;
+    }
+
+    .kit-toggles {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+    }
+
+    .kit-pane {
+      display: grid;
+      gap: 1rem;
+    }
+
+    .kit-pane__head h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+
+    .kit-pane__head p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .kit-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    }
+
+    .kit-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .5rem;
+    }
+
+    .kit-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: .4rem;
+    }
+
+    .kit-footer {
+      margin: 0 auto 2rem;
+      width: min(1120px, calc(100% - 32px));
+      color: var(--muted);
+      text-align: center;
+      font-size: .85rem;
+    }
   </style>
-  </head>
-<body>
-  <header class="section">
-    <div class="container row" role="banner">
-      <h1>EZQ UI Kit</h1>
-      <button id="themeToggle" class="btn btn-outline" type="button" aria-pressed="false" title="Toggle light theme">
-        Theme: Dark
-      </button>
+</head>
+
+<body class="kit-body" data-theme="dark">
+  <header class="site-header" role="banner">
+    <div class="site-header__row">
+      <div class="brand">
+        <a href="/" class="brand-link" aria-label="EZ Quiz Home">
+          <img id="kitBrand" src="icons/brand-title-source.png" data-dark="icons/brand-title-source.png"
+            data-light="icons/brand-title-source-light.png" alt="EZ Quiz" class="brand-logo">
+        </a>
+      </div>
+      <div class="header-actions" aria-label="Kit controls">
+        <button id="kitThemeToggle" class="btn btn-outline" type="button">Theme: Dark</button>
+        <button id="kitBetaToggle" class="btn btn-outline" type="button">Beta: Off</button>
+      </div>
     </div>
   </header>
 
-  <main class="container" id="main">
-    <section class="section" id="icons-paperclip">
-      <h2>Paperclip (Affix) Options</h2>
-      <p class="muted small">Previewing upright clip icons in isolation and inside a mock affix. Choose one that feels open and balanced. All previews respect light/dark theme.</p>
-      <div class="grid" role="group" aria-label="Paperclip icon options">
-        <div class="card" aria-label="Current clip (beta)">
-          <div class="card__body">
-            <h3>Current — Material “attach_file” (beta only)</h3>
-            <p class="muted small">The media import affix ships exclusively in beta builds. Non-beta users don’t see the button, and when <code>data-beta</code> is present we render Google’s Material Symbols paperclip.</p>
-            <div class="row" style="align-items:center">
-              <span class="pill" aria-hidden="true">Beta</span>
-              <div data-beta style="display:flex">
-                <svg class="icon-clip icon-clip--beta" width="24" height="24" viewBox="0 0 24 24" aria-hidden="true">
-                  <path fill="currentColor" d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z"/>
+  <main id="app" class="container kit-shell" role="main">
+    <section class="card kit-hero">
+      <div>
+        <h1>UI Kit Snapshot</h1>
+        <p>Drop-in reference for EZ Quiz components: toolbar, results, inputs, fieldgroups, and attachment affix. Colors
+          and spacing match <em>ez-quiz.app</em>.</p>
+      </div>
+      <p>Use <code>npm run ui:check</code> to validate toolbar gaps, results layout, and this kit before publishing.</p>
+      <div class="kit-toggles">
+        <span class="pill">Toolbar</span>
+        <span class="pill">Options</span>
+        <span class="pill">Results</span>
+        <span class="pill">Attachment</span>
+      </div>
+    </section>
+
+    <section class="card kit-pane" id="kit-toolbar">
+      <div class="kit-pane__head">
+        <h2>Generator Toolbar</h2>
+        <p>Exact markup from <code>public/index.html</code>.</p>
+      </div>
+      <div class="gen-toolbar" role="group" aria-label="Generate toolbar">
+        <div class="toolbar-left">
+          <label class="toolbar-field">
+            <span class="toolbar-label">Topic</span>
+            <div class="input-affix topic-affix" data-beta-scope>
+              <input type="text" class="toolbar-input has-affix" placeholder="Solar eclipse safety tips">
+              <button class="affix-btn beta-only" type="button" title="Attach PDF/Image (beta)">
+                <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="currentColor"
+                    d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z" />
                 </svg>
+              </button>
+            </div>
+          </label>
+          <label class="toolbar-field toolbar-field--difficulty">
+            <span class="toolbar-label">Difficulty</span>
+            <div class="difficulty-stack">
+              <div class="difficulty-slider">
+                <div class="difficulty-track" aria-hidden="true">
+                  <span class="difficulty-dot"></span>
+                  <span class="difficulty-dot"></span>
+                  <span class="difficulty-dot"></span>
+                </div>
+                <input type="range" min="0" max="4" step="1" value="2" aria-valuetext="Medium">
               </div>
             </div>
-            <div class="row" style="margin-top:.5rem">
-              <span class="pill" aria-hidden="true">Beta</span>
-              <div class="input-affix" data-beta style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip – Material attach_file (beta)">
-                  <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                    <path fill="currentColor" d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z"/>
-                  </svg>
-                </button>
+          </label>
+          <label class="toolbar-field narrow number-field">
+            <span class="toolbar-label">Length</span>
+            <div class="number-wrap">
+              <input type="number" class="toolbar-input" min="1" max="30" step="1" value="10" inputmode="numeric">
+              <div class="stepper-group" role="group" aria-label="Adjust length">
+                <button type="button" class="stepper stepper-up" aria-label="Increase length">▲</button>
+                <button type="button" class="stepper stepper-down" aria-label="Decrease length">▼</button>
               </div>
             </div>
-          </div>
+          </label>
         </div>
-
-        <div class="card" aria-label="Option A">
-          <div class="card__body">
-            <h3>Option A — Double loop (balanced)</h3>
-            <div class="row" style="align-items:center">
-              <span class="pill" aria-hidden="true">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M8 6v8a4 4 0 0 0 8 0V6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 7.6v6.8a2.4 2.4 0 1 0 4.8 0V7.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem">
-              <span class="pill" aria-hidden="true">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option A"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 6v8a4 4 0 0 0 8 0V6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 7.6v6.8a2.4 2.4 0 1 0 4.8 0V7.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
+        <div class="action-stack">
+          <button class="btn primary" type="button">Start</button>
+          <button class="btn btn-outline" type="button">Options ▾</button>
         </div>
-
-        <div class="card" aria-label="Option B">
-          <div class="card__body">
-            <h3>Option B — Double loop (airy)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M8.5 6.5v8a3.8 3.8 0 0 0 7.6 0v-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12.2 8v6a2.2 2.2 0 1 0 4.4 0V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option B"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8.5 6.5v8a3.8 3.8 0 0 0 7.6 0v-8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.2 8v6a2.2 2.2 0 1 0 4.4 0V8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option C">
-          <div class="card__body">
-            <h3>Option C — Single loop (minimal)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 6v9a3 3 0 0 0 6 0V6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option C"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6v9a3 3 0 0 0 6 0V6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option D">
-          <div class="card__body">
-            <h3>Option D — Single loop (slim)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 6.5v8.5a2.7 2.7 0 0 0 5.4 0V6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option D"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6.5v8.5a2.7 2.7 0 0 0 5.4 0V6.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option E">
-          <div class="card__body">
-            <h3>Option E — Double loop (wide top)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M7.8 7v7.6a4.2 4.2 0 0 0 8.4 0V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M11.9 8.4v5.2a2.3 2.3 0 1 0 4.6 0V8.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option E"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7.8 7v7.6a4.2 4.2 0 0 0 8.4 0V7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.9 8.4v5.2a2.3 2.3 0 1 0 4.6 0V8.4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option F">
-          <div class="card__body">
-            <h3>Option F — Single wire (continuous)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 6c0 0 0 8.5 0 9a3 3 0 0 0 6 0c0-.5 0-9 0-9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option F"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6c0 0 0 8.5 0 9a3 3 0 0 0 6 0c0-.5 0-9 0-9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option G">
-          <div class="card__body">
-            <h3>Option G — Taller arc</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 5.5v10a3.5 3.5 0 0 0 7 0v-10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12.4 7.2v7.6a1.8 1.8 0 1 0 3.6 0V7.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option G"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 5.5v10a3.5 3.5 0 0 0 7 0v-10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.4 7.2v7.6a1.8 1.8 0 1 0 3.6 0V7.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option H">
-          <div class="card__body">
-            <h3>Option H — Compact head</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 6.8v8.2a3 3 0 0 0 6 0V6.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12.2 8v6.3a2.1 2.1 0 1 0 4.2 0V8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option H"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6.8v8.2a3 3 0 0 0 6 0V6.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.2 8v6.3a2.1 2.1 0 1 0 4.2 0V8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option I">
-          <div class="card__body">
-            <h3>Option I — Rounded head (classic)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 16 V10 A5 5 0 0 1 19 10 V16 A5 5 0 1 1 9 16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 15.6 V11.7 A3 3 0 0 1 16 11.7 V15.6 A1.5 1.5 0 1 1 12 15.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option I"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 16 V10 A5 5 0 0 1 19 10 V16 A5 5 0 1 1 9 16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15.6 V11.7 A3 3 0 0 1 16 11.7 V15.6 A1.5 1.5 0 1 1 12 15.6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option J">
-          <div class="card__body">
-            <h3>Option J — Wide head (open)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M8.8 16 V9.6 A5.5 5.5 0 0 1 19.2 9.6 V16 A5.2 5.2 0 1 1 8.8 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M11.8 15.5 V11.2 A3.4 3.4 0 0 1 16.2 11.2 V15.5 A1.6 1.6 0 1 1 11.8 15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option J"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8.8 16 V9.6 A5.5 5.5 0 0 1 19.2 9.6 V16 A5.2 5.2 0 1 1 8.8 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M11.8 15.5 V11.2 A3.4 3.4 0 0 1 16.2 11.2 V15.5 A1.6 1.6 0 1 1 11.8 15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option K">
-          <div class="card__body">
-            <h3>Option K — Tall head (pronounced)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 16 V8.8 A5 5 0 0 1 19 8.8 V16 A5 5 0 1 1 9 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 15.6 V10.4 A3 3 0 0 1 16 10.4 V15.6 A1.5 1.5 0 1 1 12 15.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option K"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 16 V8.8 A5 5 0 0 1 19 8.8 V16 A5 5 0 1 1 9 16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15.6 V10.4 A3 3 0 0 1 16 10.4 V15.6 A1.5 1.5 0 1 1 12 15.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option L">
-          <div class="card__body">
-            <h3>Option L — Slim head (airy)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9.4 16 V9.2 A4.6 4.6 0 0 1 18.6 9.2 V16 A4.6 4.6 0 1 1 9.4 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12.2 15.6 V11.2 A2.8 2.8 0 0 1 15 11.2 V15.6 A1.4 1.4 0 1 1 12.2 15.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option L"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.4 16 V9.2 A4.6 4.6 0 0 1 18.6 9.2 V16 A4.6 4.6 0 1 1 9.4 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12.2 15.6 V11.2 A2.8 2.8 0 0 1 15 11.2 V15.6 A1.4 1.4 0 1 1 12.2 15.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option M">
-          <div class="card__body">
-            <h3>Option M — Hooked top (explicit bar)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <!-- Outer: up, over (H), and down into loop -->
-                <path d="M8 16 V10 a4 4 0 0 1 4-4 H16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                <!-- Outer return: down the long side back to bottom -->
-                <path d="M16 6 V16 a6 6 0 1 1 -8 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                <!-- Inner: hooked head with parallel bar -->
-                <path d="M12 15.6 V11.5 a2.6 2.6 0 0 1 2.6-2.6 H16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M16 8.9 V15.6 a1.5 1.5 0 1 1 -3 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option M">
-                  <svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                    <path d="M8 16 V10 a4 4 0 0 1 4-4 H16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M16 6 V16 a6 6 0 1 1 -8 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M12 15.6 V11.5 a2.6 2.6 0 0 1 2.6-2.6 H16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                    <path d="M16 8.9 V15.6 a1.5 1.5 0 1 1 -3 0" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option N">
-          <div class="card__body">
-            <h3>Option N — Hooked top (wide)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M8 16 V9.8 a5 5 0 0 1 5-5 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M17 4.8 V16 a6 6 0 1 1 -9 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 15.5 V11.2 a3.2 3.2 0 0 1 3.2-3.2 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M17 8 V15.4 a1.7 1.7 0 1 1 -3.4 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option N"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 16 V9.8 a5 5 0 0 1 5-5 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 4.8 V16 a6 6 0 1 1 -9 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15.5 V11.2 a3.2 3.2 0 0 1 3.2-3.2 H17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 8 V15.4 a1.7 1.7 0 1 1 -3.4 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option O">
-          <div class="card__body">
-            <h3>Option O — Hooked top (slim)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 16 V10 a3.6 3.6 0 0 1 3.6-3.6 H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M16 6.4 V16 a6 6 0 1 1 -9 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 15.6 V11.5 a2.2 2.2 0 0 1 2.2-2.2 H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M16 9.3 V15.6 a1.4 1.4 0 1 1 -2.8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option O"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 16 V10 a3.6 3.6 0 0 1 3.6-3.6 H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 6.4 V16 a6 6 0 1 1 -9 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15.6 V11.5 a2.2 2.2 0 0 1 2.2-2.2 H16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 9.3 V15.6 a1.4 1.4 0 1 1 -2.8 0" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" aria-label="Option P">
-          <div class="card__body">
-            <h3>Option P — Hooked top (pronounced bar)</h3>
-            <div class="row"><span class="pill">Icon</span>
-              <svg class="icon-clip" width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M8.5 16 V9.5 a5.2 5.2 0 0 1 5.2-5.2 H17.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M17.5 4.3 V16 a6.2 6.2 0 1 1 -9.8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M12 15.7 V11.1 a3.1 3.1 0 0 1 3.1-3.1 H17.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M17.5 7.9 V15.6 a1.6 1.6 0 1 1 -3.2 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-            <div class="row" style="margin-top:.5rem"><span class="pill">Affix</span>
-              <div class="input-affix" style="--toolbar-height: 40px; min-width:260px">
-                <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-                <button class="affix-btn" type="button" aria-label="Paperclip Option P"><svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8.5 16 V9.5 a5.2 5.2 0 0 1 5.2-5.2 H17.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.5 4.3 V16 a6.2 6.2 0 1 1 -9.8 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 15.7 V11.1 a3.1 3.1 0 0 1 3.1-3.1 H17.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17.5 7.9 V15.6 a1.6 1.6 0 1 1 -3.2 0" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
     </section>
 
-    <section class="section" id="icons-font">
-      <h2>Paperclip via Icon Font (Material Symbols)</h2>
-      <article class="card" aria-label="Material Symbols options">
-        <div class="card__body">
-          <p class="muted small">These use the Material Symbols variable font (Rounded). They typically render with consistent metrics and won’t clip at the top. Try outlined vs filled, different weights, and sizes.</p>
-          <div class="row" style="align-items:center">
-            <span class="pill">Outlined</span>
-            <span class="ms outline" aria-hidden="true">attach_file</span>
-            <span class="ms outline" style="font-variation-settings:'FILL' 0,'wght' 600,'GRAD' 0,'opsz' 24" aria-hidden="true">attach_file</span>
-            <span class="ms outline" style="font-size:20px; font-variation-settings:'FILL' 0,'wght' 550,'GRAD' 0,'opsz' 20" aria-hidden="true">attach_file</span>
-          </div>
-          <div class="row" style="align-items:center; margin-top:.5rem">
-            <span class="pill">Filled</span>
-            <span class="ms filled" aria-hidden="true">attach_file</span>
-            <span class="ms filled" style="font-variation-settings:'FILL' 1,'wght' 700,'GRAD' 0,'opsz' 24" aria-hidden="true">attach_file</span>
-            <span class="ms filled" style="font-size:20px; font-variation-settings:'FILL' 1,'wght' 600,'GRAD' 0,'opsz' 20" aria-hidden="true">attach_file</span>
-          </div>
-          <div class="row" style="margin-top:.75rem">
-            <span class="pill">Affix</span>
-            <div class="input-affix affix-demo">
-              <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-              <button class="affix-btn" type="button" aria-label="Attach (outlined)"><span class="ms outline" aria-hidden="true">attach_file</span></button>
+    <section class="card kit-pane" id="kit-results">
+      <div class="kit-pane__head">
+        <h2>Results Snapshot</h2>
+        <p>Ensures score bars, chips, and cards align.</p>
+      </div>
+      <div class="results-header-row">
+        <div class="results-header-left">
+          <h3>Results</h3>
+          <div class="results-progress" aria-hidden="true">
+            <div class="prog">
+              <div class="prog-bar" style="width:40%"></div>
             </div>
-            <div class="input-affix affix-demo">
-              <input class="toolbar-input has-affix" placeholder="Topic… (mock)" />
-              <button class="affix-btn" type="button" aria-label="Attach (filled)"><span class="ms filled" aria-hidden="true">attach_file</span></button>
-            </div>
+            <span>1/3</span>
+            <span>01:05</span>
           </div>
         </div>
-      </article>
-    </section>
-    <section class="section" id="checks">
-      <h2>Checkboxes & Radios</h2>
-      <div class="grid" role="group" aria-label="Switches and toggles">
-        <article class="card" aria-label="Opt Switch">
-          <div class="card__body">
-            <h3>Opt Switch</h3>
-            <div class="row">
-              <label class="opt-switch"><input type="checkbox" /> <span>Timer</span></label>
-              <label class="opt-switch"><input type="checkbox" checked /> <span>Countdown</span></label>
-              <label class="opt-switch"><input type="checkbox" disabled /> <span>Disabled</span></label>
-            </div>
-            <div class="row" style="margin-top:.5rem">
-              <label class="opt-switch small mirror-toggle">
-                <input type="checkbox" />
-                <span class="mirror-toggle-label">Mirror (small)</span>
-              </label>
-            </div>
-          </div>
+        <div class="results-filter" role="group" aria-label="Results filter">
+          <button class="chip-btn" aria-pressed="false">Missed</button>
+          <button class="chip-btn active" aria-pressed="true">All</button>
+        </div>
+      </div>
+      <div class="results-summary">
+        <div class="summary-card">
+          <p class="muted small">Score</p>
+          <strong>2 / 3</strong>
+        </div>
+        <div class="summary-card">
+          <p class="muted small">Time</p>
+          <strong>01:05</strong>
+        </div>
+      </div>
+      <div class="results-missed">
+        <article class="results-card">
+          <header class="results-header row">
+            <p class="results-title">1. Which numbers are prime?</p>
+            <span class="pill danger">Incorrect</span>
+          </header>
+          <p class="muted small">Your answer: A — 2</p>
+          <p class="muted small">Correct: 2 and 5</p>
         </article>
-
-        <article class="card" aria-label="Options Row (qt-row)">
-          <div class="card__body">
-            <h3>Options Row (qt-row)</h3>
-            <div class="row qt-row" style="margin-top:8px">
-              <span class="lbl">Question Types</span>
-              <label><input type="checkbox" checked /> <span>Multiple Choice</span></label>
-              <label><input type="checkbox" /> <span>True/False</span></label>
-              <label><input type="checkbox" /> <span>Yes/No</span></label>
-              <label><input type="checkbox" disabled /> <span>Matching (disabled)</span></label>
-            </div>
-          </div>
-        </article>
-
-        <article class="card" aria-label="Quiz Options — Checkboxes">
-          <div class="card__body">
-            <h3>Quiz Options — Checkboxes</h3>
-            <div id="quizView">
-              <div class="options">
-                <label class="opt"><input type="checkbox" /> <span>Option A</span></label>
-                <label class="opt"><input type="checkbox" checked /> <span>Option B (checked)</span></label>
-                <label class="opt"><input type="checkbox" disabled /> <span>Option C (disabled)</span></label>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article class="card" aria-label="Quiz Options — Radios">
-          <div class="card__body">
-            <h3>Quiz Options — Radios</h3>
-            <div id="quizView">
-              <div class="options">
-                <label class="opt"><input type="radio" name="mc-demo" /> <span>Choice 1</span></label>
-                <label class="opt"><input type="radio" name="mc-demo" checked /> <span>Choice 2 (checked)</span></label>
-                <label class="opt"><input type="radio" name="mc-demo" disabled /> <span>Choice 3 (disabled)</span></label>
-              </div>
-            </div>
-          </div>
+        <article class="results-card">
+          <header class="results-header row">
+            <p class="results-title">2. Is 0 an even number?</p>
+            <span class="pill success">Correct</span>
+          </header>
+          <p class="muted small">Answer: Yes</p>
+          <p class="muted small">Demonstrates the positive chip style.</p>
         </article>
       </div>
     </section>
 
-    <section class="section" id="settings-demo">
-      <h2>Settings (Demo)</h2>
-      <div class="grid" role="group" aria-label="Settings examples">
-        <fieldset class="fieldgroup" aria-labelledby="ui-settings-timer">
-          <legend id="ui-settings-timer">Timer</legend>
-          <label><input type="checkbox" /> <span>Enable timer</span></label>
-          <label><input type="checkbox" /> <span>Countdown mode</span></label>
-          <label class="inline">
-            Duration (mm:ss)
-            <input type="text" inputmode="numeric" placeholder="05:00" />
+    <section class="card kit-pane" id="kit-buttons">
+      <div class="kit-pane__head">
+        <h2>Buttons & Pills</h2>
+        <p>Palette used across toolbar and results.</p>
+      </div>
+      <div class="kit-buttons">
+        <button class="btn" type="button">Default</button>
+        <button class="btn btn-solid" type="button">Solid</button>
+        <button class="btn btn-outline" type="button">Outline</button>
+        <button class="btn primary" type="button">Primary</button>
+        <button class="btn success" type="button">Success</button>
+        <button class="btn danger" type="button">Danger</button>
+        <button class="btn brand" type="button">Brand</button>
+      </div>
+      <div class="kit-pills">
+        <span class="pill">All quizzes</span>
+        <span class="pill">Missed</span>
+        <span class="pill">Beta</span>
+        <span class="pill success">Correct</span>
+        <span class="pill danger">Incorrect</span>
+      </div>
+    </section>
+
+    <section class="card kit-pane" id="kit-inputs">
+      <div class="kit-pane__head">
+        <h2>Quiz Inputs</h2>
+        <p>Checkbox/radio layouts from Quiz view.</p>
+      </div>
+      <div class="kit-grid">
+        <div class="card">
+          <h3>Multiple Choice</h3>
+          <div class="options">
+            <label class="opt"><input type="checkbox"> <span>Option A</span></label>
+            <label class="opt"><input type="checkbox" checked> <span>Option B (checked)</span></label>
+            <label class="opt"><input type="checkbox" disabled> <span>Option C (disabled)</span></label>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Single Choice</h3>
+          <div class="options">
+            <label class="opt"><input type="radio" name="sc-demo"> <span>Yes</span></label>
+            <label class="opt"><input type="radio" name="sc-demo" checked> <span>No</span></label>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Question Types</h3>
+          <div class="row qt-row">
+            <span class="lbl">Question Types</span>
+            <label><input type="checkbox" checked> <span>Multiple Choice</span></label>
+            <label><input type="checkbox" checked> <span>True / False</span></label>
+            <label><input type="checkbox" checked> <span>Yes / No</span></label>
+            <label><input type="checkbox" disabled> <span>Matching</span></label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card kit-pane" id="kit-runner">
+      <div class="kit-pane__head">
+        <h2>Quiz Runner</h2>
+        <p>Active quiz view snapshot.</p>
+      </div>
+      <div id="quizView" class="card" style="display:block; box-shadow:none; border:1px solid var(--field-border);">
+        <div class="quiz-title-row">
+          <h2 style="font-size:1.25rem; margin:0">Quiz</h2>
+          <button class="btn" type="button">Back to Menu</button>
+        </div>
+        <div class="quiz-header-row">
+          <div class="timer">04:59</div>
+          <div class="results-progress" style="margin-left:auto">
+            <div class="prog" style="width:100px">
+              <div class="prog-bar" style="width:33%"></div>
+            </div>
+            <span>1/3</span>
+          </div>
+        </div>
+        <div id="questionHost">
+          <div class="q-container">
+            <div class="qhdr">Question 1</div>
+            <p class="qtext">Which of the following is a prime number?</p>
+            <div class="options">
+              <label class="opt"><input type="radio" name="q1"> <span>4</span></label>
+              <label class="opt"><input type="radio" name="q1"> <span>5</span></label>
+              <label class="opt"><input type="radio" name="q1"> <span>6</span></label>
+              <label class="opt"><input type="radio" name="q1"> <span>9</span></label>
+            </div>
+          </div>
+        </div>
+        <div class="row gap quiz-nav-row" style="margin-top:1rem">
+          <button class="btn" disabled>Previous</button>
+          <button class="btn success">Next</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card kit-pane" id="kit-fieldgroups">
+      <div class="kit-pane__head">
+        <h2>Fieldgroups</h2>
+        <p>Settings panels highlighting the updated background.</p>
+      </div>
+      <div class="kit-grid">
+        <fieldset class="fieldgroup">
+          <legend>Timer</legend>
+          <label><input type="checkbox" checked> <span>Enable timer</span></label>
+          <label><input type="checkbox"> <span>Countdown</span></label>
+          <label class="inline">Duration (mm:ss)
+            <input type="text" placeholder="05:00" inputmode="numeric">
           </label>
         </fieldset>
-
-        <fieldset class="fieldgroup" aria-labelledby="ui-settings-appearance">
-          <legend id="ui-settings-appearance">Appearance</legend>
-          <label><input type="radio" name="ui-theme" value="dark" checked /> <span>Dark</span></label>
-          <label><input type="radio" name="ui-theme" value="light" /> <span>Light</span></label>
-          <label><input type="radio" name="ui-theme" value="system" /> <span>System</span></label>
+        <fieldset class="fieldgroup">
+          <legend>Appearance</legend>
+          <label><input type="radio" name="kit-theme" checked> <span>Dark</span></label>
+          <label><input type="radio" name="kit-theme"> <span>Light</span></label>
+          <label><input type="radio" name="kit-theme"> <span>System</span></label>
         </fieldset>
-
-        <fieldset class="fieldgroup" aria-labelledby="ui-settings-editor">
-          <legend id="ui-settings-editor">Quiz Editor</legend>
-          <label><input type="checkbox" /> <span>Always show the Quiz Editor panel</span></label>
-        </fieldset>
-
-        <fieldset class="fieldgroup" aria-labelledby="ui-settings-beta">
-          <legend id="ui-settings-beta">Beta Features</legend>
-          <label><input type="checkbox" /> <span>Enable beta features and auto-redirect to /beta</span></label>
-          <p class="muted small">When enabled, you’ll automatically be redirected to the beta version on future visits.</p>
+        <fieldset class="fieldgroup">
+          <legend>Quiz Editor</legend>
+          <label><input type="checkbox" checked> <span>Always show editor</span></label>
+          <label><input type="checkbox"> <span>Mirror preview</span></label>
         </fieldset>
       </div>
     </section>
-    <section class="section" id="buttons">
-      <h2>Buttons</h2>
-      <article class="card" aria-label="Button variants">
-        <div class="card__body">
-          <div class="row" aria-label="Button variants">
-            <button type="button" class="btn">Default</button>
-            <button type="button" class="btn btn-solid">Solid</button>
-            <button type="button" class="btn btn-outline">Outline</button>
-            <button type="button" class="btn" disabled>Disabled</button>
-          </div>
-        </div>
-      </article>
-    </section>
 
-  <section class="section" id="inputs">
-      <h2>Inputs</h2>
-      <div class="grid" role="group" aria-label="Input examples">
-        <article class="card" aria-label="Text Input">
-          <div class="card__body">
-            <label for="textInput">Text Input</label><br>
-            <input id="textInput" class="input" type="text" placeholder="Enter text">
-          </div>
-        </article>
-        <article class="card" aria-label="Select Input">
-          <div class="card__body">
-            <label for="selectInput">Select Input</label><br>
-            <select id="selectInput" class="input">
-              <option value="">Choose an option</option>
-              <option>Option A</option>
-              <option>Option B</option>
-              <option>Option C</option>
-            </select>
-          </div>
-        </article>
-        <article class="card" aria-label="Textarea Input">
-          <div class="card__body">
-            <label for="textareaInput">Textarea Input</label><br>
-            <textarea id="textareaInput" class="input" rows="4" placeholder="Type your message"></textarea>
-          </div>
-        </article>
+    <section class="card kit-pane" id="kit-attachment">
+      <div class="kit-pane__head">
+        <h2>Attachment Affix</h2>
+        <p>Beta scoping for the paperclip button.</p>
       </div>
-    </section>
-
-    <section class="section" id="cards">
-      <h2>Cards</h2>
-      <div class="grid">
-        <article class="card" aria-label="Example card">
-          <div class="card__header">
-            <h3>Card Title</h3>
-          </div>
-          <div class="card__body">
-            <p>
-              This is a basic card body. Use it to group content,
-              actions, and supporting text together.
-            </p>
-          </div>
-          <div class="card__footer">
-            <button type="button" class="btn btn-solid">Call to Action</button>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="section" id="modal">
-      <h2>Modal</h2>
-      <div class="row">
-        <button id="openModalBtn" class="btn btn-solid" type="button" aria-haspopup="dialog" aria-controls="demoModal">
-          Open Modal
+      <div class="input-affix topic-affix" data-beta-scope>
+        <input type="text" class="toolbar-input has-affix" placeholder="Attach supporting PDF">
+        <button class="affix-btn beta-only" type="button" title="Attach PDF/Image (beta)">
+          <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor"
+              d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z" />
+          </svg>
         </button>
-      </div>
-      <div
-        id="demoModal"
-        class="modal"
-        role="dialog"
-        aria-modal="true"
-        aria-hidden="true"
-        aria-labelledby="modalTitle"
-        hidden
-      >
-        <div class="modal__backdrop" aria-hidden="true"></div>
-        <div class="modal__dialog" role="document" tabindex="-1">
-          <header class="modal__header">
-            <h2 id="modalTitle" class="modal__title">Example Modal</h2>
-          </header>
-          <div class="modal__body">
-            <p>This modal demonstrates keyboard accessibility and focus handling.</p>
-            <p>
-              Try tabbing through controls. Here’s a
-              <a href="#" onclick="return false;">focusable link</a> and an
-              <input class="input" type="text" placeholder="Focusable input" aria-label="Focusable input in modal">
-              for testing.
-            </p>
-          </div>
-          <footer class="modal__footer">
-            <button id="modalCloseBtn" class="btn btn-outline" type="button">Close</button>
-            <button class="btn btn-solid" type="button">Confirm</button>
-          </footer>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="pills">
-      <h2>Pills</h2>
-      <div class="row" aria-label="Pill examples">
-        <span class="pill">Score 18/20</span>
-        <span class="pill">Time 03:42</span>
-        <span class="pill">Attempts 2</span>
-        <span class="pill">Streak ×4</span>
-      </div>
-    </section>
-
-    <section class="section" id="utility-grid">
-      <h2>Utility Grid</h2>
-      <div class="grid" aria-label="Grid layout demo">
-        <div class="card" aria-label="Grid item 1">
-          <div class="card__body">Grid Item 1</div>
-        </div>
-        <div class="card" aria-label="Grid item 2">
-          <div class="card__body">Grid Item 2</div>
-        </div>
-        <div class="card" aria-label="Grid item 3">
-          <div class="card__body">Grid Item 3</div>
-        </div>
-        <div class="card" aria-label="Grid item 4">
-          <div class="card__body">Grid Item 4</div>
-        </div>
       </div>
     </section>
   </main>
 
-  <script>
-    (() => {
-      'use strict';
+  <footer class="kit-footer">
+    UI Kit mirrors production markup • <span id="kitTimestamp"></span>
+  </footer>
 
-      // Theme toggle
-      const root = document.documentElement;
-      const themeToggleBtn = document.getElementById('themeToggle');
-      const updateThemeToggleState = (theme) => {
-        const next = theme === 'light' ? 'light' : 'dark';
-        root.setAttribute('data-theme', next);
-        themeToggleBtn.setAttribute('aria-pressed', String(next === 'light'));
-        themeToggleBtn.textContent = next === 'light' ? 'Theme: Light' : 'Theme: Dark';
-      };
-      themeToggleBtn.addEventListener('click', () => {
-        const current = root.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
-        updateThemeToggleState(current === 'light' ? 'dark' : 'light');
-      });
-      updateThemeToggleState(root.getAttribute('data-theme'));
-
-      // Modal behavior
-      const openBtn = document.getElementById('openModalBtn');
-      const modal = document.getElementById('demoModal');
-      const dialog = modal.querySelector('.modal__dialog');
-      const backdrop = modal.querySelector('.modal__backdrop');
-      const closeBtn = document.getElementById('modalCloseBtn');
-
-      let lastFocused = null;
-      const focusSelector = [
-        'a[href]',
-        'area[href]',
-        'button:not([disabled])',
-        'input:not([disabled]):not([type="hidden"])',
-        'select:not([disabled])',
-        'textarea:not([disabled])',
-        '[tabindex]:not([tabindex="-1"])'
-      ].join(',');
-
-      const trapKeydown = (e) => {
-        if (!modal.classList.contains('is-open')) return;
-
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          closeModal();
-          return;
-        }
-
-        if (e.key === 'Tab') {
-          const focusables = Array.from(dialog.querySelectorAll(focusSelector))
-            .filter(el => el.offsetParent !== null || el.getClientRects().length > 0);
-
-          if (focusables.length === 0) {
-            e.preventDefault();
-            dialog.focus();
-            return;
-          }
-
-          const first = focusables[0];
-          const last = focusables[focusables.length - 1];
-          const current = document.activeElement;
-
-          if (e.shiftKey) {
-            if (current === first || !dialog.contains(current)) {
-              e.preventDefault();
-              last.focus();
-            }
-          } else {
-            if (current === last || !dialog.contains(current)) {
-              e.preventDefault();
-              first.focus();
-            }
-          }
-        }
-      };
-
-      const openModal = () => {
-        if (modal.classList.contains('is-open')) return;
-        lastFocused = document.activeElement;
-        modal.classList.add('is-open');
-        modal.removeAttribute('hidden');
-        modal.setAttribute('aria-hidden', 'false');
-
-        document.addEventListener('keydown', trapKeydown);
-
-        // Move focus into the dialog
-        requestAnimationFrame(() => {
-          const focusables = Array.from(dialog.querySelectorAll(focusSelector))
-            .filter(el => el.offsetParent !== null || el.getClientRects().length > 0);
-          if (focusables.length) {
-            focusables[0].focus();
-          } else {
-            dialog.focus();
-          }
-        });
-      };
-
-      const closeModal = () => {
-        if (!modal.classList.contains('is-open')) return;
-        modal.classList.remove('is-open');
-        modal.setAttribute('aria-hidden', 'true');
-        modal.setAttribute('hidden', '');
-        document.removeEventListener('keydown', trapKeydown);
-
-        if (lastFocused && typeof lastFocused.focus === 'function') {
-          lastFocused.focus();
-        } else if (openBtn) {
-          openBtn.focus();
-        }
-      };
-
-      openBtn.addEventListener('click', openModal);
-      closeBtn.addEventListener('click', closeModal);
-      backdrop.addEventListener('click', closeModal);
-    })();
-  </script>
+  <script src="js/boot-beta.js?v=1.5.27"></script>
+  <script src="js/ui-kit.js?v=1.5.27"></script>
 </body>
+
 </html>
