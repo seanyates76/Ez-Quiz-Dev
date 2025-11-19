@@ -480,7 +480,7 @@ textarea:focus,
   box-shadow:0 8px 20px rgba(15,23,42,.12);
 }
 .gen-toolbar > *{ min-width:0; }
-.gen-toolbar > .toolbar-left{ grid-area:left; display:grid; grid-template-columns:minmax(220px,1.8fr) minmax(200px,1.2fr) max-content; column-gap:var(--space-1); align-items:flex-start; }
+.gen-toolbar > .toolbar-left{ grid-area:left; display:grid; grid-template-columns:minmax(220px,1.8fr) minmax(200px,1.2fr) max-content; column-gap:var(--space-1); align-items:center; }
 .toolbar-left > .toolbar-field:first-of-type{ grid-column:1; }
 .toolbar-left .toolbar-field{ justify-self:stretch; width:100%; }
 .toolbar-left .number-field{ justify-self:stretch; width:100%; }
@@ -509,7 +509,7 @@ textarea:focus,
     padding:calc(var(--space-3) + 2px) clamp(16px, 5vw, 22px);
     row-gap: var(--sp-10);
   }
-  .gen-toolbar > .toolbar-left{ grid-template-columns:2fr 1fr; row-gap: var(--sp-6); }
+  .gen-toolbar > .toolbar-left{ grid-template-columns:2fr 1fr; row-gap: var(--sp-6); align-items:flex-start; }
   /* Topic spans full row; Difficulty + Length share next row */
   .gen-toolbar > .toolbar-left > .toolbar-field:first-of-type{ grid-column: 1 / -1; }
   .toolbar-left .toolbar-field--difficulty{ min-width:0; }
@@ -1095,7 +1095,7 @@ details.advanced > summary{display:none}
 #quizView .options{display:grid; gap:10px}
 #quizView .options{margin-bottom:12px}
 #quizView label.opt{
-  display:flex; align-items:flex-start; gap:10px;
+  display:flex; align-items:center; gap:10px;
   padding:10px 12px;
   border:1px solid var(--field-border);
   background:var(--panel-2);
@@ -1103,7 +1103,7 @@ details.advanced > summary{display:none}
   line-height:1.4;
   transition:border-color .15s ease, box-shadow .2s ease, background-color .15s ease;
 }
-#quizView label.opt input{margin-top:2px}
+#quizView label.opt input{margin-top:0}
 #quizView label.opt:hover{
   background:var(--field-hover);
   border-color:var(--border);
@@ -1206,7 +1206,13 @@ details.advanced > summary{display:none}
 
 /* Modals */
 .block{display:block}
-.fieldgroup{border:1px solid var(--border); border-radius:var(--radius-card); padding:10px; margin-bottom:10px}
+.fieldgroup{
+  border:1px solid var(--border);
+  border-radius:var(--radius-card);
+  padding:10px;
+  margin-bottom:10px;
+  background:var(--panel-2);
+}
 
 /* Help modal polish */
 details.help-accordion{
@@ -1688,9 +1694,11 @@ body[data-busy="true"] #interactiveEditor{ z-index:0; pointer-events:none; }
 .regen-hint[hidden]{ display:none !important; }
 /* Beta-only visibility helper */
 .beta-only{ display:none; }
-body[data-beta] .beta-only{ display:inline-flex; }
+body[data-beta] .beta-only,
+[data-beta-scope] .beta-only{ display:inline-flex; }
 .affix-btn.beta-only{ display:none; }
-body[data-beta] .affix-btn.beta-only{ display:flex; }
+body[data-beta] .affix-btn.beta-only,
+[data-beta-scope] .affix-btn.beta-only{ display:flex; }
 /* Optional visual cue while dragging over toolbar for media import */
 .gen-toolbar.drag-on{ outline: 2px dashed var(--focus,#7aa2ff); outline-offset: 2px; }
 
