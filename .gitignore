@@ -54,3 +54,4 @@ icons/source.png
 
 # Local artifacts written by dev tooling
 .artifacts/
+deno.lock
