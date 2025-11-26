@@ -8,8 +8,8 @@
  * page for navigation requests when offline.
  */
 
-const ASSET_VERSION = '1.5.26';
-const CACHE_NAME = 'ezq-v1210';
+const ASSET_VERSION = '1.5.27';
+const CACHE_NAME = 'ezq-v1211';
 const PRECACHE_URLS = [
   '/index.html',
   '/styles.css?v=' + ASSET_VERSION,
@@ -18,7 +18,6 @@ const PRECACHE_URLS = [
   '/js/theme-preload.js?v=' + ASSET_VERSION,
   '/js/boot-beta.js?v=' + ASSET_VERSION,
   '/js/main.js?v=' + ASSET_VERSION,
-  '/js/share.js?v=' + ASSET_VERSION,
   '/js/auto-refresh.js?v=' + ASSET_VERSION,
   '/js/patches.js?v=' + ASSET_VERSION,
   '/js/editor.gui.js?v=' + ASSET_VERSION,

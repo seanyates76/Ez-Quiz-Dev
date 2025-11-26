@@ -4,9 +4,13 @@ export function isBetaEnabled(settings) {
   const body = document.body;
   if (!body) return false;
   try {
-    if (body.dataset && ('beta' in body.dataset)) return true;
-    if (typeof body.hasAttribute === 'function' && body.hasAttribute('data-beta')) return true;
-    if (typeof body.getAttribute === 'function' && body.getAttribute('data-beta') !== null) return true;
+    if (typeof body.hasAttribute === 'function' && body.hasAttribute('data-beta')) {
+      return true;
+    }
   } catch {}
+  const dataset = body.dataset;
+  if (dataset && ('beta' in dataset)) {
+    return true;
+  }
   return false;
 }

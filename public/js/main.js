@@ -2,9 +2,17 @@ import { S } from './state.js';
 import { $, byQSA, showUpdateBannerIfReady } from './utils.js';
 import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel } from './settings.js';
 import { wireModals } from './modals.js';
-import { wireGenerator } from './generator.js?v=1.5.26';
+import { wireGenerator } from './generator.js?v=1.5.27';
 import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI } from './quiz.js';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
+
+function debugLog(message){
+  try {
+    if (localStorage.getItem('EZQ_DEBUG')) {
+      console.debug('[ezq:dev]', message);
+    }
+  } catch {}
+}
 
 function getEls(){
   return {
@@ -20,6 +28,7 @@ function getEls(){
 }
 
 function init(){
+  debugLog('main:init begin');
   // Measure header height for light theme brand placement
   (function headerMetrics(){
     function updateHeaderVars(){
