@@ -11,6 +11,8 @@ import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
 
+const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
+
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;
 
@@ -60,6 +62,17 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
     }
   } catch {}
   if(startBtn) startBtn.disabled = questions.length === 0 || !!limitError;
+  try {
+    if (typeof bag.onQuizReady === 'function' && questions.length && !limitError) {
+      bag.onQuizReady({
+        title: S.quiz.title || '',
+        topic: S.quiz.topic || '',
+        questions: Array.isArray(questions) ? questions.slice() : [],
+        answers: Array.isArray(S.quiz.answers) ? S.quiz.answers.slice() : [],
+        mode: 'parse',
+      });
+    }
+  } catch {}
 }
 
 export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
