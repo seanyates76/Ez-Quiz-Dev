@@ -1,12 +1,12 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.27';
+import { generateWithAI } from './api.js?v=1.5.28';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind } from './file-type-validation.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.27';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.27';
+import { announce } from './a11y-announcer.js?v=1.5.28';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.28';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
@@ -63,14 +63,17 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
   } catch {}
   if(startBtn) startBtn.disabled = questions.length === 0 || !!limitError;
   try {
-    if (typeof bag.onQuizReady === 'function' && questions.length && !limitError) {
-      bag.onQuizReady({
-        title: S.quiz.title || '',
-        topic: S.quiz.topic || '',
-        questions: Array.isArray(questions) ? questions.slice() : [],
-        answers: Array.isArray(S.quiz.answers) ? S.quiz.answers.slice() : [],
-        mode: 'parse',
-      });
+    if (typeof bag.onQuizReady === 'function') {
+      const shareableQuiz = questions.length && !limitError
+        ? {
+            title: S.quiz.title || '',
+            topic: S.quiz.topic || '',
+            questions: Array.isArray(questions) ? questions.slice() : [],
+            answers: Array.isArray(S.quiz.answers) ? S.quiz.answers.slice() : [],
+            mode: 'parse',
+          }
+        : null;
+      bag.onQuizReady(shareableQuiz);
     }
   } catch {}
 }

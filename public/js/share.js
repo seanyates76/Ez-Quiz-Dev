@@ -1,10 +1,24 @@
 import { S } from './state.js';
-import { runParseFlow } from './generator.js?v=1.5.26';
-import { isBetaEnabled } from './beta.mjs?v=1.5.26';
+import { runParseFlow } from './generator.js?v=1.5.28';
+import { isBetaEnabled } from './beta.mjs?v=1.5.28';
 
 const shareBtn = document.getElementById('shareQuizBtn');
 const shareLink = document.getElementById('shareLink');
 const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
+
+function normalizeQuiz(quiz){
+  if(!quiz || !Array.isArray(quiz.questions)) return null;
+  const questions = quiz.questions.slice();
+  const answersSource = Array.isArray(quiz.answers) ? quiz.answers : [];
+  const answers = questions.map((_, idx)=> answersSource[idx] ?? null);
+  return {
+    title: (quiz.title || '').trim(),
+    topic: (quiz.topic || '').trim(),
+    questions,
+    answers,
+    mode: quiz.mode || 'generated',
+  };
+}
 
 function isShareEnabled(){
   return isBetaEnabled(S.settings);
@@ -55,8 +69,13 @@ bag.onQuizReady = function handleQuizReady(quiz){
   if(prevOnQuizReady){
     try { prevOnQuizReady(quiz); } catch {}
   }
-  if(!quiz || !Array.isArray(quiz.questions) || !Array.isArray(quiz.answers)) return;
-  bag._lastQuiz = quiz;
+  const normalized = normalizeQuiz(quiz);
+  if(!normalized || !normalized.questions.length){
+    bag._lastQuiz = null;
+    hideShareControls();
+    return;
+  }
+  bag._lastQuiz = normalized;
   if(!isShareEnabled()){
     hideShareControls();
     return;
