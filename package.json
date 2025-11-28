@@ -12,7 +12,8 @@
     "fmt:check": "prettier -c . || true",
     "fmt:write": "prettier -w . || true",
     "test:parser": "node ./tests/parser.corpus.mjs || echo Parser corpus missing",
-    "reiterate": "node ../ezq-dev-tools/reiterate.mjs"
+    "reiterate": "node ../ezq-dev-tools/reiterate.mjs",
+    "sync:public": "./files/scripts/pull-public.sh"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
@@ -24,7 +25,6 @@
     "jest": "^30.2.0",
     "jest-environment-jsdom": "^30.2.0",
     "jsdom": "^27.0.0",
-    "puppeteer": "^24.27.0",
-    "@sparticuz/chromium": "^141.0.0"
+    "puppeteer": "^24.27.0"
   }
 }

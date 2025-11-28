@@ -231,18 +231,12 @@ export function renderResults(){
     }
     const userDetail = buildUserAnswerDetail(q,a);
     const correctDetail = buildCorrectAnswerDetail(q);
-    const statusChip = `<span class="chip tag ${item.isCorrect ? 'good' : 'bad'} res-status">${item.isCorrect ? 'Correct' : 'Incorrect'}</span>`;
-    const actions = [];
-    if (isBeta) {
-      actions.push(`<button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>`);
-    }
-    actions.push(statusChip);
-    const header = buildResultHeader(item.idx, item.text, actions);
+    const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)}${isBeta ? ` <button type=\"button\" class=\"chip-btn explain-btn\" data-explain=\"${origIdx}\">Explain</button>` : ''}</div>`;
     if (item.isCorrect) {
-      const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail}</div>`;
+      const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail} <span class=\"chip tag good\">Correct</span></div>`;
       return `<div class="missed-item is-correct" data-orig="${origIdx}">` + header + line + `</div>`;
     } else {
-      const yours = `<div class="user-ans ans-wrong"><strong>Your answer:</strong> ${userDetail}</div>`;
+      const yours = `<div class="user-ans ans-wrong"><strong>Your answer:</strong> ${userDetail} <span class="chip tag bad">Incorrect</span></div>`;
       const corr = `<div><strong>Correct:</strong> ${correctDetail}</div>`;
       return `<div class="missed-item is-wrong" data-orig="${origIdx}">` + header + yours + corr + `</div>`;
     }
@@ -271,7 +265,7 @@ function wireExplainDelegation(){
     const btn = e.target && (e.target.closest ? e.target.closest('.explain-btn') : null);
     if(!btn) return;
     e.preventDefault();
-    showToastNear(btn, 'Explanations are coming soon!');
+    showToastNear(btn, 'Explanations are coming soon.');
   });
 }
 
@@ -336,11 +330,6 @@ function buildCorrectAnswerDetail(q){
   return '';
 }
 
-function buildResultHeader(idx, text, actions){
-  const safeActions = Array.isArray(actions) ? actions.filter(Boolean).join('') : String(actions || '');
-  return `<div class="res-head"><div class="res-head-main"><strong>${idx}.</strong> ${escapeHTML(text || '')}</div><div class="res-head-actions">${safeActions}</div></div>`;
-}
-
 function renderMTResult(origIdx, q, a){
   const isBeta = isBetaEnabled(S.settings);
   // Build map of correct right indexes by left index
@@ -355,7 +344,7 @@ function renderMTResult(origIdx, q, a){
     const ok = (u>=0 && u===c);
     const your = u>=0 ? `— <span class="ans-text">${escapeHTML(rightText(u))}</span>` : `— <span class="ans-text">No selection</span>`;
     const corr = c>=0 ? `— <span class="ans-text">${escapeHTML(rightText(c))}</span>` : '';
-    const yourLine = `<div class=\"mt-your\"><span class=\"lbl\">Your answer</span> <span class=\"chip letter ${ok?'good':'bad'}\">${toLetter(u)}</span> ${your}</div>`;
+    const yourLine = `<div class=\"mt-your\"><span class=\"lbl\">Your answer</span> <span class=\"chip letter ${ok?'good':'bad'}\">${toLetter(u)}</span> ${your}${ok ? ' <span class=\\\"chip tag good\\\">Correct</span>' : ' <span class=\\\"chip tag bad\\\">Incorrect</span>'}</div>`;
     const corrLine = ok ? '' : `<div class=\"mt-correct\"><span class=\"lbl\">Correct answer</span> <span class=\"chip letter\">${toLetter(c)}</span> ${corr}</div>`;
     return `
       <div class="mt-row ${ok?'is-correct':'is-wrong'}">
@@ -365,15 +354,9 @@ function renderMTResult(origIdx, q, a){
       </div>`;
   }).join('');
   const okAll = Array.isArray(a)&&a.length&&a.every((ri,li)=>ri===correctMap[li]);
-  const statusChip = `<span class="chip tag ${okAll ? 'good' : 'bad'} res-status">${okAll ? 'Correct' : 'Incorrect'}</span>`;
-  const actions = [];
-  if (isBeta) {
-    actions.push(`<button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>`);
-  }
-  actions.push(statusChip);
-  const header = buildResultHeader(origIdx + 1, q.text, actions);
+  const explainBtn = isBeta ? ` <button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>` : '';
   return `<div class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
-    ${header}
+    <div class="res-head"><strong>${(origIdx+1)}.</strong> ${escapeHTML(q.text)}${explainBtn}</div>
     <div class="mt-result">${rows}</div>
   </div>`;
 }
