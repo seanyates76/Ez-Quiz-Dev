@@ -23,7 +23,7 @@ describe('public/styles.css core tokens', () => {
     expect(css).toMatch(/:root\s*\{/);
     expect(css).toMatch(/:root\[data-theme="light"\]\s*\{/);
     expect(css).toMatch(/:root\[data-theme="dark"\]\s*\{/);
-    expect(css).toMatch(/:root\[data-theme="light"\][^}]*--c-accent-active:var\(--accent-press\)/);
+    expect(css).toMatch(/:root\[data-theme="light"\][^}]*--c-accent-active\s*:\s*var\(--accent-press\)/);
   });
 });
 
