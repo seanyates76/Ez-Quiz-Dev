@@ -138,13 +138,8 @@ jobs:
             else
               git checkout -B "$SYNC_BRANCH"
             fi
-            # Preserve repo-specific downstream files (for example the production README)
-            # without turning every ignored source path into permanent mirror residue.
-            PRESERVE_ARGS=()
-            if [ -f ../.publicpreserve ]; then
-              PRESERVE_ARGS+=(--exclude-from=../.publicpreserve)
-            fi
-            rsync -a --delete --exclude=.git/ "${PRESERVE_ARGS[@]}" ../filtered/ ./
+            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+            rsync -a --delete --exclude=.git/ ../filtered/ ./
             git add -A
             if git diff --cached --quiet; then
               echo "No changes to publish."
