@@ -1,0 +1,4 @@
+# Public-safe workflows that should be copied into the production mirror.
+# Keep this list tiny and explicit.
+
+.github/workflows/codeql.yml
