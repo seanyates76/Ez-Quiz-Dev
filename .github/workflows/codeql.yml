@@ -8,6 +8,8 @@ on:
   schedule:
     - cron: '21 3 * * 1'
 
+permissions: {}
+
 jobs:
   analyze:
     if: ${{ github.repository_visibility == 'public' }}
