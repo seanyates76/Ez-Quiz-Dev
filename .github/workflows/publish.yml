@@ -138,8 +138,10 @@ jobs:
             else
               git checkout -B "$SYNC_BRANCH"
             fi
-            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-            rsync -a --delete --exclude=.git/ ../filtered/ ./
+            # Preserve repo-specific files that are intentionally excluded from the mirror
+            # (for example the production README). We still delete mirrored files that no
+            # longer exist upstream, but we do not wipe the destination before syncing.
+            rsync -a --delete --exclude=.git/ --exclude-from=../.publicignore ../filtered/ ./
             git add -A
             if git diff --cached --quiet; then
               echo "No changes to publish."
