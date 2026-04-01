@@ -254,7 +254,15 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   // --- Media Import (beta) ---
   function isBeta(){ return isBetaEnabled(S.settings); }
   function setHint(msg){ try{ const hint=document.getElementById('regenHint'); if(hint){ hint.textContent = msg; hint.hidden = false; } }catch{} }
-  function clearHint(){ try{ const hint=document.getElementById('regenHint'); if(hint){ hint.hidden = true; } }catch{} }
+  function clearHint(){
+    try{
+      const hint=document.getElementById('regenHint');
+      if(hint){
+        hint.textContent = '';
+        hint.hidden = true;
+      }
+    }catch{}
+  }
   // Improve accessible label on import button
   try {
     if (importBtn) {

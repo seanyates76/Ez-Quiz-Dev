@@ -45,6 +45,7 @@ describe('generator media import overlap regression', () => {
   let fetchDeferredByName;
   let readers;
   let consoleDebugSpy;
+  let validateMediaImportSize;
 
   beforeAll(() => {
     ({ ImportController } = loadBrowserModule('public/js/import-controller.js', ['ImportController']));
@@ -67,6 +68,7 @@ describe('generator media import overlap regression', () => {
       error: null,
     }));
     announce = jest.fn();
+    validateMediaImportSize = jest.fn(() => ({ ok: true }));
     fetchCalls = [];
     fetchDeferredByName = new Map();
     readers = [];
@@ -119,7 +121,7 @@ describe('generator media import overlap regression', () => {
       sniffFileKind,
       isSupportedImportKind: () => true,
       hasImportMetadataMismatch: () => false,
-      validateMediaImportSize: () => ({ ok: true }),
+      validateMediaImportSize,
       attachDragDrop: () => ({ dispose() {} }),
       announce,
       buildGeneratorPayload: ({ topic, difficulty, count }) => ({ topic, difficulty, count }),
@@ -141,6 +143,55 @@ describe('generator media import overlap regression', () => {
     consoleDebugSpy?.mockRestore();
     delete global.fetch;
     delete global.FileReader;
+  });
+
+  test('clears a stale import error before processing the next valid file', async () => {
+    const importInput = document.getElementById('importFile');
+    const hint = document.getElementById('regenHint');
+
+    const invalidFile = new File(['bad'], 'bad.pdf', { type: 'application/pdf' });
+    const validFile = new File(['good'], 'good.pdf', { type: 'application/pdf' });
+
+    validateMediaImportSize
+      .mockReturnValueOnce({ ok: false, error: 'File too large. Maximum supported size is 5 MiB.' })
+      .mockReturnValue({ ok: true });
+
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [invalidFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe('File too large. Maximum supported size is 5 MiB.');
+
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [validFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe('Importing…');
+
+    expect(readers).toHaveLength(1);
+    readers[0].result = 'data:application/pdf;base64,Z29vZA==';
+    readers[0].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0].body.name).toBe('good.pdf');
+
+    fetchDeferredByName.get('good.pdf').resolve({ text: 'GOOD IMPORT TEXT' });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(hint.textContent).toBe('Imported text added to editor.');
+    expect(validateMediaImportSize).toHaveBeenCalledTimes(2);
   });
 
   test('keeps the newest overlapping import result and only re-enables controls after it finishes', async () => {
