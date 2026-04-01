@@ -5,6 +5,7 @@
 .git/
 .github/workflows/
 .gitignore
+.publicpreserve
 
 # Local artifacts
 node_modules/
@@ -20,7 +21,6 @@ issues/
 tests/
 scripts/
 agents.md
-README.md
 
 # Tests and internal tooling (uncomment if desired)
 # tests/
