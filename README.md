@@ -1,91 +1,100 @@
-Ez-Quiz App
+Ez-Quiz Dev
 ===========
 
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/seanyates76/Ez-Quiz-App/badge?style=flat)](https://securityscorecards.dev/viewer/?uri=github.com/seanyates76/Ez-Quiz-App)
-[![License](https://img.shields.io/github/license/seanyates76/Ez-Quiz-App)](LICENSE)
-[![Latest Release](https://img.shields.io/github/v/release/seanyates76/Ez-Quiz-App?include_prereleases)](https://github.com/seanyates76/Ez-Quiz-App/releases)
-![Upstream Synced](https://img.shields.io/badge/Mirror-Upstream%20Synced-blue)
+[![License](https://img.shields.io/github/license/seanyates76/Ez-Quiz-App)](LICENSE.txt)
+![Mirror](https://img.shields.io/badge/Mirror-Ez--Quiz--App-blue)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES%20Modules-f7df1e?logo=javascript&logoColor=000&labelColor=f7df1e)
-![Node.js](https://img.shields.io/badge/Node.js-Functions-3c873a?logo=nodedotjs&logoColor=fff)
+![Node.js](https://img.shields.io/badge/Node.js-Netlify%20Functions-3c873a?logo=nodedotjs&logoColor=fff)
 [![Netlify Status](https://api.netlify.com/api/v1/badges/35b8697e-f228-4b5f-8065-6286e05246c8/deploy-status)](https://app.netlify.com/sites/ez-quiz/deploys)
 
-Create and play quizzes in seconds with a clean, responsive interface. Keyboard-friendly and offline-ready.
+Development repository for **Ez-Quiz**, a quiz app built with vanilla JavaScript and Netlify Functions. This repo is the working source of truth; the filtered production mirror lives at **`seanyates76/Ez-Quiz-App`**.
 
-Features
+Ez-Quiz is designed to be:
+- fast and lightweight
+- accessible and keyboard-friendly
+- privacy-respecting
+- simple to run locally
+
+Live app
 --------
-- Generate from a topic or create your own quiz
-- Multiple formats: Multiple Choice, True/False, Yes/No, Matching
-- Clear results with retake options (full or missed)
-- Installable PWA with cache-safe updates
-- Accessibility by default
-- Privacy first: no tracking, AI only when you choose
-
-Live
-----
 - https://ez-quiz.app/
 
-Quick Start
+What’s in this repo
+-------------------
+- quiz generation and play flow
+- PWA/service worker support
+- Netlify Functions for generation, feedback, and health endpoints
+- tests, CI workflows, and maintainer tooling
+- mirror workflow to the production mirror
+
+Quick start
 -----------
 ```bash
+# Install dependencies
+npm install
+
 # Static preview (no functions)
 cd public && python3 -m http.server 8000
 
-# Full stack dev (Netlify functions)
+# Full stack local dev (Netlify functions)
+cd ..
 netlify dev
 # Tip: set AI_PROVIDER=echo to run without provider keys
 
-# Tests and UI snapshots
-npm install
+# Tests
 npm test
 npm run ui:check
 ```
 
-Syncing with Ez-Quiz-App (Public)
----------------------------------
-- **Pull public → dev**: run `npm run sync:public` (or `files/scripts/pull-public.sh`). It clones `seanyates76/Ez-Quiz-App` main and overlays those files onto this repo while protecting anything listed in `.publicignore` (docs, scripts, internal tooling, etc.). Set `PUBLIC_BRANCH`, `PUBLIC_GH_URL`, or `CLEAN_SYNC=true` if you need different behavior.
-- **Push dev → public**: keep using `.github/workflows/publish.yml` or `files/scripts/mirror.sh` which export a filtered tree defined by `.publicignore`.
-- Always review the diff after running either command so you can commit or revert intentional changes before opening a PR.
+Repository model
+----------------
+This is the **development repo**.
 
-Key Endpoints
+- **Dev repo:** `seanyates76/Ez-Quiz-Dev`
+- **Production mirror:** `seanyates76/Ez-Quiz-App`
+
+The production mirror is produced from this repo through a filtered sync defined by `.publicignore`, so internal files like workflow notes, test artifacts, scripts, and local tooling do not automatically flow downstream.
+
+Syncing with the production mirror
+----------------------------
+- **Pull production mirror → dev:** `npm run sync:public`
+- **Push dev → production mirror:** `.github/workflows/publish.yml` or `files/scripts/mirror.sh`
+- Always review the resulting diff before committing or opening a PR
+
+Architecture
+------------
+- **Front end:** HTML, CSS, vanilla JS ES modules under `public/`
+- **Back end:** Netlify Functions under `netlify/functions/`
+- **Core entry point:** `public/index.html`
+- **Client modules:** `public/js/*`
+- **Provider selection:** `netlify/functions/lib/providers.js`
+
+Key endpoints
 -------------
 - `/.netlify/functions/generate-quiz` — generate from topic or seed text
-- `/.netlify/functions/send-feedback` — email feedback (nodemailer)
+- `/.netlify/functions/send-feedback` — feedback mailer
 - `/.netlify/functions/health` — health probe
 
 Environment
 -----------
+See `ENV.md` for full setup details.
+
+Common variables:
 - `AI_PROVIDER` = `gemini` | `openai` | `echo`
-- Provider keys as needed. See `ENV.md` for details.
+- provider API keys as needed
+- feedback mailer variables for Netlify Functions
 
-Tech Stack
-----------
-- Front end: HTML/CSS/vanilla JS (ES modules), PWA service worker
-- Back end: Netlify Functions (Node, esbuild)
-- CI/Security: GitHub Actions, CodeQL, OpenSSF Scorecard, Dependabot
-
-Under the Hood
---------------
-- Lightweight, framework-free front end
-- Versioned service worker with safe updates
-- Beta flags: server `requireBeta`, client `flags.js`
-- Provider selection in `netlify/functions/lib/providers.js`
-
-Contributing & Policies
+Contributing & policies
 -----------------------
-- See `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`
-- Conventional Commits encouraged; commit lint on PRs
-- License: MIT (`LICENSE`)
-
-Future Updates
---------------
-- Full UI overhaul: clearer layout, balanced spacing, refined theming
-- Explain feature: AI-powered, non-blocking answer explanations
-- Media input (PDF/image) with resilient fallbacks
-- Expanded DOM/CSS regression checks for toolbar and results
+- `CONTRIBUTING.md`
+- `CODE_OF_CONDUCT.md`
+- `SECURITY.md`
+- `CHANGELOG.md`
+- License: MIT (`LICENSE.txt`)
 
 Contact
 -------
-Open an issue or email ez.quizapp@gmail.com.
+Open an issue or email **ez.quizapp@gmail.com**.
 
-**Trust Matters**  
-Zero tracking. Zero data sales. AI works on your terms — never in the background.
+**Trust matters**  
+Zero tracking. Zero data sales. AI runs only when explicitly invoked.
