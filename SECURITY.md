@@ -4,11 +4,11 @@ Security Policy
 Supported versions
 ------------------
 - The latest `main` branch is the supported development baseline for this repository.
-- The public mirror may lag slightly behind while filtered sync and release review are in progress.
+- The production mirror may lag slightly behind while filtered sync and release review are in progress.
 
 Reporting a vulnerability
 -------------------------
-- Preferred: GitHub Security Advisories for the public mirror: <https://github.com/seanyates76/Ez-Quiz-App/security/advisories/new>
+- Preferred: GitHub Security Advisories for the production mirror: <https://github.com/seanyates76/Ez-Quiz-App/security/advisories/new>
 - Alternative: email **ez.quizapp@gmail.com** with the subject `Ez-Quiz security`
 - Do not open public issues for undisclosed vulnerabilities.
 

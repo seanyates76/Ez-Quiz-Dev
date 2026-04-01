@@ -7,7 +7,7 @@ Ez-Quiz Dev
 ![Node.js](https://img.shields.io/badge/Node.js-Netlify%20Functions-3c873a?logo=nodedotjs&logoColor=fff)
 [![Netlify Status](https://api.netlify.com/api/v1/badges/35b8697e-f228-4b5f-8065-6286e05246c8/deploy-status)](https://app.netlify.com/sites/ez-quiz/deploys)
 
-Development repository for **Ez-Quiz**, a quiz app built with vanilla JavaScript and Netlify Functions. This repo is the working source of truth; the filtered public mirror lives at **`seanyates76/Ez-Quiz-App`**.
+Development repository for **Ez-Quiz**, a quiz app built with vanilla JavaScript and Netlify Functions. This repo is the working source of truth; the filtered production mirror lives at **`seanyates76/Ez-Quiz-App`**.
 
 Ez-Quiz is designed to be:
 - fast and lightweight
@@ -25,7 +25,7 @@ What’s in this repo
 - PWA/service worker support
 - Netlify Functions for generation, feedback, and health endpoints
 - tests, CI workflows, and maintainer tooling
-- mirror workflow to the public repo
+- mirror workflow to the production mirror
 
 Quick start
 -----------
@@ -51,14 +51,14 @@ Repository model
 This is the **development repo**.
 
 - **Dev repo:** `seanyates76/Ez-Quiz-Dev`
-- **Public mirror:** `seanyates76/Ez-Quiz-App`
+- **Production mirror:** `seanyates76/Ez-Quiz-App`
 
-The public mirror is produced from this repo through a filtered sync defined by `.publicignore`, so internal files like workflow notes, test artifacts, scripts, and local tooling do not automatically flow downstream.
+The production mirror is produced from this repo through a filtered sync defined by `.publicignore`, so internal files like workflow notes, test artifacts, scripts, and local tooling do not automatically flow downstream.
 
-Syncing with the public repo
+Syncing with the production mirror
 ----------------------------
-- **Pull public → dev:** `npm run sync:public`
-- **Push dev → public:** `.github/workflows/publish.yml` or `files/scripts/mirror.sh`
+- **Pull production mirror → dev:** `npm run sync:public`
+- **Push dev → production mirror:** `.github/workflows/publish.yml` or `files/scripts/mirror.sh`
 - Always review the resulting diff before committing or opening a PR
 
 Architecture

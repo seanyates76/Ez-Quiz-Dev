@@ -2,12 +2,12 @@
 
 Thanks for contributing.
 
-This repository is the **development repo** for Ez-Quiz. The filtered public mirror lives at [`seanyates76/Ez-Quiz-App`](https://github.com/seanyates76/Ez-Quiz-App), but active implementation work happens here.
+This repository is the **development repo** for Ez-Quiz. The filtered production mirror lives at [`seanyates76/Ez-Quiz-App`](https://github.com/seanyates76/Ez-Quiz-App), but active implementation work happens here.
 
 ## Project overview
 
 - **Development repo:** `Ez-Quiz-Dev`
-- **Public mirror:** `Ez-Quiz-App`
+- **Production mirror:** `Ez-Quiz-App`
 - **Live app:** <https://ez-quiz.app>
 - **License:** MIT
 
@@ -89,9 +89,9 @@ Before requesting review:
 - [ ] Theme/token changes remain consistent
 - [ ] PR description explains scope and validation clearly
 
-## Public mirror notes
+## Production mirror notes
 
-This repo syncs selectively to the public mirror.
+This repo syncs selectively to the production mirror.
 
 That means:
 - not every dev-repo file is intended to flow downstream

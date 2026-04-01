@@ -1,153 +1,189 @@
-# Codex Welcome — EZ Quiz Web
+# Maintainer Guide — Ez-Quiz Dev
 
-Hey future helper! This repo ships the [ez-quiz.app](https://ez-quiz.app) PWA plus a few Netlify Functions. It’s a static front end under `public/` (vanilla ES modules) with serverless handlers in `netlify/functions/` for quiz generation and feedback email.
+This file is for future maintainers, coding agents, and helper instances working inside **Ez-Quiz-Dev**.
 
-## Branch: new-maintenance-branch
-- ✅ **UI Kit Enhanced**: `public/ui-kit.html` now includes Quiz Runner elements, colored correctness chips (`.pill.success`/`.pill.danger`), and working Theme/Beta toggles.
-- ✅ **CSS Refactored**: Consolidated redundant status color definitions (chip, pill, ie-status, ie-summary) into shared block to reduce duplication.
-- ✅ **CSP Fix**: Moved inline toggle script to `public/js/ui-kit.js` to comply with Content Security Policy enforced by `netlify dev`.
-- ✅ **UI Checks Passing**: All viewport checks pass (`npm run ui:check`).
+It should stay practical, current, and boring in a good way.
 
-## Orientation
-- **Entry point**: `public/index.html` loads slim modules from `public/js/`. State lives in `public/js/state.js`; the generator wiring is in `public/js/generator.js` and delegates to `public/js/api.js` (prefers `/.netlify/functions/generate-quiz`, falls back to `/api/generate`).
-- **Styling**: global tokens set in `public/styles.css` (see top-of-file CSS variables); cards/toolbars/veils use shared radius + shadow tokens (`--radius-*`, `--shadow-*`). Keep those consistent when you tweak UI.
-- **Quiz Editor**: `public/js/editor.gui.js` controls the Quiz Editor (now a main feature). Toggle lives in Options → Quiz Editor. The Start button shows a brief tooltip when the editor is open (`Start begins the quiz • Generate fills the editor/mirror`).
-- **Netlify Functions**: `netlify/functions/generate-quiz.js` calls providers defined in `netlify/functions/lib/providers.js`. Gemini/OpenAI share a strict prompt via `buildPrompt(...)`, and we fall back to Gemini when possible. `send-feedback.js` pipes into Gmail via nodemailer. New providers should extend `providers.js` and update ENV docs.
-- **Veil**: `public/js/veil.js` toggles `data-busy` on `<body>` so the overlay truly blocks UI. If you add new modals/FABs, check they obey the busy state.
+## What this repo is
 
-## Local dev
-- Static preview: `python3 -m http.server 8000` inside `public/` (no functions).
-- Full stack: `netlify dev` from repo root; copy env vars from `ENV.md`. Use `AI_PROVIDER=echo` if you lack API keys.
-- Health: `/.netlify/functions/health` when running through Netlify.
+`Ez-Quiz-Dev` is the **development repository** for Ez-Quiz.
 
-## Public ↔ Private Sync
-- **Pull Ez-Quiz-App → this repo**: run `npm run sync:public` (wrapper for `files/scripts/pull-public.sh`). It clones `seanyates76/Ez-Quiz-App` `main`, overlays files here, and automatically preserves anything excluded via `.publicignore` (files/, issues/, scripts/, docs-heavy dirs, etc.). Set `PUBLIC_BRANCH`, `PUBLIC_GH_URL`, or `CLEAN_SYNC=true` if you need a different branch, remote, or a delete-sync.
-- **Push this repo → Ez-Quiz-App**: keep using `files/scripts/mirror.sh` locally or `.github/workflows/publish.yml` in CI. Both honor `.publicignore` and enforce guardrails so private assets never leave.
-- Always inspect `git status` after either direction; commit or drop changes intentionally.
+- **Live app:** <https://ez-quiz.app>
+- **Production mirror:** `seanyates76/Ez-Quiz-App`
+- **Current role of this repo:** source of truth for implementation, CI, tests, and internal tooling
 
-## Visual UI Checks (toolbar + results)
+The production mirror is a filtered mirror, not the main workshop.
 
-We now ship a viewport‑aware UI check that validates the generator toolbar layout at multiple widths and writes screenshots + measured metrics. It’s designed to prevent regressions where the Difficulty→Length gap grows, or the Length control visually hugs the action buttons at tablet sizes.
+## Core architecture
 
-- Install once: `npm i` (Puppeteer is a dev dep)
-- Run sweep: `npm run ui:check`
-  - Artifacts: `.artifacts/ui/toolbar-<viewport>.png` + `.json` and `.artifacts/ui/results-<viewport>.png` + `.json`
-  - Default widths: `360,390,414,600,640,720,768,800,820,834,912,1024,1200,1280,1366,1440`
-  - Override widths: `UI_CHECK_WIDTHS=375,820,1280 npm run ui:check`
-  - Notes: The runner uses a small static server; if blocked, it falls back to inline HTML+CSS (no scripts) to still measure layout. It launches Chromium with sandbox‑safe flags by default.
+### Front end
+- Main HTML shell: `public/index.html`
+- Styling: `public/styles.css`, `public/styles.tokens.css`, `public/styles.backdrop.css`
+- Client modules: `public/js/*`
 
-What it enforces
-- Topic→Difficulty and Difficulty→Length wrapper gaps equal within 2px (when on the same row)
-- Length→Actions wrapper gap is allowed to stretch, but never less than the field gap
-- Visual gaps (interactive elements):
-  - Diff→Length ≈ 10px (6–14 acceptable)
-  - Length→Actions ≥ 8px (prevents “sticking”)
-- Actions stay inside the toolbar (no overflow)
+Key client modules:
+- `public/js/main.js` — bootstraps the app
+- `public/js/state.js` — shared client state
+- `public/js/generator.js` — generation flow wiring
+- `public/js/api.js` — client API/fallback handling
+- `public/js/quiz.js` — quiz runner behavior
+- `public/js/settings.js` — settings modal/state
+- `public/js/editor.gui.js` — quiz editor UI
+- `public/js/flags.js` / `public/js/boot-beta.js` — runtime beta feature handling
+- `public/js/veil.js` — busy overlay handling
 
-Results checks
-- Results header wraps without horizontal overflow at small widths (e.g., 320–375)
-- Page and header have no horizontal overflow in Results
-- Score bar width stays within its clamp (proportional to viewport, never too small/large)
-- Explain button absent in non‑beta mode (beta gating respected)
+### Back end
+Netlify Functions live under `netlify/functions/`.
 
-CI‑friendly: The script exits non‑zero on failure and prints a self‑diagnosing report (selectors, computed grids, gap values, y‑centers, hints) so it’s easy to spot what drifted.
+Important functions:
+- `generate-quiz.js` — quiz generation endpoint
+- `send-feedback.js` — feedback mailer
+- `health.js` — simple health probe
+- `ingest-media.js` — media import path
+- `mcp.ts` — experimental MCP endpoint
 
-## Pre‑Merge Maintenance (UI changes)
-- Bump cache‑busters + SW together when UI assets change:
-  - index.html: update query tokens for `styles.css`, `js/main.js`, `js/auto-refresh.js`, `js/patches.js`, `js/editor.gui.js`.
-  - Module imports: update query tokens in `public/js/main.js` (generator import), `public/js/generator.js` (api import), and `public/js/editor.gui.js` (generator import).
-  - Service worker: bump `CACHE_NAME` and keep every `RELATIVE_URLS` entry aligned to the new query tokens.
-- Verify:
-  - `npm test` and `npm run ui:check`.
-  - Load the app once and confirm new CSS/JS are served; update banner logic works.
-  - `/?clear=1` and Settings → Reset App behave as expected.
-- Don’t bump cache/version when only server code changes.
+Supporting modules:
+- `netlify/functions/lib/providers.js` — provider selection and generation logic
+- `netlify/functions/lib/providers.explain.js` — explanation provider helpers
+- `netlify/functions/lib/normalizer.js` — quiz normalization/parsing support
+- `netlify/functions/lib/betaGuard.js` — server-side beta gating
+- `netlify/functions/lib/quizSchema.js` — structured quiz schema helpers
 
-## Recent polish
-- 2025-10-22 — Explain (beta) moved to a localized toast (no inline ribbon). Topic input + paperclip unified as a single control with one soft focus border; hover/autofill de‑noised. Stabilized DOM tests (jsdom environment, safer HTML parsing) and used Node Blob for header‑byte tests.
-- 2025-10-16 — Results Explain is strictly beta‑gated and won’t render outside beta (checked via `S.settings.betaEnabled` or `body[data-beta]`). Added a tiny dev‑only log for primary action mode changes; enable with `localStorage.setItem('EZQ_DEBUG','1')` to print `[ezq:dev] primary-action` in console.
-- 2025-10-14 — Stabilize Jest (in-band); add providers/dom/css tests; ignore .artifacts (via ezq-head).
-- Unified UI tokens, lighter shadows, refined Options/Quiz Editor surfaces.
-- Removed theme radio row from Options (theme lives in Settings modal only).
-- Veil disables the page by default; Start tooltip appears only during Quiz Editor mode.
-- Difficulty selector upgraded to a five-step slider (Very Easy → Expert) replacing the old dropdown.
-- Privacy/Terms open as in-app modals instead of navigating away from the app.
-- Length field gained inline steppers; generator wiring restored to use `getShowQuizEditorPreference()` so UI controls stay interactive after build tweaks.
-- 2025-09-19 — Mobile comfort pass; refreshed cache-buster (v1.5.10). Veil strings restored; spinner hides cleanly on “Done”.
-- 2025-09-23 — Synced AI generation with the Quiz Editor. Generator dispatches input events so editor cards refresh automatically when quizzes load.
-- 2025-09-24 — Rebalanced the generator toolbar (responsive grid) and wrapped editor panes with headers/gradients.
-- 2025-09-24 — Smoothed Topic autofill, restored footer reserve tint, bumped cache-busters (v1.5.11) + SW cache v120.
-- 2025-09-25 — Softened borders/focus rings, widened toolbar on big phones, cache-buster v1.5.12 + SW cache v121.
-- 2025-09-25 — Added client fallback to `/.netlify/functions/generate-quiz` when `/api/generate` is missing.
-- 2025-09-26 — Hardened AI endpoint selection; CSP connect-src allowlist for both Netlify fallbacks; backend default `gemini-2.5-flash-lite-preview-09-2025`. Cache-busters v1.5.17 + SW cache v125.
-- 2025-09-27 — Removed unused legacy root assets and a stub in `settings.js`. Restored explicit Netlify fallback allowlist.
-- 2025-09-30 — Quiet info bar for version/highlights. Version indicator moved into Settings. Settings defaults to prod build v3.3.
-- 2025-10-01 — Quiz Editor graduated from beta to stable (main feature). Orientation/docs updated.
-- 2025-10-02 — Structured quiz JSON is now opt-in via `format=quiz-json`; legacy `{ title, lines }` always included. Chunked generation helper staged for >50 questions. Footer reserve padding adjusted to avoid the gray strip on beta builds.
+## Local development
 
-## Experimental / Beta Features
-We sometimes ship new features in “beta” mode (same build; beta is a runtime flag).
+### Install
+```bash
+npm install
+```
 
-**How to enable**  
-- Visit `/beta` to set a `FEATURE_FLAGS=beta` cookie for 24h (redirects home).  
-- Or toggle **Settings → Beta features** (writes `EZQ_FLAGS` in localStorage).
+### Full stack local dev
+```bash
+netlify dev
+```
 
-**How to gate code**  
-- Server (Netlify Functions): import `requireBeta` from `netlify/functions/lib/betaGuard.js` and 403 if not beta.  
-- Client: `import { has } from './js/flags.js'` and check `has('beta')` before mounting UI.
+Tips:
+- use `AI_PROVIDER=echo` for local work when you do not want to depend on provider keys
+- local dev normally serves on `http://localhost:8888`
 
-**Current beta features**
-- **MCP integration** (`netlify/functions/mcp.ts`): Experimental MCP server entrypoint and “lazy explanations” path. This endpoint is beta-gated at the server layer and may change without notice.
+### Static-only preview
+```bash
+cd public && python3 -m http.server 8000
+```
 
-**Rules**
-- Beta must not break core quiz play/generation.  
-- Keep accessibility parity (focus rings, keyboard nav).  
-- Log beta errors with a `[beta]` prefix.  
-- When a beta feature graduates, remove it from this list and add a dated note in **Recent polish**.
+## Testing and verification
 
-## To-do / Handoff Notes
-- If you ship visible UI tweaks, update this note and the Help/README copy so docs stay accurate.
-- Keep the service worker + cache busting in sync when touching asset versions (`public/sw.js`, query strings in `index.html`).
-- Before promoting quiz v2 to end users: update the client fetch path to send `format=quiz-json`, surface the structured data in UI, and add regression tests for the new payload.
-- Next exploration: story-board the explanations UI (visual spec + API hook) before wiring it up so we can document the flow alongside implementation.
-- Next agent: append your updates here (date + highlight) so this stays a living log.
+### Baseline test suite
+```bash
+npm test
+```
 
-### Agent playbook (quick)
-- Local smoke: `npm test` (Node tests + DOM/CSS sanity)
-- UI snapshot sweep: `npm run ui:check` (review `.artifacts/ui/`)
-- Full stack: `netlify dev` (`AI_PROVIDER=echo` if no keys)
-- If the toolbar gaps regress, iterate only in `public/styles.css` within `.gen-toolbar` + `.toolbar-left` and re‑run `ui:check` until green.
+### UI/layout sweep
+```bash
+npm run ui:check
+```
 
-— Codex (GPT-5)
+### Public sync helper
+```bash
+npm run sync:public
+```
 
-## Local Head CLI (ezq-head)
+## Dependency notes
 
-Use the local Head coordinator to run sub‑agents, capture artifacts, and (optionally) request Codex proposals. Dry‑run by default; never changes files unless explicitly applied.
+Current package roles are intentional:
 
-- Install: `cd ../ezq-dev-tools && ./scripts/install.sh`
-- Quick run: `../ezq-dev-tools/bin/ezq-head run quick`
-- Presets: `quick = [smoke, lint, ui, parser, repo]`, `ui-check = [ui, repo]`
-- Artifacts: `../ezq-dev-tools/.ezq/runs/<run_id>/artifacts`
-- App path override: `EZQ_APP_DIR=$(pwd) ../ezq-dev-tools/bin/ezq-head run quick`
-- Apply mode (conflict-sim first): `../ezq-dev-tools/bin/ezq-head apply`
+### Runtime dependencies
+- `@google/generative-ai`
+- `nodemailer`
 
-Wrapper:
-- Default tools: /home/arch-bean/Projects/ezq-dev-tools
-- Use wrapper: `./scripts/ezq-head.sh run quick`
-- Override: `EZQ_DEV_TOOLS_DIR=/custom/path ./scripts/ezq-head.sh run quick`
+### Dev dependencies
+- `netlify-cli`
+- `jest`
+- `jest-environment-jsdom`
+- `jsdom`
+- `puppeteer`
 
-### Codex bridge (MCP-like toolset)
+Do not move `netlify-cli` back into runtime dependencies unless there is a very explicit reason.
 
-Codex (CLI) can consume a Context Packet built by the Head and return a JSON summary with proposed patch artifacts. Treat this as a tool, similar in spirit to an MCP action:
+## Netlify / deployment notes
 
-- Call: `../ezq-dev-tools/bin/ezq-head codex "<one‑sentence brief>" --timebox 120`
-- Constraints: whitelist `public/`, `netlify/`, `package.json`; no installs/deletes/renames; minimal diffs
-- Output: artifacts at `.ezq/runs/<run_id>/artifacts/codex/{context-packet.json,codex-output.txt}`
-- The last line of `codex-output.txt` is JSON: `{ summary, proposed_diffs, verify, uncertainty, next_hint }`
-- Review then apply patches manually (or wire auto‑apply later behind conflict simulation)
+See:
+- `netlify.toml`
+- `ENV.md`
 
-## Next Agent Agenda
-- UI Visual Refresh: soften outlined wrappers (tokens + shadows) with accessible focus states.
-- Media Input (Phase 1): PDF/Image import UI stub with drag-drop and file picker; graceful fallback if function not deployed.
-- Tests: add DOM/css sanity cases for new UI; keep Jest in-band.
-- See: docs/agenda-ui-visual-refresh-media-input.md
+Important points:
+- publish directory: `public`
+- functions directory: `netlify/functions`
+- Node bundler: `esbuild`
+- external runtime modules: `@google/generative-ai`, `nodemailer`
+
+Key redirects:
+- `/api/generate` → `/.netlify/functions/generate-quiz`
+- `/api/health` → `/.netlify/functions/health`
+- `/api/mcp` → `/.netlify/functions/mcp`
+
+## Mirror workflow model
+
+This repo syncs selectively to the production mirror.
+
+### Dev → public
+- workflow: `.github/workflows/publish.yml`
+- local helper: `files/scripts/mirror.sh`
+
+### Public → dev
+- local helper: `files/scripts/pull-public.sh`
+- npm wrapper: `npm run sync:public`
+
+### Guardrails
+- `.publicignore` defines what should not flow downstream
+- internal tooling, workflow details, tests, scripts, and local-only files should remain filtered
+
+## CI and workflow notes
+
+Important workflows live in `.github/workflows/`.
+
+Current expectations:
+- CI uses **Node 25** to match the working lockfile generation environment
+- Scorecard workflow is fixed structurally, but SARIF upload/code scanning still depends on repository code-scanning availability
+- dependency review is intentionally gated to public visibility
+
+## Known repo conventions
+
+- front end is vanilla JS, no framework
+- prefer explicit modules over magic
+- keep accessibility intact when changing UI
+- if front-end assets change meaningfully, verify cache-buster/service-worker implications
+- `.netlify/state.json` and `.netlify/plugins/package-lock.json` are local working files and should not be re-tracked casually
+
+## High-value files to read before large changes
+
+- `README.md`
+- `CONTRIBUTING.md`
+- `SECURITY.md`
+- `ENV.md`
+- `netlify.toml`
+- `package.json`
+
+If touching mirror behavior, also read:
+- `.publicignore`
+- `.github/workflows/publish.yml`
+- `files/scripts/mirror.sh`
+- `files/scripts/pull-public.sh`
+
+## If you are making changes
+
+Before handing work off or opening a PR:
+1. run relevant tests
+2. confirm the scope is intentional
+3. avoid bundling unrelated cleanup into one commit
+4. leave short, useful commit messages
+5. update this file only if the repo’s actual operating model changed
+
+## What this file should not become
+
+Do not turn this into:
+- a diary
+- a branch-specific memo
+- a changelog duplicate
+- a giant stale handoff log
+
+If information is temporary, put it in a PR, issue, or commit message instead.
