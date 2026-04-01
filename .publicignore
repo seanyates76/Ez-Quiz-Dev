@@ -20,6 +20,7 @@ issues/
 tests/
 scripts/
 agents.md
+README.md
 
 # Tests and internal tooling (uncomment if desired)
 # tests/
