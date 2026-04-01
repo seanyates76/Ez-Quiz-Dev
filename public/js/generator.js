@@ -416,15 +416,26 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   });
   // Drag-drop on toolbar (beta)
   let __affixEscapeListener = null;
+  const focusAffixExitTarget = ()=>{
+    if(topicInput && typeof topicInput.focus === 'function'){
+      topicInput.focus();
+      return;
+    }
+    if(importBtn && typeof importBtn.focus === 'function'){
+      importBtn.focus();
+    }
+  };
   const addAffixEscapeHandler = ()=>{
     if(__affixEscapeListener) return;
     __affixEscapeListener = (evt)=>{
       if(evt && (evt.key==='Escape' || evt.key==='Esc')){
         try{
+          if(typeof evt.preventDefault === 'function') evt.preventDefault();
+          if(typeof evt.stopPropagation === 'function') evt.stopPropagation();
           topicAffix?.classList.remove('drag-on');
           topicAffix?.classList.remove('drag-active');
           if(topicAffix) clearDrag(topicAffix);
-          if(importBtn && typeof importBtn.focus==='function'){ importBtn.focus(); }
+          focusAffixExitTarget();
         }catch{}
         try{ announce('Import canceled.', 'polite'); }catch{}
         removeAffixEscapeHandler();
