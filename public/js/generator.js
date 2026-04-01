@@ -3,7 +3,7 @@ import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
 import { generateWithAI } from './api.js?v=1.5.27';
 import { ImportController } from './import-controller.js';
-import { sniffFileKind, isSupportedImportKind } from './file-type-validation.js';
+import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
 import { announce } from './a11y-announcer.js?v=1.5.27';
@@ -348,6 +348,13 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         if(importCtl.isCurrent(token)) {
           setHint('Unsupported file. Choose a PDF or image.');
           try { announce('Import failed: Unsupported file.', 'assertive'); } catch {}
+        }
+        return;
+      }
+      if(hasImportMetadataMismatch(file, kind)){
+        if(importCtl.isCurrent(token)) {
+          setHint('File type does not match its contents. Choose a real PDF or image.');
+          try { announce('Import failed: File type does not match contents.', 'assertive'); } catch {}
         }
         return;
       }
