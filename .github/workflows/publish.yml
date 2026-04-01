@@ -124,7 +124,7 @@ jobs:
         - name: Sync and push staging branch
           id: sync
           env:
-            SYNC_BRANCH: mirror/main
+            SYNC_BRANCH: mirror/staging
             HAS_PAT: ${{ steps.detect.outputs.has_pat }}
             HAS_DEPLOY_KEY: ${{ steps.detect.outputs.has_deploy_key }}
           run: |
@@ -179,7 +179,7 @@ jobs:
           if: ${{ steps.detect.outputs.has_pat == 'true' && steps.sync.outputs.has_changes == 'true' }}
           env:
             GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-            SYNC_BRANCH: mirror/main
+            SYNC_BRANCH: mirror/staging
           run: |
             set -euo pipefail
             cd public-repo
