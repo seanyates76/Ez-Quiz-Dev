@@ -31,14 +31,16 @@ describe('ImportController', () => {
 
     ctl.finish(first.token);
     expect(ctl.pending).toBe(true);
+    expect(ctl.abortController).not.toBeNull();
 
     ctl.finish(second.token);
     expect(ctl.pending).toBe(false);
+    expect(ctl.abortController).toBeNull();
   });
 
-  test('cancel aborts the current signal and resets pending state', () => {
+  test('cancel aborts the current signal, invalidates the token, and resets pending state', () => {
     const ctl = new ImportController();
-    const { signal } = ctl.start();
+    const { token, signal } = ctl.start();
 
     let aborted = false;
     signal.addEventListener('abort', () => { aborted = true; });
@@ -46,5 +48,7 @@ describe('ImportController', () => {
     ctl.cancel();
     expect(aborted).toBe(true);
     expect(ctl.pending).toBe(false);
+    expect(ctl.abortController).toBeNull();
+    expect(ctl.isCurrent(token)).toBe(false);
   });
 });

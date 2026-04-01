@@ -400,11 +400,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         try { announce(msg, 'assertive'); } catch {}
       }
     }finally{
+      const isCurrentImport = importCtl.isCurrent(token);
       importCtl.finish(token);
-      if(importCtl.isCurrent(token)){
+      if(isCurrentImport){
         importBtn?.removeAttribute('disabled');
+        if(importFile) importFile.value='';
       }
-      if(importFile) importFile.value='';
     }
   }
   importBtn?.addEventListener('click', ()=>{ if(!isBeta()) return; importFile?.click(); });

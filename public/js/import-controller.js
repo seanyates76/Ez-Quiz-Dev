@@ -27,10 +27,12 @@ export class ImportController {
   finish(token) {
     if (this.isCurrent(token)) {
       this.pending = false;
+      this.abortController = null;
     }
   }
 
   cancel() {
+    this.currentToken += 1;
     if (this.abortController) {
       try {
         this.abortController.abort();
@@ -38,6 +40,7 @@ export class ImportController {
         // ignore abort errors from current controller
       }
     }
+    this.abortController = null;
     this.pending = false;
   }
 }
