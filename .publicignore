@@ -20,8 +20,6 @@ issues/
 tests/
 scripts/
 agents.md
-BETA_DOCUMENTATION.md
-LAZY_EXPLANATIONS.md
 
 # Tests and internal tooling (uncomment if desired)
 # tests/
