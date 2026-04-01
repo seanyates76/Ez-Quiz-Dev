@@ -18,6 +18,7 @@ export function setMode(mode){
     generatorCard?.classList.add('is-hidden'); resultsView?.classList.add('is-hidden'); quizView?.classList.remove('is-hidden'); document.body.classList.add('is-quiz');
   }else if(mode==='results'){
     generatorCard?.classList.add('is-hidden'); quizView?.classList.add('is-hidden'); resultsView?.classList.remove('is-hidden'); document.body.classList.add('is-quiz');
+    syncExplainButtonsVisibility();
   }else{
     generatorCard?.classList.remove('is-hidden'); quizView?.classList.add('is-hidden'); resultsView?.classList.add('is-hidden'); document.body.classList.remove('is-quiz');
     // If an update is ready, show banner when returning to main menu
@@ -256,6 +257,14 @@ export function renderResults(){
       + `<span class="score-label">${labelText}</span>`
       + (showTime ? `<span class="sg-time">${timeText}</span>` : '');
   }
+}
+
+export function syncExplainButtonsVisibility(root = document){
+  if(!root || isBetaEnabled(S.settings)) return;
+  const nodes = typeof root.querySelectorAll === 'function' ? root.querySelectorAll('.explain-btn') : [];
+  nodes.forEach((node)=>{
+    try{ node.remove(); }catch{}
+  });
 }
 
 function wireExplainDelegation(){
