@@ -4,6 +4,7 @@ import { parseEditorInput } from './parser.js';
 import { generateWithAI } from './api.js?v=1.5.27';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind } from './file-type-validation.js';
+import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
 import { announce } from './a11y-announcer.js?v=1.5.27';
 import { buildGeneratorPayload } from './generator-payload.js?v=1.5.27';
@@ -330,6 +331,15 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       if(importCtl.isCurrent(token)) {
         setHint('Importing…');
         try { announce('Importing file…', 'polite'); } catch {}
+      }
+
+      const sizeCheck = validateMediaImportSize(file);
+      if(!sizeCheck.ok){
+        if(importCtl.isCurrent(token)) {
+          setHint(sizeCheck.error);
+          try { announce(`Import failed: ${sizeCheck.error}`, 'assertive'); } catch {}
+        }
+        return;
       }
 
       const kind = await sniffFileKind(file);
