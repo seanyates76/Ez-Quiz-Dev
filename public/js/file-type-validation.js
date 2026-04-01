@@ -1,4 +1,20 @@
 const SUPPORTED_KINDS = new Set(['pdf', 'png', 'jpeg', 'gif']);
+const MIME_KIND_MAP = new Map([
+  ['application/pdf', 'pdf'],
+  ['image/pdf', 'pdf'],
+  ['image/png', 'png'],
+  ['image/jpeg', 'jpeg'],
+  ['image/jpg', 'jpeg'],
+  ['image/pjpeg', 'jpeg'],
+  ['image/gif', 'gif'],
+]);
+const EXTENSION_KIND_MAP = new Map([
+  ['pdf', 'pdf'],
+  ['png', 'png'],
+  ['jpg', 'jpeg'],
+  ['jpeg', 'jpeg'],
+  ['gif', 'gif'],
+]);
 
 export async function sniffFileKind(file) {
   try {
@@ -24,6 +40,34 @@ export async function sniffFileKind(file) {
     // Ignore read errors and fall through to unknown
   }
   return 'unknown';
+}
+
+export function getImportKindFromMime(type) {
+  if (!type) return 'unknown';
+  return MIME_KIND_MAP.get(String(type).trim().toLowerCase()) || 'unknown';
+}
+
+export function getImportKindFromName(name) {
+  if (!name) return 'unknown';
+  const match = String(name).trim().toLowerCase().match(/\.([a-z0-9]+)$/);
+  if (!match) return 'unknown';
+  return EXTENSION_KIND_MAP.get(match[1]) || 'unknown';
+}
+
+export function hasImportMetadataMismatch(file, sniffedKind) {
+  if (!isSupportedImportKind(sniffedKind)) return false;
+
+  const mimeKind = getImportKindFromMime(file && file.type);
+  if (mimeKind !== 'unknown' && mimeKind !== sniffedKind) {
+    return true;
+  }
+
+  const nameKind = getImportKindFromName(file && file.name);
+  if (nameKind !== 'unknown' && nameKind !== sniffedKind) {
+    return true;
+  }
+
+  return false;
 }
 
 export function isSupportedImportKind(kind) {

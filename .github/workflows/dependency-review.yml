@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [ "main", "beta" ]
 
+permissions: {}
+
 jobs:
   review:
     if: ${{ github.repository_visibility == 'public' }}

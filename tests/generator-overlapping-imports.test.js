@@ -1,0 +1,266 @@
+/** @jest-environment jsdom */
+'use strict';
+
+const fs = require('node:fs');
+const path = require('node:path');
+const { loadBrowserModule } = require('./utils');
+
+function loadGeneratorModule(deps) {
+  const absPath = path.resolve(__dirname, '../public/js/generator.js');
+  const source = fs.readFileSync(absPath, 'utf8')
+    .replace(/^import\s+[^;]+;\n/gm, '')
+    .replace(/export\s+function\s+/g, 'function ')
+    .replace(/export\s+class\s+/g, 'class ')
+    .replace(/export\s+const\s+/g, 'const ')
+    .replace(/export\s+let\s+/g, 'let ')
+    .replace(/export\s+var\s+/g, 'var ');
+
+  const names = Object.keys(deps);
+  const values = Object.values(deps);
+  const factory = new Function(...names, `${source}\nreturn { wireGenerator, runParseFlow, disposeGenerator };\n//# sourceURL=${absPath}`);
+  return factory(...values);
+}
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
+function flush() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+describe('generator media import overlap regression', () => {
+  let ImportController;
+  let wireGenerator;
+  let sniffFileKind;
+  let parseEditorInput;
+  let announce;
+  let fetchCalls;
+  let fetchDeferredByName;
+  let readers;
+  let consoleDebugSpy;
+  let validateMediaImportSize;
+
+  beforeAll(() => {
+    ({ ImportController } = loadBrowserModule('public/js/import-controller.js', ['ImportController']));
+  });
+
+  beforeEach(() => {
+    const html = fs.readFileSync(path.resolve(__dirname, '../public/index.html'), 'utf8');
+    document.open();
+    document.write(html);
+    document.close();
+    window.localStorage.clear();
+    window.EZQ = {};
+    consoleDebugSpy = jest.spyOn(console, 'debug').mockImplementation(() => {});
+    document.getElementById('regenHint').hidden = true;
+
+    sniffFileKind = jest.fn().mockResolvedValue('pdf');
+    parseEditorInput = jest.fn().mockImplementation((text) => ({
+      questions: text ? [{ prompt: text }] : [],
+      errors: [],
+      error: null,
+    }));
+    announce = jest.fn();
+    validateMediaImportSize = jest.fn(() => ({ ok: true }));
+    fetchCalls = [];
+    fetchDeferredByName = new Map();
+    readers = [];
+
+    global.fetch = jest.fn().mockImplementation(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      const deferred = createDeferred();
+      fetchCalls.push({ body, options, deferred });
+      fetchDeferredByName.set(body.name, deferred);
+      const payload = await deferred.promise;
+      return {
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ text: payload.text }),
+      };
+    });
+
+    global.FileReader = class MockFileReader {
+      constructor() {
+        this.result = null;
+        this.onload = null;
+        this.onerror = null;
+        readers.push(this);
+      }
+
+      readAsDataURL(file) {
+        this.file = file;
+      }
+
+      abort() {
+        this.aborted = true;
+      }
+    };
+
+    const deps = {
+      S: { settings: { beta: true }, quiz: {} },
+      $: (id) => document.getElementById(id),
+      byQSA: (selector) => Array.from(document.querySelectorAll(selector)),
+      mmSsToMs: () => 0,
+      clampCount: (value, { fallback } = {}) => {
+        const parsed = Number.parseInt(value, 10);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+        return fallback ?? 10;
+      },
+      getMaxQuestions: () => 50,
+      parseEditorInput,
+      generateWithAI: jest.fn(),
+      ImportController,
+      sniffFileKind,
+      isSupportedImportKind: () => true,
+      hasImportMetadataMismatch: () => false,
+      validateMediaImportSize,
+      attachDragDrop: () => ({ dispose() {} }),
+      announce,
+      buildGeneratorPayload: ({ topic, difficulty, count }) => ({ topic, difficulty, count }),
+      showVeil: () => {},
+      hideVeil: () => {},
+      MESSAGES: ['hello'],
+      applyTheme: () => {},
+      saveSettingsToStorage: () => {},
+      getShowQuizEditorPreference: () => false,
+      STORAGE_KEYS: { defaults: 'defaults' },
+      isBetaEnabled: () => true,
+    };
+
+    ({ wireGenerator } = loadGeneratorModule(deps));
+    wireGenerator({ beginQuiz: jest.fn(), syncSettingsFromUI: jest.fn() });
+  });
+
+  afterEach(() => {
+    consoleDebugSpy?.mockRestore();
+    delete global.fetch;
+    delete global.FileReader;
+  });
+
+  test('clears a stale import error before processing the next valid file', async () => {
+    const importInput = document.getElementById('importFile');
+    const hint = document.getElementById('regenHint');
+
+    const invalidFile = new File(['bad'], 'bad.pdf', { type: 'application/pdf' });
+    const validFile = new File(['good'], 'good.pdf', { type: 'application/pdf' });
+
+    validateMediaImportSize
+      .mockReturnValueOnce({ ok: false, error: 'File too large. Maximum supported size is 5 MiB.' })
+      .mockReturnValue({ ok: true });
+
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [invalidFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe('File too large. Maximum supported size is 5 MiB.');
+
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [validFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe('Importing…');
+
+    expect(readers).toHaveLength(1);
+    readers[0].result = 'data:application/pdf;base64,Z29vZA==';
+    readers[0].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0].body.name).toBe('good.pdf');
+
+    fetchDeferredByName.get('good.pdf').resolve({ text: 'GOOD IMPORT TEXT' });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(hint.textContent).toBe('Imported text added to editor.');
+    expect(validateMediaImportSize).toHaveBeenCalledTimes(2);
+  });
+
+  test('keeps the newest overlapping import result and only re-enables controls after it finishes', async () => {
+    const importInput = document.getElementById('importFile');
+    const importBtn = document.getElementById('importBtn');
+    const editor = document.getElementById('editor');
+    const mirror = document.getElementById('mirror');
+    const hint = document.getElementById('regenHint');
+
+    const firstFile = new File(['first'], 'first.pdf', { type: 'application/pdf' });
+    const secondFile = new File(['second'], 'second.pdf', { type: 'application/pdf' });
+
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [firstFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(importBtn.getAttribute('disabled')).toBe('true');
+    expect(hint.textContent).toBe('Importing…');
+    expect(readers).toHaveLength(1);
+
+    readers[0].result = 'data:application/pdf;base64,Zmlyc3Q=';
+    readers[0].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(1);
+    expect(fetchCalls[0].body.name).toBe('first.pdf');
+
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [secondFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(fetchCalls[0].options.signal.aborted).toBe(true);
+    expect(importBtn.getAttribute('disabled')).toBe('true');
+    expect(readers).toHaveLength(2);
+
+    readers[1].result = 'data:application/pdf;base64,c2Vjb25k';
+    readers[1].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(2);
+    expect(fetchCalls[1].body.name).toBe('second.pdf');
+
+    fetchDeferredByName.get('second.pdf').resolve({ text: 'SECOND IMPORT TEXT' });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(editor.value).toBe('SECOND IMPORT TEXT');
+    expect(mirror.value).toBe('SECOND IMPORT TEXT');
+    expect(hint.textContent).toBe('Imported text added to editor.');
+    expect(importBtn.hasAttribute('disabled')).toBe(false);
+
+    fetchDeferredByName.get('first.pdf').resolve({ text: 'STALE FIRST IMPORT TEXT' });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(editor.value).toBe('SECOND IMPORT TEXT');
+    expect(mirror.value).toBe('SECOND IMPORT TEXT');
+    expect(parseEditorInput).toHaveBeenCalledTimes(1);
+    expect(parseEditorInput).toHaveBeenCalledWith('SECOND IMPORT TEXT');
+    expect(announce).toHaveBeenCalledWith('Imported text added to editor.', 'polite');
+  });
+});
