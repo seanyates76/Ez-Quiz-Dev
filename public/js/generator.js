@@ -10,6 +10,7 @@ import { buildGeneratorPayload } from './generator-payload.js?v=1.5.27';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
+import { isBetaEnabled } from './beta.mjs';
 
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;
@@ -250,7 +251,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const exportTxtBtn = $('exportTxtBtn');
   
   // --- Media Import (beta) ---
-  function isBeta(){ try{ return document.body?.dataset?.beta === 'true' || !!S.settings?.betaEnabled; }catch{ return false; } }
+  function isBeta(){ return isBetaEnabled(S.settings); }
   function setHint(msg){ try{ const hint=document.getElementById('regenHint'); if(hint){ hint.textContent = msg; hint.hidden = false; } }catch{} }
   function clearHint(){ try{ const hint=document.getElementById('regenHint'); if(hint){ hint.hidden = true; } }catch{} }
   // Improve accessible label on import button
