@@ -453,23 +453,37 @@ const IE2 = (()=>{
     const s=els().summary; if(!s) return;
     const total=state.model.length;
     const valid=state.model.filter(ok).length;
+    const makePill = (text, className='')=>{
+      const span = document.createElement('span');
+      span.className = className ? `ie-summary-pill ${className}` : 'ie-summary-pill';
+      span.textContent = text;
+      return span;
+    };
+    const makeHint = (text)=>{
+      const span = document.createElement('span');
+      span.className = 'ie-summary-hint';
+      span.textContent = text;
+      return span;
+    };
+
+    s.replaceChildren();
     if(!total){
       const hint = summaryHint || 'Use the Add buttons or import from raw text. Hotkeys: M, Shift+M, T, Y.';
-      s.innerHTML = `
-        <span class="ie-summary-pill ie-summary-empty">No questions yet</span>
-        <span class="ie-summary-hint">${hint}</span>
-      `;
+      s.append(
+        makePill('No questions yet', 'ie-summary-empty'),
+        makeHint(hint),
+      );
       return;
     }
     const allValid = valid===total;
     const validityClass = allValid ? 'ie-summary-valid' : 'ie-summary-warn';
     const baseHint = allValid ? 'All set — ready to generate.' : 'Finish the highlighted cards to preview.';
     const hint = summaryHint || `${baseHint} Hotkeys: M, Shift+M, T, Y.`;
-    s.innerHTML = `
-      <span class="ie-summary-pill">${total} ${total===1?'question':'questions'}</span>
-      <span class="ie-summary-pill ${validityClass}">${valid}/${total} ready</span>
-      <span class="ie-summary-hint">${hint}</span>
-    `;
+    s.append(
+      makePill(`${total} ${total===1?'question':'questions'}`),
+      makePill(`${valid}/${total} ready`, validityClass),
+      makeHint(hint),
+    );
   }
 
   function init(){
