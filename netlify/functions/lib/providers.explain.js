@@ -96,7 +96,7 @@ function echoExplain(questions, originalIndices) {
 }
 
 // Future: Real AI provider integration
-async function geminiExplain({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', questions, originalIndices }) {
+async function geminiExplain({ apiKey, model = 'gemini-2.5-flash-lite', questions, originalIndices }) {
   // TODO: Implement real Gemini API integration
   // const { GoogleGenerativeAI } = await import('@google/generative-ai');
   // const genAI = new GoogleGenerativeAI(apiKey);
@@ -127,7 +127,7 @@ async function explainQuestions({ provider, model, questions, originalIndices, e
     if (p === 'gemini') {
       return await geminiExplain({ 
         apiKey: env.GEMINI_API_KEY, 
-        model: model || env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', 
+        model: model || env.GEMINI_MODEL || 'gemini-2.5-flash-lite', 
         questions, 
         originalIndices 
       });
