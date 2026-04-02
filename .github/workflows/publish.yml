@@ -88,6 +88,16 @@ jobs:
             RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
             rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
 
+            # Allow a small, explicit set of shared public-safe workflows to flow
+            # downstream even though `.publicignore` blocks the workflow directory
+            # by default. This keeps dev-only automation private while still
+            # satisfying required public checks such as CodeQL.
+            mkdir -p filtered/.github/workflows
+            while IFS= read -r workflow_path; do
+              mkdir -p "filtered/$(dirname "$workflow_path")"
+              cp "$workflow_path" "filtered/$workflow_path"
+            done < <(files/scripts/public-workflows.sh "$PWD")
+
         - name: Clone public repo
           env:
             HAS_PAT: ${{ steps.detect.outputs.has_pat }}
