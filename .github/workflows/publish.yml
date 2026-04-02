@@ -202,8 +202,8 @@ jobs:
               "${GITHUB_SERVER_URL}" \
               "${GITHUB_REPOSITORY}" \
               "${GITHUB_RUN_ID}"
-            if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
-              PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
+            PR_NUMBER=$(gh pr list --repo seanyates76/Ez-Quiz-App --state open --head "$SYNC_BRANCH" --json number --jq '.[0].number')
+            if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
               gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
             else
               gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"
