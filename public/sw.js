@@ -8,8 +8,8 @@
  * page for navigation requests when offline.
  */
 
-const ASSET_VERSION = '1.5.27';
-const CACHE_NAME = 'ezq-v1211';
+const ASSET_VERSION = '1.5.28';
+const CACHE_NAME = 'ezq-v1212';
 const PRECACHE_URLS = [
   '/index.html',
   '/styles.css?v=' + ASSET_VERSION,
@@ -38,6 +38,7 @@ const PRECACHE_URLS = [
   '/js/beta.mjs',
   '/js/import-controller.js',
   '/js/file-type-validation.js',
+  '/js/media-import-constraints.js',
   '/js/drag-drop.js',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
