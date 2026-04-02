@@ -67,7 +67,15 @@ export function updateNavButtons(){
 export function updateProgress(){ const total=S.quiz.questions.length; const elBar = document.getElementById('progBar'); if(!elBar || !total){ if(elBar) elBar.style.width='0%'; return; } const pct = Math.max(0, Math.min(100, Math.round(((S.quiz.index+1)/total)*100))); elBar.style.width = pct + '%'; const wrap=document.getElementById('progWrap'); if(wrap){ wrap.setAttribute('aria-valuemin','0'); wrap.setAttribute('aria-valuemax','100'); wrap.setAttribute('aria-valuenow', String(pct)); } }
 
 export function renderCurrentQuestion(){
-  const questionHost=el('questionHost'); const q = S.quiz.questions[S.quiz.index]; if(!q){ questionHost.innerHTML = '<p>Missing question.</p>'; return; }
+  const questionHost=el('questionHost'); const q = S.quiz.questions[S.quiz.index];
+  if(!q){
+    if(questionHost){
+      const msg = document.createElement('p');
+      msg.textContent = 'Missing question.';
+      questionHost.replaceChildren(msg);
+    }
+    return;
+  }
   const n=S.quiz.index+1, total=S.quiz.questions.length;
   let html = `<div class="qwrap">       <div class="qhdr"><strong>Question ${n}/${total}</strong></div>       <div class="qtext" style="margin:8px 0 12px">${escapeHTML(q.text)}</div>`;
   if(q.type==='MC'){
@@ -218,7 +226,12 @@ export function renderResults(){
   let view = showMissedOnly ? items.filter(it=>!it.isCorrect) : items.slice();
   if(!showMissedOnly){ view.sort((a,b)=> Number(a.isCorrect) - Number(b.isCorrect)); }
   if(!view.length){
-    missedList.innerHTML = `<div class="missed-item"><em>${showMissedOnly ? 'No missed questions 🎉' : 'No questions'}</em></div>`;
+    const item = document.createElement('div');
+    item.className = 'missed-item';
+    const em = document.createElement('em');
+    em.textContent = showMissedOnly ? 'No missed questions 🎉' : 'No questions';
+    item.appendChild(em);
+    missedList.replaceChildren(item);
     try{ updateRetakeUI(); }catch{}
     return;
   }
@@ -252,9 +265,24 @@ export function renderResults(){
     const pct = baseQs.length ? Math.round((correctCountFull / baseQs.length) * 100) : 0;
     const aria = showTime ? `${correctCountFull} out of ${baseQs.length} in ${timeText}` : `${correctCountFull} out of ${baseQs.length}`;
     chip.setAttribute('aria-label', aria);
-    chip.innerHTML = `<span class="score-bar" aria-hidden="true"><span class=\"score-fill\" style=\"width:${pct}%\"></span></span>`
-      + `<span class="score-label">${labelText}</span>`
-      + (showTime ? `<span class="sg-time">${timeText}</span>` : '');
+    const scoreBar = document.createElement('span');
+    scoreBar.className = 'score-bar';
+    scoreBar.setAttribute('aria-hidden', 'true');
+    const scoreFill = document.createElement('span');
+    scoreFill.className = 'score-fill';
+    scoreFill.style.width = `${pct}%`;
+    scoreBar.appendChild(scoreFill);
+    const scoreLabel = document.createElement('span');
+    scoreLabel.className = 'score-label';
+    scoreLabel.textContent = labelText;
+    if(showTime){
+      const timeNode = document.createElement('span');
+      timeNode.className = 'sg-time';
+      timeNode.textContent = timeText;
+      chip.replaceChildren(scoreBar, scoreLabel, timeNode);
+    } else {
+      chip.replaceChildren(scoreBar, scoreLabel);
+    }
   }
 }
 
