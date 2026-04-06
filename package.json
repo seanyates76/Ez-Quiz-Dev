@@ -23,7 +23,7 @@
     "jest": "^30.3.0",
     "jest-environment-jsdom": "^30.3.0",
     "jsdom": "^27.0.0",
-    "netlify-cli": "^24.9.0",
+    "netlify-cli": "^24.10.0",
     "puppeteer": "^24.40.0"
   }
 }
