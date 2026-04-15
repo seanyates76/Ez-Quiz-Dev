@@ -42,14 +42,74 @@
         <button id="updateRefreshBtn" class="btn primary" type="button">Refresh</button>
       </div>
 
+      <section id="welcomePanel" class="welcome-panel" aria-labelledby="builderTitle" hidden>
+        <div class="welcome-panel__hero">
+          <div class="builder-hero__topline">
+            <p class="builder-kicker">Quiz builder</p>
+          </div>
+          <h1 id="builderTitle" class="builder-title">Build a quiz from your notes, topic, or source material.</h1>
+          <p class="builder-subtitle">Start fast, shape the draft if you need to, then review misses and run it again.</p>
+          <ul class="builder-highlights" role="list" aria-label="Workspace highlights">
+            <li class="builder-highlight">Topic or notes</li>
+            <li class="builder-highlight">Editable draft</li>
+            <li class="builder-highlight">Review loop</li>
+          </ul>
+        </div>
+        <div class="welcome-panel__flow" aria-label="How it flows">
+          <p class="builder-meta-label">How it flows</p>
+          <ul class="builder-flow" role="list">
+            <li class="builder-flow__item">
+              <span class="builder-flow__step" aria-hidden="true">1</span>
+              <div>
+                <p class="builder-flow__title">Bring material</p>
+                <p class="builder-flow__text">Type a topic, paste notes, or import source material when source import is enabled.</p>
+              </div>
+            </li>
+            <li class="builder-flow__item">
+              <span class="builder-flow__step" aria-hidden="true">2</span>
+              <div>
+                <p class="builder-flow__title">Shape the draft</p>
+                <p class="builder-flow__text">Tighten the questions before you start.</p>
+              </div>
+            </li>
+            <li class="builder-flow__item">
+              <span class="builder-flow__step" aria-hidden="true">3</span>
+              <div>
+                <p class="builder-flow__title">Practice and review</p>
+                <p class="builder-flow__text">Finish the quiz, check misses, and retake what still needs work.</p>
+              </div>
+            </li>
+          </ul>
+        </div>
+        <div class="welcome-panel__actions">
+          <div class="quick-start-panel__copy">
+            <p class="quick-start-panel__eyebrow">Quick start</p>
+            <h2 id="quickStartTitle" class="quick-start-panel__title">Start now, or open the draft first.</h2>
+            <p class="quick-start-panel__text">Press <strong>Start quiz</strong> for a straight run, or open the draft editor first.</p>
+            <p class="quick-start-panel__note">Your draft and preferences stay in this browser.</p>
+          </div>
+          <div class="quick-start-panel__actions">
+            <button id="quickStartOpenEditor" class="btn" type="button">Open draft</button>
+            <button id="quickStartOpenHelp" class="btn btn-ghost" type="button">Guide</button>
+            <button id="quickStartDismiss" class="btn btn-outline" type="button">Dismiss</button>
+            <label class="welcome-persist">
+              <input id="quickStartPersist" type="checkbox" />
+              <span>Don't show again</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <p id="genCountHint" class="sr-only">Choose between 1 and 30 questions.</p>
+
       <!-- Top toolbar (simple generate form) -->
-      <div class="gen-toolbar" role="group" aria-label="Generate toolbar">
+      <div class="gen-toolbar" role="group" aria-label="Quiz builder">
         <div class="toolbar-left">
         <label class="toolbar-field">
           <span class="toolbar-label">Topic</span>
           <div class="input-affix topic-affix">
-            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="e.g. Animals" />
-            <button id="importBtn" class="affix-btn beta-only" type="button" title="Attach PDF/Image (beta)" aria-label="Attach PDF or Image (beta)">
+            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="e.g. Photosynthesis, SQL joins, Chapter 4 notes" />
+            <button id="importBtn" class="affix-btn beta-only" type="button" title="Attach PDF/Image" aria-label="Attach PDF or Image">
               <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                 <!-- Material Symbols Rounded “attach_file” icon (beta only) -->
                 <path fill="currentColor" d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z"/>
@@ -72,7 +132,7 @@
           </div>
         </label>
         <label class="toolbar-field narrow number-field">
-          <span class="toolbar-label">Length</span>
+          <span class="toolbar-label">Questions</span>
           <div class="number-wrap">
             <input id="countInput" type="number" class="toolbar-input" min="1" max="30" step="1" value="10" inputmode="numeric" />
             <div class="stepper-group" role="group" aria-label="Adjust length">
@@ -83,19 +143,21 @@
         </label>
         </div>
         <div class="action-stack">
-          <button id="generateBtn" class="btn primary" type="button" aria-label="Primary action">Start</button>
-          <button id="optionsBtn" class="btn btn-outline" aria-haspopup="true" aria-expanded="false" aria-controls="optionsPanel">Options ▾</button>
+          <button id="generateBtn" class="btn primary" type="button" aria-label="Primary action">Start quiz</button>
+          <button id="optionsBtn" class="btn btn-outline" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="optionsPanel">Options ▾</button>
         </div>
     </div>
 
       <!-- Subtle hint when inputs change after generation -->
       <div id="regenHint" class="regen-hint" role="status" aria-live="polite" hidden>
-        Updated inputs — press Regenerate
+        Inputs changed. Refresh the draft or start a fresh session.
       </div>
+      <div id="status" class="generator-status" role="status" aria-live="polite"></div>
 
       <!-- Options Drop-Down (includes Quiz Editor tools) -->
-      <div id="optionsPanel" class="options-panel" role="region" aria-label="Options" hidden>
+      <div id="optionsPanel" class="options-panel" role="region" aria-label="Quiz options" hidden>
         <div class="options-regular">
+          <p class="options-section-label">Session options</p>
           <div class="row gap wrap">
             <label class="opt-switch"><input type="checkbox" id="optTimerEnabled" /> <span>Timer</span></label>
             <label class="opt-switch"><input type="checkbox" id="optCountdownMode" /> <span>Countdown</span></label>
@@ -119,21 +181,24 @@
         </div>
         <div class="divider" role="separator" aria-orientation="horizontal"></div>
         <div class="advanced-disclosure" role="button" tabindex="0" aria-expanded="false" aria-controls="advancedBlock">
-          <span>Quiz Editor</span>
+          <div class="advanced-disclosure__copy">
+            <span class="advanced-disclosure__title">Draft editor</span>
+            <span class="advanced-disclosure__meta">Review and adjust the draft before you start.</span>
+          </div>
           <span class="caret" aria-hidden="true">▼</span>
         </div>
         <div id="advancedBlock" class="advanced-body" hidden>
           <div class="adv-head">
-            <div class="adv-mode-toggle" role="group" aria-label="Quiz editor mode">
-              <button type="button" class="adv-mode-btn is-active" data-editor-mode="interactive" aria-pressed="true">Interactive</button>
-              <button type="button" class="adv-mode-btn" data-editor-mode="manual" aria-pressed="false">Manual</button>
+            <div class="adv-mode-toggle" role="group" aria-label="Draft editor mode">
+              <button type="button" class="adv-mode-btn is-active" data-editor-mode="interactive" aria-pressed="true">Cards</button>
+              <button type="button" class="adv-mode-btn" data-editor-mode="manual" aria-pressed="false">Plain text</button>
               <input id="toggleInteractiveEditor" data-role="quiz-editor-toggle" type="checkbox" class="sr-only" aria-hidden="true" checked />
             </div>
             <div class="adv-title-right">
               <div class="spacer"></div>
               <label class="opt-switch small mirror-toggle">
                 <input type="checkbox" id="mirrorToggle" />
-                <span class="mirror-toggle-label">Debug / Mirror</span>
+                <span class="mirror-toggle-label">Show plain text</span>
               </label>
             </div>
           </div>
@@ -144,30 +209,31 @@
             </div>
             <div class="adv-right">
               <div id="mirrorBox" class="mirror-box" data-on="false" data-empty="true">
-                <textarea id="mirror" class="mirror" rows="12" readonly aria-label="Generated quiz lines (read-only)" data-empty="true"></textarea>
+                <textarea id="mirror" class="mirror" rows="12" readonly aria-label="Draft text (read-only)" data-empty="true"></textarea>
               </div>
             </div>
           </div>
-          <div class="adv-actions">
-            <div class="row gap adv-row">
-              <div class="adv-group files">
-                <button id="loadBtn" class="btn">Load .txt</button>
-                <input id="fileInput" type="file" accept=".txt" style="display:none" />
-                <button id="loadLastBtn" class="btn">Load last quiz</button>
-                <button id="demoBtn" class="btn">Use Demo Set</button>
-              </div>
+            <div class="adv-actions">
+              <div class="row gap adv-row">
+                <div class="adv-group files">
+                  <button id="loadBtn" class="btn">Load .txt</button>
+                  <input id="fileInput" type="file" accept=".txt" style="display:none" />
+                  <button id="loadLastBtn" class="btn">Restore last draft</button>
+                  <button id="demoBtn" class="btn">Load sample</button>
+                </div>
               <div class="adv-group run">
-                <button id="clearBtn" class="btn btn-ghost">Clear</button>
-                <button id="startBtn" class="btn" aria-describedby="startHelp" disabled>Start</button>
+                <button id="clearBtn" class="btn btn-ghost">Clear draft</button>
+                <button id="startBtn" class="btn" aria-describedby="startHelp" disabled>Start quiz</button>
+                <span id="startHelp" class="sr-only">Start the current draft from the draft editor.</span>
               </div>
             </div>
-            <div class="advanced-actions">
-              <button id="copyPromptsBtn" class="btn btn-ghost">Copy prompts</button>
+              <div class="advanced-actions">
+              <button id="copyPromptsBtn" class="btn btn-ghost">Copy plain text</button>
               <button id="exportTxtBtn" class="btn btn-ghost">Export .txt</button>
             </div>
           </div>
           <details class="parser-ref" style="margin-top:8px">
-            <summary>Parser reference</summary>
+            <summary>Text format</summary>
             <pre class="parser-block" aria-label="Example parser lines">MC|Question?|A) Opt1;B) Opt2|A
 TF|Statement.|T
 YN|Question?|Y
@@ -427,6 +493,8 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         <button id="settingsClose" class="icon-btn" title="Close">✕</button>
       </header>
       <div class="modal__body">
+        <p class="settings-lead">Preferences for how Ez-Quiz behaves on this device.</p>
+
         <fieldset class="fieldgroup">
           <legend>Timer</legend>
           <label><input type="checkbox" id="timerEnabled" /> <span>Enable timer</span></label>
@@ -445,8 +513,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         </fieldset>
 
         <fieldset class="fieldgroup">
-          <legend>Quiz Editor</legend>
-          <label><input type="checkbox" id="alwaysShowQuizEditor" /> <span>Always show the Quiz Editor panel</span></label>
+          <legend>Builder</legend>
+          <label><input type="checkbox" id="alwaysShowQuizEditor" /> <span>Keep the draft editor open</span></label>
+          <label><input type="checkbox" id="showQuickStartOnLaunch" /> <span>Show the quick start panel on launch</span></label>
+          <p class="settings-note muted small">Both preferences are saved locally in this browser.</p>
         </fieldset>
 
 
@@ -454,8 +524,8 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <button id="resetApp" class="btn danger">Reset App</button>
         </div>
         <fieldset class="fieldgroup">
-          <legend>Beta Features</legend>
-          <label><input type="checkbox" id="betaEnabled" /> <span>Enable beta features</span></label>
+          <legend>Builder extras</legend>
+          <label><input type="checkbox" id="betaEnabled" /> <span>Enable source import and extra tools</span></label>
         </fieldset>
 
         <p class="muted small settings-version" data-version-copy>

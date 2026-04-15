@@ -20,6 +20,11 @@ describe('public/index.html structure', () => {
       ['mirror', 'TEXTAREA'],
       ['importBtn', 'BUTTON'],
       ['importFile', 'INPUT'],
+      ['welcomePanel', 'SECTION'],
+      ['quickStartOpenHelp', 'BUTTON'],
+      ['quickStartOpenEditor', 'BUTTON'],
+      ['quickStartDismiss', 'BUTTON'],
+      ['showQuickStartOnLaunch', 'INPUT'],
     ];
 
     expectedIds.forEach(([id, tag]) => {
@@ -41,12 +46,31 @@ describe('public/index.html structure', () => {
     expect(mirror).not.toBeNull();
     expect(mirror.hasAttribute('readonly')).toBe(true);
     expect(mirror.dataset.empty).toBe('true');
-    expect(mirror.getAttribute('aria-label')).toContain('Generated quiz lines');
+    expect(mirror.getAttribute('aria-label')).toContain('Draft text');
   });
 
   test('quiz editor advanced block is hidden on load', () => {
     const advancedBlock = document.getElementById('advancedBlock');
     expect(advancedBlock).not.toBeNull();
     expect(advancedBlock.hasAttribute('hidden')).toBe(true);
+  });
+
+  test('uses plain-English builder copy for the main visible labels', () => {
+    expect(document.getElementById('builderTitle')?.textContent.trim())
+      .toBe('Build a quiz from your notes, topic, or source material.');
+    expect(document.getElementById('generateBtn')?.textContent.trim()).toBe('Start quiz');
+    expect(document.getElementById('optionsBtn')?.textContent.trim()).toBe('Options ▾');
+    expect(document.getElementById('resultsTitle')?.textContent.trim()).toBe('Results');
+    expect(document.getElementById('retakeLabel')?.textContent.trim()).toBe('Retake missed');
+  });
+
+  test('includes a lightweight quick-start surface and matching settings preference', () => {
+    expect(document.getElementById('quickStartTitle')?.textContent.trim())
+      .toBe('Start now, or open the draft first.');
+    expect(document.getElementById('quickStartOpenEditor')?.textContent.trim()).toBe('Open draft');
+    expect(document.getElementById('quickStartOpenHelp')?.textContent.trim()).toBe('Guide');
+    expect(document.getElementById('quickStartDismiss')?.textContent.trim()).toBe('Dismiss');
+    expect(document.querySelector('label.welcome-persist span')?.textContent.trim()).toBe("Don't show again");
+    expect(document.getElementById('showQuickStartOnLaunch')?.getAttribute('type')).toBe('checkbox');
   });
 });
