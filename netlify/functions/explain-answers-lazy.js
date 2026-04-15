@@ -256,7 +256,7 @@ exports.handler = async (event) => {
   }
 
   // Validate request format
-  const { lines, index, indices } = payload;
+  const { lines, index, indices, answer, answers } = payload;
   
   if (!Array.isArray(lines)) {
     return reply(400, { error: 'Missing or invalid "lines" array' }, responseOrigin);
@@ -283,7 +283,7 @@ exports.handler = async (event) => {
   }
 
   // Get provider configuration
-  const provider = String(payload.provider || process.env.AI_PROVIDER || 'echo');
+  const provider = String(payload.provider || process.env.EXPLAIN_PROVIDER || process.env.AI_PROVIDER || '').trim();
   const model = String(payload.model || '');
 
   // Set timeout for explanation generation
@@ -292,6 +292,14 @@ exports.handler = async (event) => {
   try {
     // Parse the requested questions
     const { questions, originalIndices } = parseRequestedQuestions(lines, requestedIndices);
+    const attemptedAnswers = originalIndices.map((originalIndex, requestIndex) => {
+      if (typeof index === 'number') return requestIndex === 0 ? answer : undefined;
+      if (Array.isArray(answers)) return answers[requestIndex];
+      if (answers && typeof answers === 'object') {
+        return answers[originalIndex] ?? answers[String(originalIndex)];
+      }
+      return undefined;
+    });
 
     // Generate explanations with timeout
     const explanations = await withTimeout(
@@ -300,6 +308,7 @@ exports.handler = async (event) => {
         model, 
         questions, 
         originalIndices, 
+        attemptedAnswers,
         env: process.env 
       }),
       TIMEOUT_MS
@@ -324,7 +333,11 @@ exports.handler = async (event) => {
     if (status >= 400 && status < 500) {
       return reply(status, { error: msg }, responseOrigin);
     }
-    
+
+    if (msg.includes('not configured')) {
+      return reply(503, { error: 'Explanation provider is not configured' }, responseOrigin);
+    }
+
     return reply(500, { error: 'Internal server error' }, responseOrigin);
   }
 };

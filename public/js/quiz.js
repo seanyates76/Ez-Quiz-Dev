@@ -1,10 +1,11 @@
 import { S } from './state.js';
-import { isBetaEnabled } from './beta.mjs';
-import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
+import { $, byQSA, clamp, formatDuration, escapeHTML, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce } from './utils.js';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
 const RETAKE_ALL = 'all';
+const EXPLAIN_ENDPOINT = '/.netlify/functions/explain-answers-lazy';
+const EXPLAIN_CLIENT_TIMEOUT_MS = 7000;
 
 // Elements helper
 const el = (id) => $(id);
@@ -39,13 +40,19 @@ export function syncSettingsFromUI(){
 export function beginQuiz(){
   const timerEl = el('timer'); const quizTitleEl = el('quizTitle');
   S.quiz.index = 0; S.quiz.score = 0; S.quiz.startedAt = Date.now(); S.quiz.finishedAt = 0;
+  S.quiz.explanations = {};
   clearInterval(timerInterval); timerInterval=null; pausedAt=0; elapsedOffset=0; remainingOnPause=0; if(timerEl) timerEl.textContent = '';
   if(S.settings.timerEnabled){ if(S.settings.countdown && S.settings.durationMs>0){ S.quiz.endAt = Date.now() + S.settings.durationMs; timerInterval = setInterval(tickCountdown, 1000); if(timerEl) timerEl.textContent = formatDuration(S.quiz.endAt - Date.now()); } else { timerInterval = setInterval(tickStopwatch, 1000); if(timerEl) timerEl.textContent = '00:00'; } }
   setMode('quiz');
   if (quizTitleEl) {
     let heading = (S.quiz.title || '').trim();
-    if (!heading) { const pretty = formatTopicLabel(S.quiz.topic||''); heading = pretty ? (/\bquiz$/i.test(pretty) ? pretty : `${pretty} Quiz`) : 'Quiz'; }
-    else { const m = heading.match(/\bquiz\b/i); if (!m) heading = `${heading} Quiz`; }
+    if (!heading) {
+      const pretty = formatTopicLabel(S.quiz.topic||'');
+      heading = pretty ? (/\bquiz$/i.test(pretty) ? pretty : `${pretty} Quiz`) : 'Quiz';
+    } else {
+      const m = heading.match(/\bquiz\b/i);
+      if (!m) heading = `${heading} Quiz`;
+    }
     quizTitleEl.textContent = heading;
   }
   renderCurrentQuestion(); updateNavButtons(); updateProgress();
@@ -77,7 +84,7 @@ export function renderCurrentQuestion(){
     return;
   }
   const n=S.quiz.index+1, total=S.quiz.questions.length;
-  let html = `<div class="qwrap">       <div class="qhdr"><strong>Question ${n}/${total}</strong></div>       <div class="qtext" style="margin:8px 0 12px">${escapeHTML(q.text)}</div>`;
+  let html = `<div class="qwrap"><div class="qhdr"><span class="qnum">Question ${n}/${total}</span><span class="qprompt">${escapeHTML(q.text)}</span></div>`;
   if(q.type==='MC'){
     const user = Array.isArray(S.quiz.answers[S.quiz.index]) ? S.quiz.answers[S.quiz.index] : [];
     const multiple = Array.isArray(q.correct) && q.correct.length>1;
@@ -96,7 +103,7 @@ export function renderCurrentQuestion(){
   html += `</div>`; questionHost.innerHTML = html;
   // Progressbar in the body
   const qwrapProg = document.createElement('div'); qwrapProg.className='prog'; qwrapProg.id='progWrap'; qwrapProg.innerHTML='<div class="prog-bar" id="progBar" style="width:0%"></div>'; qwrapProg.setAttribute('role','progressbar'); qwrapProg.setAttribute('aria-label','Question progress');
-  const hdrEl = questionHost.querySelector('.qhdr'); const qtextEl = questionHost.querySelector('.qtext'); if(hdrEl && qtextEl){ hdrEl.after(qwrapProg); }
+  const hdrEl = questionHost.querySelector('.qhdr'); if(hdrEl){ hdrEl.after(qwrapProg); }
   updateProgress();
 
   // Wire inputs
@@ -144,8 +151,6 @@ export function wireQuizControls(){
 }
 
 function compareQA(q, a){ if(q.type==='MC'){ const user=Array.isArray(a)?a.slice().sort((x,y)=>x-y):[]; const correct=(q.correct||[]).slice().sort((x,y)=>x-y); return user.length && arraysEqual(user, correct); } if(q.type==='TF' || q.type==='YN'){ return typeof a==='boolean' && a===q.correct; } if(q.type==='MT'){ const user=Array.isArray(a)?a:[]; const target=new Array(q.left.length).fill(-1); q.pairs.forEach(([li,ri])=>{ target[li]=ri; }); return user.length===target.length && arraysEqual(user, target); } return false; }
-function viewCorrect(q){ if(q.type==='MC'){ return indexesToLetters(q.correct).join(','); } if(q.type==='TF'){ return q.correct ? 'T' : 'F'; } if(q.type==='YN'){ return q.correct ? 'Y' : 'N'; } if(q.type==='MT'){ return q.pairs.map(([li,ri]) => `${li+1}-${String.fromCharCode(65+ri)}`).join(','); } return ''; }
-function viewUser(q,a){ if(q.type==='MC'){ const arr=Array.isArray(a)?a:[]; return indexesToLetters(arr).join(','); } if(q.type==='TF'){ if(typeof a!=='boolean') return ''; return a?'T':'F'; } if(q.type==='YN'){ if(typeof a!=='boolean') return ''; return a?'Y':'N'; } if(q.type==='MT'){ const arr=Array.isArray(a)?a:[]; return arr.map((ri,li)=> (ri<0?`${li+1}-?`:`${li+1}-${String.fromCharCode(65+ri)}`)).join(','); } return ''; }
 
 export function finishQuiz(auto=false){
   if(timerInterval){ clearInterval(timerInterval); timerInterval=null; }
@@ -185,19 +190,15 @@ export function finishQuiz(auto=false){
 export function renderResults(){
   const resultsSummary=el('resultsSummary'); const missedList=el('missedList');
   const chip=el('resultsChip'); const filterMissed=el('filterMissed'); const filterAll=el('filterAll');
-  const total=S.quiz.questions.length; const duration = S.quiz.finishedAt && S.quiz.startedAt ? (S.quiz.finishedAt - S.quiz.startedAt - 0) : 0;
+  const duration = S.quiz.finishedAt && S.quiz.startedAt ? (S.quiz.finishedAt - S.quiz.startedAt - 0) : 0;
   const showTime = !!(S.settings && S.settings.timerEnabled);
-  // Legacy score/time block removed in favor of compact summary chip in header
-  if(resultsSummary) resultsSummary.innerHTML = '';
   // Build results relative to the original question set, even after a retake
   const baseQs = (Array.isArray(S.quiz.originalQuestions) && S.quiz.originalQuestions.length)
     ? S.quiz.originalQuestions
     : S.quiz.questions;
-  const baseIsOriginal = Array.isArray(S.quiz.originalQuestions) && S.quiz.originalQuestions.length && (baseQs === S.quiz.originalQuestions);
   const indexMap = (Array.isArray(S.quiz.indexMap) && S.quiz.indexMap.length)
     ? S.quiz.indexMap
     : S.quiz.questions.map((_,i)=>i);
-  const isBeta = isBetaEnabled(S.settings);
   // Prefer persistent originalAnswers when available; fallback to mapping current run
   let answersFull;
   if (Array.isArray(S.quiz.originalAnswers) && S.quiz.originalAnswers.length === baseQs.length) {
@@ -210,7 +211,7 @@ export function renderResults(){
     }
   }
   let correctCountFull = 0;
-  const items=[]; for(let i=0;i<baseQs.length;i++){ const q=baseQs[i], a=answersFull[i]; const correctView=viewCorrect(q), userView=viewUser(q,a); const isCorrect=compareQA(q,a); if(isCorrect) correctCountFull++; items.push({ idx:i+1, text:q.text, userView, correctView, isCorrect }); }
+  const items=[]; for(let i=0;i<baseQs.length;i++){ const q=baseQs[i], a=answersFull[i]; const isCorrect=compareQA(q,a); if(isCorrect) correctCountFull++; items.push({ idx:i+1, text:q.text, isCorrect }); }
   // Apply desired filter preference if set (e.g., from retake action)
   try{
     if(S.ui && S.ui.nextResultsFilter){
@@ -225,6 +226,30 @@ export function renderResults(){
   const showMissedOnly = !isAll;
   let view = showMissedOnly ? items.filter(it=>!it.isCorrect) : items.slice();
   if(!showMissedOnly){ view.sort((a,b)=> Number(a.isCorrect) - Number(b.isCorrect)); }
+  const pct = baseQs.length ? Math.round((correctCountFull / baseQs.length) * 100) : 0;
+  const timeText = showTime ? formatDuration(Math.max(0,duration)) : '';
+  const filterGroup = document.querySelector('#resultsView .results-filter');
+  if(resultsSummary){
+    resultsSummary.innerHTML = buildResultsSummaryMarkup({
+      correctCount: correctCountFull,
+      total: baseQs.length,
+      pct,
+      showTime,
+      timeText,
+      showMissedOnly,
+    });
+    const filterSlot = resultsSummary.querySelector('[data-results-filter-slot]');
+    if(filterSlot){
+      if(filterGroup) filterSlot.appendChild(filterGroup);
+    }
+  }
+  if(chip){
+    const summaryText = showTime
+      ? `Results: ${pct} percent. ${correctCountFull} correct, ${Math.max(0, baseQs.length - correctCountFull)} to revisit, ${baseQs.length} questions total, in ${timeText}.`
+      : `Results: ${pct} percent. ${correctCountFull} correct, ${Math.max(0, baseQs.length - correctCountFull)} to revisit, ${baseQs.length} questions total.`;
+    chip.classList.add('sr-only');
+    chip.textContent = summaryText;
+  }
   if(!view.length){
     const item = document.createElement('div');
     item.className = 'missed-item';
@@ -238,93 +263,455 @@ export function renderResults(){
   missedList.innerHTML = view.map(item => {
     const q = baseQs[item.idx-1];
     const a = answersFull[item.idx-1];
-    const origIdx = baseIsOriginal ? (item.idx-1) : (indexMap[item.idx-1] ?? (item.idx-1));
+    const origIdx = item.idx - 1;
     if(q && q.type==='MT'){
-      return renderMTResult(origIdx, q, a);
+      return renderMTResult(item.idx, origIdx, q, a);
     }
     const userDetail = buildUserAnswerDetail(q,a);
     const correctDetail = buildCorrectAnswerDetail(q);
-    const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)}${isBeta ? ` <button type=\"button\" class=\"chip-btn explain-btn\" data-explain=\"${origIdx}\">Explain</button>` : ''}</div>`;
+    const header = buildQuestionHeader(item.idx, item.text, item.isCorrect);
+    const answerGrid = [
+      buildAnswerRow(item.isCorrect ? 'Answer' : 'You chose', userDetail || `<span class="answer-empty">No answer selected</span>`, item.isCorrect ? 'answer' : 'user'),
+      item.isCorrect ? '' : buildAnswerRow('Correct answer', correctDetail || `<span class="answer-empty">Unavailable</span>`, 'key'),
+    ].filter(Boolean).join('');
     if (item.isCorrect) {
-      const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail} <span class=\"chip tag good\">Correct</span></div>`;
-      return `<div class="missed-item is-correct" data-orig="${origIdx}">` + header + line + `</div>`;
+      return `<article class="missed-item is-correct" data-orig="${origIdx}">` + header + `<div class="result-answer-grid">${answerGrid}</div>` + `</article>`;
     } else {
-      const yours = `<div class="user-ans ans-wrong"><strong>Your answer:</strong> ${userDetail} <span class="chip tag bad">Incorrect</span></div>`;
-      const corr = `<div><strong>Correct:</strong> ${correctDetail}</div>`;
-      return `<div class="missed-item is-wrong" data-orig="${origIdx}">` + header + yours + corr + `</div>`;
+      return `<article class="missed-item is-wrong" data-orig="${origIdx}">` + header + `<div class="result-answer-grid">${answerGrid}</div>` + buildExplainFooter(origIdx) + `</article>`;
     }
   }).join('');
   // Sync retake controls UI when results are shown/updated
   try{ updateRetakeUI(); }catch{}
-  // Wire Explain delegation once (beta only)
-  try{ if(isBetaEnabled(S.settings)){ wireExplainDelegation(); } }catch{}
-  // Update chip after we know full correctness
-  if(chip){
-    const labelText = `${correctCountFull}/${baseQs.length}`;
-    const timeText = showTime ? formatDuration(Math.max(0,duration)) : '';
-    const pct = baseQs.length ? Math.round((correctCountFull / baseQs.length) * 100) : 0;
-    const aria = showTime ? `${correctCountFull} out of ${baseQs.length} in ${timeText}` : `${correctCountFull} out of ${baseQs.length}`;
-    chip.setAttribute('aria-label', aria);
-    const scoreBar = document.createElement('span');
-    scoreBar.className = 'score-bar';
-    scoreBar.setAttribute('aria-hidden', 'true');
-    const scoreFill = document.createElement('span');
-    scoreFill.className = 'score-fill';
-    scoreFill.style.width = `${pct}%`;
-    scoreBar.appendChild(scoreFill);
-    const scoreLabel = document.createElement('span');
-    scoreLabel.className = 'score-label';
-    scoreLabel.textContent = labelText;
-    if(showTime){
-      const timeNode = document.createElement('span');
-      timeNode.className = 'sg-time';
-      timeNode.textContent = timeText;
-      chip.replaceChildren(scoreBar, scoreLabel, timeNode);
-    } else {
-      chip.replaceChildren(scoreBar, scoreLabel);
-    }
-  }
+  try{ wireExplainDelegation(); }catch{}
+}
+
+function buildResultsSummaryMarkup({ correctCount, total, pct, showTime, timeText, showMissedOnly }){
+  const missedCount = Math.max(0, total - correctCount);
+  const headline = buildResultsHeadline(pct, missedCount);
+  const note = missedCount
+    ? `${missedCount} ${missedCount === 1 ? 'question to revisit.' : 'questions to revisit.'}`
+    : 'Everything landed cleanly this round.';
+  const helper = showMissedOnly
+    ? 'Showing missed questions only.'
+    : missedCount
+      ? 'Showing the full round, with misses first.'
+      : 'Showing the full round.';
+  const meta = [
+    buildSummaryStat('Correct', String(correctCount)),
+    buildSummaryStat('To revisit', String(missedCount)),
+    buildSummaryStat(showTime ? 'Time' : 'Questions', showTime ? timeText : String(total || 0)),
+  ].filter(Boolean).join('');
+  return `
+    <section class="results-overview" aria-label="Session review">
+      <div class="results-overview__top">
+        <div class="results-overview__main">
+          <p class="results-overview__eyebrow">Results</p>
+          <h3 class="results-overview__headline">${escapeHTML(headline)}</h3>
+          <p class="results-overview__note">${escapeHTML(note)}</p>
+        </div>
+        <div class="results-overview__toolbar">
+          <span class="results-overview__toolbar-label">Show</span>
+          <div class="results-overview__filters" data-results-filter-slot></div>
+        </div>
+      </div>
+      <div class="results-overview__body">
+        <div class="results-overview__score">
+          <div class="results-overview__scoreline">
+            <span class="results-overview__percent">${pct}%</span>
+            <span class="results-overview__percent-label">Score</span>
+          </div>
+          <p class="results-overview__helper">${escapeHTML(helper)}</p>
+          <div class="results-overview__bar" aria-hidden="true">
+            <span style="width:${pct}%"></span>
+          </div>
+        </div>
+        <div class="results-overview__meta">${meta}</div>
+      </div>
+    </section>
+  `;
+}
+
+function buildResultsHeadline(pct, missedCount){
+  if(missedCount === 0) return 'Perfect round';
+  if(pct >= 90) return 'Strong finish';
+  if(pct >= 70) return 'Good progress';
+  if(pct >= 50) return 'Room to tighten';
+  return 'Ready for another pass';
+}
+
+function buildSummaryStat(label, value){
+  return `
+    <div class="results-overview__stat">
+      <span class="results-overview__stat-label">${escapeHTML(label)}</span>
+      <strong>${escapeHTML(value)}</strong>
+    </div>
+  `;
 }
 
 function wireExplainDelegation(){
   const host = document.getElementById('missedList'); if(!host) return;
   if(host.__explBound) return; host.__explBound = true;
-  host.addEventListener('click', (e)=>{
+  host.addEventListener('click', async (e)=>{
     const btn = e.target && (e.target.closest ? e.target.closest('.explain-btn') : null);
     if(!btn) return;
     e.preventDefault();
-    showToastNear(btn, 'Explanations are coming soon.');
+    const origIdx = parseInt(btn.getAttribute('data-explain') || '', 10);
+    if(!Number.isInteger(origIdx) || origIdx < 0) return;
+    const explainState = getExplainState();
+    const current = explainState[origIdx];
+    if(current && current.status === 'ready'){
+      current.expanded = !current.expanded;
+      renderResults();
+      return;
+    }
+    if(current && current.status === 'loading') return;
+    explainState[origIdx] = { status: 'loading', expanded: true, text: '', error: '' };
+    renderResults();
+    const question = getExplainQuestions()[origIdx];
+    const fallbackText = buildLocalExplanation(question, getExplainAnswerAt(origIdx));
+    try {
+      const lines = getExplainLines();
+      let explanation = '';
+      if(Array.isArray(lines) && lines[origIdx]){
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), EXPLAIN_CLIENT_TIMEOUT_MS) : 0;
+        try {
+          const res = await fetch(EXPLAIN_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lines,
+              index: origIdx,
+              answer: getExplainAnswerAt(origIdx),
+            }),
+            signal: controller ? controller.signal : undefined,
+          });
+          let payload = null;
+          try { payload = await res.json(); } catch {}
+          if(!res.ok){
+            const rawError = payload && (payload.error?.message || payload.error);
+            const err = new Error(String(rawError || res.statusText || 'Explanation request failed'));
+            err.status = res.status;
+            throw err;
+          }
+          explanation = payload?.explanations?.[String(origIdx)]?.explanation
+            || payload?.explanations?.[origIdx]?.explanation
+            || '';
+        } finally {
+          if(timer) clearTimeout(timer);
+        }
+      }
+      const normalized = String(explanation || '').trim();
+      explainState[origIdx] = {
+        status: 'ready',
+        expanded: true,
+        text: normalized && !/Rationale stub for practice/i.test(normalized)
+          ? normalizeExplanationText(normalized)
+          : fallbackText,
+        error: '',
+      };
+    } catch(err){
+      const fallback = fallbackText || normalizeExplanationText(humanizeExplainError(err));
+      explainState[origIdx] = fallback
+        ? {
+            status: 'ready',
+            expanded: true,
+            text: fallback,
+            error: '',
+          }
+        : {
+            status: 'error',
+            expanded: true,
+            text: '',
+            error: humanizeExplainError(err),
+          };
+    }
+    renderResults();
   });
+}
+
+function getExplainState(){
+  if(!S.quiz || typeof S.quiz !== 'object') S.quiz = {};
+  if(!S.quiz.explanations || typeof S.quiz.explanations !== 'object') S.quiz.explanations = {};
+  return S.quiz.explanations;
+}
+
+function getExplainLines(){
+  const sourceQs = (Array.isArray(S.quiz.originalQuestions) && S.quiz.originalQuestions.length)
+    ? S.quiz.originalQuestions
+    : (Array.isArray(S.quiz.questions) ? S.quiz.questions : []);
+  return sourceQs.map(serializeQuestionToExplainLine);
+}
+
+function getExplainQuestions(){
+  return (Array.isArray(S.quiz.originalQuestions) && S.quiz.originalQuestions.length)
+    ? S.quiz.originalQuestions
+    : (Array.isArray(S.quiz.questions) ? S.quiz.questions : []);
+}
+
+function getExplainAnswerAt(origIdx){
+  const questions = getExplainQuestions();
+  if(Array.isArray(S.quiz.originalAnswers) && S.quiz.originalAnswers.length === questions.length){
+    return S.quiz.originalAnswers[origIdx];
+  }
+  if(Array.isArray(S.quiz.answers) && S.quiz.answers.length === questions.length){
+    return S.quiz.answers[origIdx];
+  }
+  return null;
+}
+
+function serializeQuestionToExplainLine(q){
+  if(!q || typeof q !== 'object') return '';
+  if(q.type === 'MC'){
+    const options = Array.isArray(q.options) ? q.options.map((opt, idx) => `${String.fromCharCode(65 + idx)}) ${String(opt || '').trim()}`) : [];
+    const correct = Array.isArray(q.correct) ? q.correct.map((idx) => String.fromCharCode(65 + idx)).join(',') : '';
+    return `MC|${String(q.text || '').trim()}|${options.join(';')}|${correct}`;
+  }
+  if(q.type === 'TF'){
+    return `TF|${String(q.text || '').trim()}|${q.correct ? 'T' : 'F'}`;
+  }
+  if(q.type === 'YN'){
+    return `YN|${String(q.text || '').trim()}|${q.correct ? 'Y' : 'N'}`;
+  }
+  if(q.type === 'MT'){
+    const left = Array.isArray(q.left) ? q.left.map((item, idx) => `${idx + 1}) ${String(item || '').trim()}`) : [];
+    const right = Array.isArray(q.right) ? q.right.map((item, idx) => `${String.fromCharCode(65 + idx)}) ${String(item || '').trim()}`) : [];
+    const pairs = Array.isArray(q.pairs)
+      ? q.pairs.map(([li, ri]) => `${li + 1}-${String.fromCharCode(65 + ri)}`)
+      : [];
+    return `MT|${String(q.text || '').trim()}|${left.join(';')}|${right.join(';')}|${pairs.join(',')}`;
+  }
+  return '';
+}
+
+function joinExplainList(parts){
+  if(!Array.isArray(parts) || !parts.length) return '';
+  if(parts.length === 1) return parts[0];
+  if(parts.length === 2) return `${parts[0]} and ${parts[1]}`;
+  return `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+}
+
+function describeChoice(options, idx){
+  const letter = String.fromCharCode(65 + idx);
+  const text = options && options[idx] ? String(options[idx]).trim() : '';
+  return text ? `${letter}: ${text}` : letter;
+}
+
+function buildLocalExplanation(q, answer){
+  if(!q) return 'Explanation unavailable for this question.';
+
+  if(q.type === 'MC'){
+    const correct = Array.isArray(q.correct) ? q.correct : [];
+    const picked = Array.isArray(answer) ? answer : [];
+    const missed = correct.filter((idx) => !picked.includes(idx));
+    const extra = picked.filter((idx) => !correct.includes(idx));
+    const correctText = joinExplainList(correct.map((idx) => describeChoice(q.options, idx)));
+    const pickedText = joinExplainList(picked.map((idx) => describeChoice(q.options, idx)));
+    const lines = [
+      `Answer: ${correctText}.`,
+      'Why it fits: This quiz keys that option set as correct.',
+    ];
+    if(!picked.length){
+      lines.push('You chose: no answer.');
+    } else if(compareQA(q, answer)){
+      lines.push(`You chose: ${pickedText}. That matches the key.`);
+    } else {
+      const detail = [
+        `You chose: ${pickedText}.`,
+        missed.length ? `Still needed: ${joinExplainList(missed.map((idx) => describeChoice(q.options, idx)))}.` : '',
+        extra.length ? `Not part of the key: ${joinExplainList(extra.map((idx) => describeChoice(q.options, idx)))}.` : '',
+      ].filter(Boolean).join(' ');
+      lines.push(detail);
+    }
+    return normalizeExplanationText(lines.join('\n'));
+  }
+
+  if(q.type === 'TF' || q.type === 'YN'){
+    const yesText = q.type === 'TF' ? 'True' : 'Yes';
+    const noText = q.type === 'TF' ? 'False' : 'No';
+    const expected = q.correct ? yesText : noText;
+    const lines = [
+      `Answer: ${expected}.`,
+      'Why it fits: This quiz keys that response as correct.',
+    ];
+    if(typeof answer !== 'boolean'){
+      lines.push('You chose: no answer.');
+    } else if(answer !== q.correct){
+      lines.push(`You chose: ${answer ? yesText : noText}.`);
+    } else {
+      lines.push(`You chose: ${answer ? yesText : noText}. That matches the key.`);
+    }
+    return normalizeExplanationText(lines.join('\n'));
+  }
+
+  if(q.type === 'MT'){
+    const correctMap = new Array(q.left.length).fill(-1);
+    (Array.isArray(q.pairs) ? q.pairs : []).forEach(([li, ri]) => { correctMap[li] = ri; });
+    const picked = Array.isArray(answer) ? answer : [];
+    const pickedSummary = picked.length
+      ? picked.map((ri, li) => (ri >= 0 ? `${li + 1}-${String.fromCharCode(65 + ri)}` : `${li + 1}-?`)).join(', ')
+      : 'no answer';
+    const mismatchCount = q.left.reduce((count, _, li) => {
+      const expected = correctMap[li];
+      const got = picked[li] ?? -1;
+      return count + (expected >= 0 && got !== expected ? 1 : 0);
+    }, 0);
+    const summary = (Array.isArray(q.pairs) ? q.pairs : []).map(([li, ri]) => `${li + 1}-${String.fromCharCode(65 + ri)}`).join(', ');
+    const lines = [
+      `Answer: ${summary}.`,
+      'Why it fits: Each left item has one keyed match.',
+    ];
+    if(mismatchCount){
+      lines.push(`You chose: ${pickedSummary}. Still needed: ${mismatchCount} ${mismatchCount === 1 ? 'pair correction' : 'pair corrections'}.`);
+    } else {
+      lines.push(`You chose: ${pickedSummary}. That matches the key.`);
+    }
+    return normalizeExplanationText(lines.join('\n'));
+  }
+
+  return normalizeExplanationText('Explanation unavailable for this question.');
+}
+
+function humanizeExplainError(err){
+  const status = err && Number.isFinite(err.status) ? err.status : 0;
+  const raw = String((err && err.message) || err || '').trim();
+  if(status === 429 || /rate limit/i.test(raw)) return 'Explanation rate limit hit. Try again in a minute.';
+  if(status === 504 || /timed out/i.test(raw)) return 'That explanation took too long. Try again.';
+  if(status === 401 || status === 403) return 'Explanation access is not available in this environment right now.';
+  if(status === 404) return 'The explanation endpoint is unavailable right now.';
+  if(/not configured/i.test(raw)) return 'Explanation support is not configured right now.';
+  if(raw) return raw;
+  return 'Explanation unavailable right now. The answer key above is still accurate.';
+}
+
+function normalizeExplanationText(text){
+  const lines = String(text || '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[–—]/g, ', ')
+    .split('\n')
+    .map((line) => line.trim().replace(/^[-*•]\s*/, '').replace(/\s+/g, ' ').replace(/\s+([,.;:!?])/g, '$1'))
+    .filter(Boolean);
+  return lines.join('\n');
+}
+
+function buildQuestionHeader(displayIdx, text, isCorrect){
+  const statusLabel = isCorrect ? 'Correct' : 'Missed';
+  const statusClass = isCorrect ? 'is-correct' : 'is-wrong';
+  return `
+    <div class="res-head">
+      <div class="res-question-line">
+        <span class="res-number">${displayIdx}.</span>
+        <h3 class="res-question">${escapeHTML(text)}</h3>
+      </div>
+      <span class="res-pill ${statusClass}">${statusLabel}</span>
+    </div>
+  `;
+}
+
+function buildAnswerRow(label, detail, tone = ''){
+  const toneClass = tone ? ` result-answer-panel--${tone}` : '';
+  return `
+    <div class="result-answer-row">
+      <div class="result-answer-label">${escapeHTML(label)}</div>
+      <div class="result-answer-value">
+        <div class="result-answer-panel${toneClass}">${detail}</div>
+      </div>
+    </div>
+  `;
+}
+
+function buildExplainFooter(origIdx){
+  const explainState = getExplainState();
+  const record = explainState[origIdx];
+  const panelId = `resultExplain-${origIdx}`;
+  const buttonText = record?.status === 'loading'
+    ? 'Loading…'
+    : record?.status === 'ready'
+      ? (record.expanded ? 'Hide' : 'Show explanation')
+      : record?.status === 'error'
+        ? 'Try again'
+        : 'Explain';
+  const buttonDisabled = record?.status === 'loading' ? 'disabled' : '';
+  const button = `<button type="button" class="chip-btn explain-btn" data-explain="${origIdx}" aria-controls="${panelId}" aria-expanded="${record?.expanded ? 'true' : 'false'}" ${buttonDisabled}>${buttonText}</button>`;
+  if(!record || !record.expanded){
+    return `<div class="result-card__footer">${button}</div>`;
+  }
+  const panelClass = record.status === 'error' ? 'result-explainer is-error' : 'result-explainer';
+  const eyebrow = record.status === 'error' ? 'Explanation unavailable' : 'Explanation';
+  const body = renderExplanationBody(record.status === 'error' ? record.error : record.text);
+  return `
+    <div class="result-card__footer">
+      ${button}
+      <div id="${panelId}" class="${panelClass}" role="status" aria-live="polite">
+        <p class="result-explainer__eyebrow">${eyebrow}</p>
+        <div class="result-explainer__body">${body}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderExplanationBody(text){
+  const lines = normalizeExplanationText(text)
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(Answer|Why it fits|You chose|Still needed|Not part of the key):\s*(.*)$/i);
+      if(!match){
+        return { label: '', value: line, isLead: false };
+      }
+      return {
+        label: match[1],
+        value: match[2] || '',
+        isLead: /^Answer$/i.test(match[1]),
+      };
+    });
+  if(!lines.length){
+    return `<p class="result-explainer__line">Explanation unavailable right now.</p>`;
+  }
+  return lines.map((line) => `
+    <div class="result-explainer__row${line.isLead ? ' is-lead' : ''}">
+      ${line.label ? `<p class="result-explainer__label">${escapeHTML(line.label)}</p>` : ''}
+      <p class="result-explainer__line">${escapeHTML(line.value || line.label)}</p>
+    </div>
+  `).join('');
+}
+
+function buildAnswerChoice(label, text = ''){
+  const safeLabel = escapeHTML(label);
+  if(!text){
+    return `<li class="result-answer-item result-answer-item--plain"><span class="result-answer-item__content">${safeLabel}</span></li>`;
+  }
+  return `<li class="result-answer-item"><span class="result-answer-item__key">${safeLabel}</span><span class="result-answer-item__content">${escapeHTML(text)}</span></li>`;
 }
 
 function buildUserAnswerDetail(q,a){
   if(!q) return '';
   if(q.type==='MC'){
     const arr=Array.isArray(a)?a:[];
-    return arr.map(idx => {
+    if(!arr.length) return '';
+    return `<ul class="result-answer-list" role="list">` + arr.map(idx => {
       const letter = String.fromCharCode(65+idx);
       const text = q.options && q.options[idx] ? q.options[idx] : '';
-      return `${letter} — <span class="ans-text">${escapeHTML(text)}</span>`;
-    }).join(', ');
+      return buildAnswerChoice(letter, text);
+    }).join('') + `</ul>`;
   }
   if(q.type==='TF'){
     if(typeof a!=='boolean') return '';
-    const text = a ? 'True':'False';
-    return `<span class="chip">${text}</span>`;
+    return `<ul class="result-answer-list" role="list">${buildAnswerChoice(a ? 'True':'False')}</ul>`;
   }
   if(q.type==='YN'){
     if(typeof a!=='boolean') return '';
-    const text = a ? 'Yes':'No';
-    return `<span class="chip">${text}</span>`;
+    return `<ul class="result-answer-list" role="list">${buildAnswerChoice(a ? 'Yes':'No')}</ul>`;
   }
   if(q.type==='MT'){
     const arr=Array.isArray(a)?a:[];
-    return arr.map((ri,li)=>{
-      if(ri<0) return `${li+1}-?`;
-      const letter=String.fromCharCode(65+ri);
+    if(!arr.length) return '';
+    return `<ul class="result-answer-list" role="list">` + arr.map((ri,li)=>{
+      if(ri<0) return buildAnswerChoice(`${li+1}-?`);
+      const letter=`${li+1}-${String.fromCharCode(65+ri)}`;
       const text = q.right && q.right[ri] ? q.right[ri] : '';
-      return `${li+1}-${letter} — <span class="ans-text">${escapeHTML(text)}</span>`;
-    }).join(', ');
+      return buildAnswerChoice(letter, text);
+    }).join('') + `</ul>`;
   }
   return '';
 }
@@ -333,33 +720,32 @@ function buildCorrectAnswerDetail(q){
   if(!q) return '';
   if(q.type==='MC'){
     const arr=Array.isArray(q.correct)?q.correct:[];
-    return arr.map(idx => {
+    if(!arr.length) return '';
+    return `<ul class="result-answer-list" role="list">` + arr.map(idx => {
       const letter = String.fromCharCode(65+idx);
       const text = q.options && q.options[idx] ? q.options[idx] : '';
-      return `${letter} — <span class="ans-text">${escapeHTML(text)}</span>`;
-    }).join(', ');
+      return buildAnswerChoice(letter, text);
+    }).join('') + `</ul>`;
   }
   if(q.type==='TF'){
-    const text = q.correct ? 'True':'False';
-    return `<span class="chip">${text}</span>`;
+    return `<ul class="result-answer-list" role="list">${buildAnswerChoice(q.correct ? 'True':'False')}</ul>`;
   }
   if(q.type==='YN'){
-    const text = q.correct ? 'Yes':'No';
-    return `<span class="chip">${text}</span>`;
+    return `<ul class="result-answer-list" role="list">${buildAnswerChoice(q.correct ? 'Yes':'No')}</ul>`;
   }
   if(q.type==='MT'){
     const pairs = Array.isArray(q.pairs)?q.pairs:[];
-    return pairs.map(([li,ri]) => {
-      const letter = String.fromCharCode(65+ri);
+    if(!pairs.length) return '';
+    return `<ul class="result-answer-list" role="list">` + pairs.map(([li,ri]) => {
+      const letter = `${li+1}-${String.fromCharCode(65+ri)}`;
       const text = q.right && q.right[ri] ? q.right[ri] : '';
-      return `${li+1}-${letter} — <span class="ans-text">${escapeHTML(text)}</span>`;
-    }).join(', ');
+      return buildAnswerChoice(letter, text);
+    }).join('') + `</ul>`;
   }
   return '';
 }
 
-function renderMTResult(origIdx, q, a){
-  const isBeta = isBetaEnabled(S.settings);
+function renderMTResult(displayIdx, origIdx, q, a){
   // Build map of correct right indexes by left index
   const correctMap = new Array(q.left.length).fill(-1);
   (Array.isArray(q.pairs)?q.pairs:[]).forEach(([li,ri])=>{ correctMap[li]=ri; });
@@ -370,23 +756,23 @@ function renderMTResult(origIdx, q, a){
     const u = (userArr[li] != null ? userArr[li] : -1);
     const c = (correctMap[li] != null ? correctMap[li] : -1);
     const ok = (u>=0 && u===c);
-    const your = u>=0 ? `— <span class="ans-text">${escapeHTML(rightText(u))}</span>` : `— <span class="ans-text">No selection</span>`;
-    const corr = c>=0 ? `— <span class="ans-text">${escapeHTML(rightText(c))}</span>` : '';
-    const yourLine = `<div class=\"mt-your\"><span class=\"lbl\">Your answer</span> <span class=\"chip letter ${ok?'good':'bad'}\">${toLetter(u)}</span> ${your}${ok ? ' <span class=\\\"chip tag good\\\">Correct</span>' : ' <span class=\\\"chip tag bad\\\">Incorrect</span>'}</div>`;
-    const corrLine = ok ? '' : `<div class=\"mt-correct\"><span class=\"lbl\">Correct answer</span> <span class=\"chip letter\">${toLetter(c)}</span> ${corr}</div>`;
+    const yourValue = u>=0 ? buildAnswerChoice(`${li+1}-${toLetter(u)}`, rightText(u)) : `<span class="answer-empty">No selection</span>`;
+    const corrValue = c>=0 ? buildAnswerChoice(`${li+1}-${toLetter(c)}`, rightText(c)) : '';
+    const yourLine = `<div class="mt-review-row"><div class="result-answer-label">${ok ? 'Match' : 'You matched'}</div><div class="result-answer-value">${yourValue}</div></div>`;
+    const corrLine = ok ? '' : `<div class="mt-review-row"><div class="result-answer-label">Correct match</div><div class="result-answer-value">${corrValue}</div></div>`;
     return `
-      <div class="mt-row ${ok?'is-correct':'is-wrong'}">
-        <div class="mt-left">${escapeHTML(lt)}</div>
+      <div class="mt-row ${ok?'is-match':'is-mismatch'}">
+        <div class="mt-left"><span class="mt-index">${li+1}.</span><span>${escapeHTML(lt)}</span></div>
         ${yourLine}
         ${corrLine}
       </div>`;
   }).join('');
   const okAll = Array.isArray(a)&&a.length&&a.every((ri,li)=>ri===correctMap[li]);
-  const explainBtn = isBeta ? ` <button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>` : '';
-  return `<div class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
-    <div class="res-head"><strong>${(origIdx+1)}.</strong> ${escapeHTML(q.text)}${explainBtn}</div>
+  return `<article class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
+    ${buildQuestionHeader(displayIdx, q.text, okAll)}
     <div class="mt-result">${rows}</div>
-  </div>`;
+    ${okAll ? '' : buildExplainFooter(origIdx)}
+  </article>`;
 }
 
 // Determine missed indexes from last completed attempt (incorrect or unanswered)
@@ -440,7 +826,7 @@ function updateRetakeUI(){
 
   // Label and caret aria
   const scope = g.retakeScope === RETAKE_ALL ? RETAKE_ALL : RETAKE_MISSED;
-  label.textContent = `Retake: ${scope===RETAKE_ALL ? 'All' : 'Missed'}`;
+  label.textContent = scope===RETAKE_ALL ? 'Retake all' : 'Retake missed';
   const opp = scope === RETAKE_ALL ? RETAKE_MISSED : RETAKE_ALL;
   const caretAria = opp===RETAKE_ALL ? 'Retake All (opposite)' : 'Retake Missed (opposite)';
   caret.setAttribute('aria-label', caretAria);
