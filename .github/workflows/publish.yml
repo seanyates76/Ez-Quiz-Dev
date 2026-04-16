@@ -9,6 +9,8 @@ concurrency:
   group: mirror-main
   cancel-in-progress: true
 
+permissions: {}
+
 jobs:
     mirror:
       permissions:
@@ -86,6 +88,16 @@ jobs:
             RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
             rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
 
+            # Allow a small, explicit set of shared public-safe workflows to flow
+            # downstream even though `.publicignore` blocks the workflow directory
+            # by default. This keeps dev-only automation private while still
+            # satisfying required public checks such as CodeQL.
+            mkdir -p filtered/.github/workflows
+            while IFS= read -r workflow_path; do
+              mkdir -p "filtered/$(dirname "$workflow_path")"
+              cp "$workflow_path" "filtered/$workflow_path"
+            done < <(files/scripts/public-workflows.sh "$PWD")
+
         - name: Clone public repo
           env:
             HAS_PAT: ${{ steps.detect.outputs.has_pat }}
@@ -124,7 +136,7 @@ jobs:
         - name: Sync and push staging branch
           id: sync
           env:
-            SYNC_BRANCH: mirror/main
+            SYNC_BRANCH: mirror/staging
             HAS_PAT: ${{ steps.detect.outputs.has_pat }}
             HAS_DEPLOY_KEY: ${{ steps.detect.outputs.has_deploy_key }}
           run: |
@@ -138,8 +150,13 @@ jobs:
             else
               git checkout -B "$SYNC_BRANCH"
             fi
-            find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
-            rsync -a --delete --exclude=.git/ ../filtered/ ./
+            # Preserve repo-specific downstream files (for example the production README)
+            # without turning every ignored source path into permanent mirror residue.
+            PRESERVE_ARGS=()
+            if [ -f ../.publicpreserve ]; then
+              PRESERVE_ARGS+=(--exclude-from=../.publicpreserve)
+            fi
+            rsync -a --delete --exclude=.git/ "${PRESERVE_ARGS[@]}" ../filtered/ ./
             git add -A
             if git diff --cached --quiet; then
               echo "No changes to publish."
@@ -174,7 +191,7 @@ jobs:
           if: ${{ steps.detect.outputs.has_pat == 'true' && steps.sync.outputs.has_changes == 'true' }}
           env:
             GH_TOKEN: ${{ secrets.PUBLIC_REPO_TOKEN }}
-            SYNC_BRANCH: mirror/main
+            SYNC_BRANCH: mirror/staging
           run: |
             set -euo pipefail
             cd public-repo
@@ -185,8 +202,8 @@ jobs:
               "${GITHUB_SERVER_URL}" \
               "${GITHUB_REPOSITORY}" \
               "${GITHUB_RUN_ID}"
-            if gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" >/dev/null 2>&1; then
-              PR_NUMBER=$(gh pr view --repo seanyates76/Ez-Quiz-App --head "$SYNC_BRANCH" --json number -q '.number')
+            PR_NUMBER=$(gh pr list --repo seanyates76/Ez-Quiz-App --state open --head "$SYNC_BRANCH" --json number --jq '.[0].number')
+            if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
               gh pr edit "$PR_NUMBER" --repo seanyates76/Ez-Quiz-App --title "$PR_TITLE" --body "$PR_BODY"
             else
               gh pr create --repo seanyates76/Ez-Quiz-App --base main --head "$SYNC_BRANCH" --title "$PR_TITLE" --body "$PR_BODY"

@@ -5,6 +5,7 @@
 .git/
 .github/workflows/
 .gitignore
+.publicpreserve
 
 # Local artifacts
 node_modules/
@@ -20,8 +21,6 @@ issues/
 tests/
 scripts/
 agents.md
-BETA_DOCUMENTATION.md
-LAZY_EXPLANATIONS.md
 
 # Tests and internal tooling (uncomment if desired)
 # tests/

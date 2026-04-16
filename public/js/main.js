@@ -1,9 +1,10 @@
 import { S } from './state.js';
 import { $, byQSA, showUpdateBannerIfReady } from './utils.js';
-import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel, setShowQuickStartPreference } from './settings.js';
-import { wireModals, openModal } from './modals.js';
-import { wireGenerator } from './generator.js?v=1.5.27';
-import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI } from './quiz.js';
+import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel } from './settings.js';
+import { wireModals } from './modals.js';
+import { wireGenerator } from './generator.js?v=1.5.28';
+import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js';
+import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
 function debugLog(message){
   try {
@@ -153,6 +154,7 @@ function init(){
   } else {
     document.documentElement.removeAttribute('data-beta');
     document.body.removeAttribute('data-beta');
+    syncExplainButtonsVisibility();
   }
 
   // Check for feature-route redirect when the saved setting is active.

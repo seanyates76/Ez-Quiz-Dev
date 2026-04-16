@@ -1,0 +1,4 @@
+# Files that should remain repo-specific in the production mirror
+# These are excluded only from the destination sync pass, so the mirror
+# will not overwrite or delete the downstream copy.
+README.md

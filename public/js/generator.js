@@ -1,15 +1,17 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.27';
+import { generateWithAI } from './api.js?v=1.5.28';
 import { ImportController } from './import-controller.js';
-import { sniffFileKind, isSupportedImportKind } from './file-type-validation.js';
+import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
+import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.27';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.27';
+import { announce } from './a11y-announcer.js?v=1.5.28';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.28';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
+import { isBetaEnabled } from './beta.mjs';
 
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;
@@ -250,9 +252,17 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const exportTxtBtn = $('exportTxtBtn');
   
   // --- Media Import (beta) ---
-  function isBeta(){ try{ return document.body?.dataset?.beta === 'true' || !!S.settings?.betaEnabled; }catch{ return false; } }
+  function isBeta(){ return isBetaEnabled(S.settings); }
   function setHint(msg){ try{ const hint=document.getElementById('regenHint'); if(hint){ hint.textContent = msg; hint.hidden = false; } }catch{} }
-  function clearHint(){ try{ const hint=document.getElementById('regenHint'); if(hint){ hint.hidden = true; } }catch{} }
+  function clearHint(){
+    try{
+      const hint=document.getElementById('regenHint');
+      if(hint){
+        hint.textContent = '';
+        hint.hidden = true;
+      }
+    }catch{}
+  }
   // Improve accessible label on import button
   try {
     if (importBtn) {
@@ -331,12 +341,28 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         try { announce('Importing file…', 'polite'); } catch {}
       }
 
+      const sizeCheck = validateMediaImportSize(file);
+      if(!sizeCheck.ok){
+        if(importCtl.isCurrent(token)) {
+          setHint(sizeCheck.error);
+          try { announce(`Import failed: ${sizeCheck.error}`, 'assertive'); } catch {}
+        }
+        return;
+      }
+
       const kind = await sniffFileKind(file);
       if(!importCtl.isCurrent(token)) return;
       if(!isSupportedImportKind(kind)){
         if(importCtl.isCurrent(token)) {
           setHint('Unsupported file. Choose a PDF or image.');
           try { announce('Import failed: Unsupported file.', 'assertive'); } catch {}
+        }
+        return;
+      }
+      if(hasImportMetadataMismatch(file, kind)){
+        if(importCtl.isCurrent(token)) {
+          setHint('File type does not match its contents. Choose a real PDF or image.');
+          try { announce('Import failed: File type does not match contents.', 'assertive'); } catch {}
         }
         return;
       }
@@ -382,11 +408,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         try { announce(msg, 'assertive'); } catch {}
       }
     }finally{
+      const isCurrentImport = importCtl.isCurrent(token);
       importCtl.finish(token);
-      if(importCtl.isCurrent(token)){
+      if(isCurrentImport){
         importBtn?.removeAttribute('disabled');
+        if(importFile) importFile.value='';
       }
-      if(importFile) importFile.value='';
     }
   }
   importBtn?.addEventListener('click', ()=>{ if(!isBeta()) return; importFile?.click(); });
@@ -398,15 +425,26 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   });
   // Drag-drop on toolbar (beta)
   let __affixEscapeListener = null;
+  const focusAffixExitTarget = ()=>{
+    if(topicInput && typeof topicInput.focus === 'function'){
+      topicInput.focus();
+      return;
+    }
+    if(importBtn && typeof importBtn.focus === 'function'){
+      importBtn.focus();
+    }
+  };
   const addAffixEscapeHandler = ()=>{
     if(__affixEscapeListener) return;
     __affixEscapeListener = (evt)=>{
       if(evt && (evt.key==='Escape' || evt.key==='Esc')){
         try{
+          if(typeof evt.preventDefault === 'function') evt.preventDefault();
+          if(typeof evt.stopPropagation === 'function') evt.stopPropagation();
           topicAffix?.classList.remove('drag-on');
           topicAffix?.classList.remove('drag-active');
           if(topicAffix) clearDrag(topicAffix);
-          if(importBtn && typeof importBtn.focus==='function'){ importBtn.focus(); }
+          focusAffixExitTarget();
         }catch{}
         try{ announce('Import canceled.', 'polite'); }catch{}
         removeAffixEscapeHandler();
