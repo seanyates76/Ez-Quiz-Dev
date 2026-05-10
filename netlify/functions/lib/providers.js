@@ -13,6 +13,7 @@ function buildPrompt(topic, count, types, difficulty){
     : '';
   return [
     `Task: Produce a quiz about ${topic}.`,
+    `Generate questions in a style that matches how the topic is typically assessed in real quizzes, exams, or trivia, while strictly following the required format.`,
     allowLine,
     diffLine,
     `Output format:`,
@@ -43,6 +44,7 @@ function buildStructuredPrompt(topic, count, types, difficulty){
     : '';
   return [
     `You are generating a structured quiz about ${topic}.`,
+    `Generate questions in a style that matches how the topic is typically assessed in real quizzes, exams, or trivia, while strictly following the required format.`,
     diffLine,
     `Allowed question types: ${allowed.join(', ')}. Use only these codes.`,
     `Respond with valid minified JSON only. Do not include markdown fences or commentary.`,

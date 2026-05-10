@@ -23,8 +23,112 @@ function getEls(){
     autoStartEl: $('autoStart'),
     requireAnswerEl: $('requireAnswer'),
     quizEditorPrefEl: $('alwaysShowQuizEditor'),
+    quickStartPrefEl: $('showQuickStartOnLaunch'),
     betaEnabledEl: $('betaEnabled'),
   };
+}
+
+function initQuickStart(){
+  const panel = document.getElementById('welcomePanel');
+  if(!panel) return;
+
+  const helpBtn = document.getElementById('quickStartOpenHelp');
+  const dismissBtn = document.getElementById('quickStartDismiss');
+  const openDraftBtn = document.getElementById('openDraftBtn') || document.getElementById('quickStartOpenEditor');
+  const persistCheckbox = document.getElementById('quickStartPersist');
+  const quickStartPrefEl = document.getElementById('showQuickStartOnLaunch');
+  const advDisclosure = document.querySelector('.advanced-disclosure');
+  const advBlock = document.getElementById('advancedBlock');
+
+  function isDraftOpen(){
+    const optionsPanel = document.getElementById('optionsPanel');
+    return !!(optionsPanel && !optionsPanel.hidden && advBlock && !advBlock.hidden);
+  }
+
+  function syncOpenDraftButton(){
+    if(!openDraftBtn) return;
+    openDraftBtn.textContent = isDraftOpen() ? 'Close Draft' : 'Open draft';
+  }
+
+  function openDraft(){
+    if(advDisclosure && advBlock?.hidden){
+      advDisclosure.setAttribute('aria-expanded', 'true');
+      advBlock.hidden = false;
+    }
+    const optionsPanel = document.getElementById('optionsPanel');
+    const optionsBtn = document.getElementById('optionsBtn');
+    if(optionsPanel?.hidden){
+      optionsPanel.hidden = false;
+      optionsBtn?.setAttribute('aria-expanded', 'true');
+    }
+    syncOpenDraftButton();
+    const focusTarget =
+      document.querySelector('#interactiveEditor button, #interactiveEditor textarea, #interactiveEditor input, #interactiveEditor [tabindex]:not([tabindex="-1"])') ||
+      document.getElementById('editor') ||
+      advDisclosure;
+    window.setTimeout(()=>{ focusTarget?.focus?.(); }, 0);
+  }
+
+  function closeDraft(){
+    const optionsPanel = document.getElementById('optionsPanel');
+    const optionsBtn = document.getElementById('optionsBtn');
+    if(advDisclosure && advBlock && !advBlock.hidden){
+      advDisclosure.setAttribute('aria-expanded', 'false');
+      advBlock.hidden = true;
+    }
+    if(optionsPanel && !optionsPanel.hidden){
+      optionsPanel.hidden = true;
+      optionsBtn?.setAttribute('aria-expanded', 'false');
+    }
+    syncOpenDraftButton();
+  }
+
+  function syncPanel(){
+    const visible = !!S.settings.showQuickStart;
+    panel.hidden = !visible;
+    if(quickStartPrefEl){ quickStartPrefEl.checked = visible; }
+  }
+
+  function dismissWelcome(){
+    panel.hidden = true;
+    if(persistCheckbox?.checked){
+      setShowQuickStartPreference(false);
+      if(quickStartPrefEl){ quickStartPrefEl.checked = false; }
+      return;
+    }
+  }
+
+  helpBtn?.addEventListener('click', ()=>{
+    openModal('helpModal');
+  });
+
+  const handleDismiss = (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    dismissWelcome();
+  };
+
+  dismissBtn?.addEventListener('click', handleDismiss);
+  openDraftBtn?.addEventListener('click', (event)=>{
+    event.preventDefault();
+    event.stopPropagation();
+    if(isDraftOpen()) closeDraft();
+    else openDraft();
+  });
+
+  persistCheckbox?.addEventListener('change', ()=>{});
+
+  quickStartPrefEl?.addEventListener('change', syncPanel);
+  syncPanel();
+  syncOpenDraftButton();
+  if(advBlock){
+    const draftObserver = new MutationObserver(syncOpenDraftButton);
+    draftObserver.observe(advBlock, { attributes:true, attributeFilter:['hidden'] });
+    const optionsPanel = document.getElementById('optionsPanel');
+    if(optionsPanel){
+      draftObserver.observe(optionsPanel, { attributes:true, attributeFilter:['hidden'] });
+    }
+  }
 }
 
 function init(){
@@ -43,19 +147,18 @@ function init(){
   })();
   loadSettingsFromStorage();
   
-  const betaCookieActive = hasCookieFlag('beta');
-  const betaActive = hasFlag('beta') || betaCookieActive;
+  const betaActive = !!S.settings.betaEnabled;
   if (betaActive) {
+    document.documentElement.dataset.beta = 'true';
     document.body.dataset.beta = 'true';
   } else {
+    document.documentElement.removeAttribute('data-beta');
     document.body.removeAttribute('data-beta');
     syncExplainButtonsVisibility();
   }
-  // Force-sync settings flag with computed beta state to avoid transient mismatch
-  try { S.settings.betaEnabled = !!betaActive; } catch {}
 
-  // Check for beta auto-redirect when landing on root: if beta is active (cookie or local flag), go to /beta
-  if ((betaActive || S.settings.betaEnabled) && window.location.pathname === '/' && !window.location.search.includes('no-beta-redirect')) {
+  // Check for feature-route redirect when the saved setting is active.
+  if (betaActive && window.location.pathname === '/' && !window.location.search.includes('no-beta-redirect')) {
     try { window.location.replace('/beta'); } catch { window.location.href = '/beta'; }
     return;
   }
@@ -66,6 +169,7 @@ function init(){
   wireSettingsPanel(els);
   wireModals({ onPause: pauseTimerIfQuiz, onResume: resumeTimerIfQuiz });
   wireGenerator({ beginQuiz, syncSettingsFromUI });
+  initQuickStart();
   wireQuizControls();
   wireResultsControls();
 
@@ -92,7 +196,7 @@ function init(){
       const betaSection = sections.find(section => section && !section.classList.contains('release-notes--production')) || null;
       const betaVersion = betaSection?.querySelector('h4')?.textContent?.trim();
       if(betaVersion){
-        applyVersion('Beta', betaVersion);
+        applyVersion('Extended', betaVersion);
       }
     }
   })();
@@ -144,13 +248,11 @@ function init(){
         await Promise.all(regs.map(r => r.unregister().catch(() => {})));
       }
     } catch {}
-    // After async cleanup completes, navigate cleanly to canonical route
-    // Prefer /beta when the cookie flag is present, otherwise root.
+    // After async cleanup completes, navigate cleanly to the default route.
     try {
-      const target = (typeof hasCookieFlag === 'function' && hasCookieFlag('beta')) ? '/beta' : '/';
-      window.location.replace(target);
+      window.location.replace('/');
     } catch {
-      try { window.location.href = (typeof hasCookieFlag === 'function' && hasCookieFlag('beta')) ? '/beta' : '/'; }
+      try { window.location.href = '/'; }
       catch { try { window.location.reload(true); } catch { window.location.reload(); } }
     }
   }
@@ -241,7 +343,15 @@ function init(){
         const res = await fetch('/.netlify/functions/send-feedback', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message:text, email:em, hp:(trap?.value||'') }) });
         const data = await res.json().catch(()=>({}));
         if(res.ok && data && data.success){ if(status) status.textContent='Feedback sent — thank you!'; setLastTs(now); msg.value=''; updateCount(); setTimeout(()=>{ setOpen(false); if(status) status.textContent=''; }, 1400); }
-        else { if(status) status.innerHTML='Error sending feedback. Please try again later. <a href="mailto:ez.quizapp@gmail.com">Email us</a>.'; }
+        else {
+          if(status){
+            status.replaceChildren('Error sending feedback. Please try again later. ');
+            const link = document.createElement('a');
+            link.href = 'mailto:ez.quizapp@gmail.com';
+            link.textContent = 'Email us';
+            status.appendChild(link);
+          }
+        }
       }catch{ if(status) status.textContent='Network error. Please try again.'; }
       finally{ if(send) send.disabled=false; }
     }

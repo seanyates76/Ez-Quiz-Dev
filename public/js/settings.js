@@ -1,6 +1,6 @@
 import { S, STORAGE_KEYS } from './state.js';
 import { msToMmSs, mmSsToMs } from './utils.js';
-import { has as hasFlag, setFlag, addCookieFlag, clearCookieFlag } from './flags.js';
+import { setFlag, addCookieFlag, clearCookieFlag } from './flags.js';
 
 // Cookie helpers for persistent flags (1 year)
 const COOKIE_SHOW_QUIZ_EDITOR = 'ezq.showQuizEditor';
@@ -23,6 +23,7 @@ export function saveSettingsToStorage(){
       durationMs: Number(S.settings.durationMs||0),
       autoStart: !!S.settings.autoStart,
       requireAnswer: !!S.settings.requireAnswer,
+      showQuickStart: !!S.settings.showQuickStart,
       betaEnabled: !!S.settings.betaEnabled,
     }));
   }catch{}
@@ -33,10 +34,8 @@ export function loadSettingsFromStorage(){
   try{ const raw=localStorage.getItem(STORAGE_KEYS.settings); if(raw){ const obj=JSON.parse(raw);
     S.settings.timerEnabled=!!obj.timerEnabled; S.settings.countdown=!!obj.countdown; S.settings.durationMs=Number(obj.durationMs||0);
     if(obj.autoStart!==undefined) S.settings.autoStart=!!obj.autoStart; S.settings.requireAnswer=!!obj.requireAnswer;
+    if(obj.showQuickStart!==undefined) S.settings.showQuickStart=!!obj.showQuickStart;
     if(obj.betaEnabled!==undefined) S.settings.betaEnabled=!!obj.betaEnabled; } }catch{}
-  if(hasFlag('beta')){
-    S.settings.betaEnabled = true;
-  }
   // Load cookie-backed flags
   try{
     const pref = getCookie(COOKIE_SHOW_QUIZ_EDITOR);
@@ -162,6 +161,7 @@ export function reflectSettingsIntoUI(els){
   if(els.autoStartEl) els.autoStartEl.checked=!!S.settings.autoStart;
   if(els.requireAnswerEl) els.requireAnswerEl.checked=!!S.settings.requireAnswer;
   if(els.quizEditorPrefEl) els.quizEditorPrefEl.checked=!!S.settings.showQuizEditor;
+  if(els.quickStartPrefEl) els.quickStartPrefEl.checked=!!S.settings.showQuickStart;
   if(els.betaEnabledEl) els.betaEnabledEl.checked=!!S.settings.betaEnabled;
 }
 
@@ -179,6 +179,10 @@ export function wireSettingsPanel(els){
       setCookie(COOKIE_SHOW_QUIZ_EDITOR, serialized);
       setCookie(LEGACY_COOKIE_ALWAYS_SHOW_ADV, serialized);
     }catch{}
+  });
+  els.quickStartPrefEl?.addEventListener('change', ()=>{
+    S.settings.showQuickStart = !!els.quickStartPrefEl.checked;
+    saveSettingsToStorage();
   });
   els.betaEnabledEl?.addEventListener('change', ()=>{
     S.settings.betaEnabled = !!els.betaEnabledEl.checked;
@@ -204,3 +208,7 @@ export function wireSettingsPanel(els){
 
 // Expose cookie helpers for other modules
 export function getShowQuizEditorPreference(){ return !!S.settings.showQuizEditor; }
+export function setShowQuickStartPreference(value){
+  S.settings.showQuickStart = !!value;
+  saveSettingsToStorage();
+}
