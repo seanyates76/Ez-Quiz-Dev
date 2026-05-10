@@ -22,7 +22,7 @@ Optional security:
 AI Generation providers (optional):
 - AI_PROVIDER: `gemini`, `openai`, or `echo`
 - GEMINI_API_KEY: Google Generative AI key
-- GEMINI_MODEL: e.g. `gemini-2.5-flash-lite-preview-09-2025`
+- GEMINI_MODEL: e.g. `gemini-2.5-flash-lite`
 - OPENAI_API_KEY: OpenAI API key
 - OPENAI_MODEL: e.g. `gpt-4o-mini`
 
