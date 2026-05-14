@@ -26,6 +26,11 @@ AI Generation providers (optional):
 - OPENAI_API_KEY: OpenAI API key
 - OPENAI_MODEL: e.g. `gpt-4o-mini`
 
+Provider smoke note:
+- `Ez-Quiz-Dev` is the active development repo, but the linked Netlify project/env is tied to `Ez-Quiz-App`.
+- Normal `netlify dev` may inject App-linked env while running Dev-repo code.
+- To verify local provider wiring from this repo, use local `.env` with `netlify dev --offline`; then confirm the App-linked Netlify env before promotion.
+
 Notes
 - Update Netlify env vars under Site Settings → Environment.
 - After changing env vars, trigger a redeploy.

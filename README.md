@@ -40,6 +40,7 @@ cd public && python3 -m http.server 8000
 cd ..
 netlify dev
 # Tip: set AI_PROVIDER=echo to run without provider keys
+# Provider smoke from this dev repo: use local .env with netlify dev --offline
 
 # Tests
 npm test
@@ -83,6 +84,8 @@ Common variables:
 - `AI_PROVIDER` = `gemini` | `openai` | `echo`
 - provider API keys as needed
 - feedback mailer variables for Netlify Functions
+
+Provider-smoke caveat: this dev repo can run against an App-linked Netlify environment. If local `.env` works with `netlify dev --offline` but normal `netlify dev` fails, verify the `Ez-Quiz-App` Netlify env before changing code.
 
 Contributing & policies
 -----------------------

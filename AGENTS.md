@@ -132,6 +132,7 @@ Key redirects:
 Promotion note:
 - do not treat a normal `netlify dev` provider failure as proof that Dev-repo code is broken until you confirm which Netlify env supplied the key
 - if local `.env` plus `netlify dev --offline` passes but normal `netlify dev` fails, check the App-linked Netlify project env before changing code
+- before promoting provider-backed work, make the App-linked Netlify env match the known-good local provider keys, then rerun a normal Netlify/App smoke or deploy smoke
 
 ## Mirror workflow model
 
