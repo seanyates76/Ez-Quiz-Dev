@@ -30,4 +30,22 @@ describe('buildGeneratorPayload', () => {
     expect(result.difficulty).toBe('medium');
     expect(result.count).toBe(1);
   });
+
+  test('carries cleaned source material when media import supplied it', () => {
+    const result = buildGeneratorPayload({
+      topic: 'Scan',
+      difficulty: 'easy',
+      count: 3,
+      sourceName: 'notes.pdf',
+      sourceText: ' Heading \n\n First   fact. \r\n Second fact. ',
+    });
+
+    expect(result).toMatchObject({
+      topic: 'Scan',
+      difficulty: 'easy',
+      count: 3,
+      sourceName: 'notes.pdf',
+      sourceText: 'Heading\nFirst fact.\nSecond fact.',
+    });
+  });
 });

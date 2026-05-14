@@ -8,7 +8,6 @@ describe('beta gating helper', () => {
         delete document.body.dataset.beta;
       }
     }
-    delete global.document;
   });
 
   test('returns true when settings flag is enabled', async () => {

@@ -46,6 +46,8 @@ describe('generator media import overlap regression', () => {
   let readers;
   let consoleDebugSpy;
   let validateMediaImportSize;
+  let generateWithAI;
+  let state;
 
   beforeAll(() => {
     ({ ImportController } = loadBrowserModule('public/js/import-controller.js', ['ImportController']));
@@ -67,6 +69,11 @@ describe('generator media import overlap regression', () => {
       errors: [],
       error: null,
     }));
+    generateWithAI = jest.fn().mockResolvedValue({
+      title: 'Imported Source Quiz',
+      lines: 'TF|Imported fact.|T',
+    });
+    state = { settings: { beta: true }, quiz: {}, media: {} };
     announce = jest.fn();
     validateMediaImportSize = jest.fn(() => ({ ok: true }));
     fetchCalls = [];
@@ -83,7 +90,15 @@ describe('generator media import overlap regression', () => {
         ok: true,
         status: 200,
         headers: { get: () => 'application/json' },
-        json: async () => ({ text: payload.text }),
+        json: async () => ({
+          text: payload.text,
+          metadata: {
+            name: body.name,
+            kind: body.kind,
+            size: body.size,
+            charCount: String(payload.text || '').length,
+          },
+        }),
       };
     });
 
@@ -105,7 +120,7 @@ describe('generator media import overlap regression', () => {
     };
 
     const deps = {
-      S: { settings: { beta: true }, quiz: {} },
+      S: state,
       $: (id) => document.getElementById(id),
       byQSA: (selector) => Array.from(document.querySelectorAll(selector)),
       mmSsToMs: () => 0,
@@ -116,7 +131,7 @@ describe('generator media import overlap regression', () => {
       },
       getMaxQuestions: () => 50,
       parseEditorInput,
-      generateWithAI: jest.fn(),
+      generateWithAI,
       ImportController,
       sniffFileKind,
       isSupportedImportKind: () => true,
@@ -124,7 +139,14 @@ describe('generator media import overlap regression', () => {
       validateMediaImportSize,
       attachDragDrop: () => ({ dispose() {} }),
       announce,
-      buildGeneratorPayload: ({ topic, difficulty, count }) => ({ topic, difficulty, count }),
+      buildGeneratorPayload: ({ topic, difficulty, count, sourceText, sourceName }) => {
+        const payload = { topic, difficulty, count };
+        if (sourceText) {
+          payload.sourceText = sourceText;
+          payload.sourceName = sourceName;
+        }
+        return payload;
+      },
       showVeil: () => {},
       hideVeil: () => {},
       MESSAGES: ['hello'],
@@ -190,7 +212,11 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(hint.textContent).toBe('Imported text added to editor.');
+    expect(hint.textContent).toBe('Imported good.pdf. Press Generate to build the quiz.');
+    expect(document.getElementById('mediaSourceStatus').hidden).toBe(false);
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: good.pdf');
+    expect(state.media.sourceText).toBe('GOOD IMPORT TEXT');
+    expect(parseEditorInput).not.toHaveBeenCalled();
     expect(validateMediaImportSize).toHaveBeenCalledTimes(2);
   });
 
@@ -247,9 +273,11 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(editor.value).toBe('SECOND IMPORT TEXT');
-    expect(mirror.value).toBe('SECOND IMPORT TEXT');
-    expect(hint.textContent).toBe('Imported text added to editor.');
+    expect(editor.value).toBe('');
+    expect(mirror.value).toBe('');
+    expect(hint.textContent).toBe('Imported second.pdf. Press Generate to build the quiz.');
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: second.pdf');
+    expect(state.media.sourceText).toBe('SECOND IMPORT TEXT');
     expect(importBtn.hasAttribute('disabled')).toBe(false);
 
     fetchDeferredByName.get('first.pdf').resolve({ text: 'STALE FIRST IMPORT TEXT' });
@@ -257,10 +285,23 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(editor.value).toBe('SECOND IMPORT TEXT');
-    expect(mirror.value).toBe('SECOND IMPORT TEXT');
-    expect(parseEditorInput).toHaveBeenCalledTimes(1);
-    expect(parseEditorInput).toHaveBeenCalledWith('SECOND IMPORT TEXT');
-    expect(announce).toHaveBeenCalledWith('Imported text added to editor.', 'polite');
+    expect(editor.value).toBe('');
+    expect(mirror.value).toBe('');
+    expect(parseEditorInput).not.toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith('Imported source ready. Press Generate to build the quiz.', 'polite');
+
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(generateWithAI).toHaveBeenCalledWith('second', 10, expect.objectContaining({
+      sourceText: 'SECOND IMPORT TEXT',
+      sourceName: 'second.pdf',
+      difficulty: 'medium',
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+    expect(editor.value).toBe('TF|Imported fact.|T');
+    expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
   });
 });

@@ -3,7 +3,7 @@
 
 const { loadDocument } = require('./utils');
 
-describe('Media Input (beta) UI stub', () => {
+describe('Media Input (beta) UI', () => {
   let document;
 
   beforeAll(async () => {

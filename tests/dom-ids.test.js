@@ -13,6 +13,7 @@ describe('public/index.html structure', () => {
   test('exposes key controls and editor surfaces by id', () => {
     const expectedIds = [
       ['generatorCard', 'SECTION'],
+      ['landingHero', 'SECTION'],
       ['generateBtn', 'BUTTON'],
       ['optionsBtn', 'BUTTON'],
       ['startBtn', 'BUTTON'],
@@ -20,6 +21,8 @@ describe('public/index.html structure', () => {
       ['mirror', 'TEXTAREA'],
       ['importBtn', 'BUTTON'],
       ['importFile', 'INPUT'],
+      ['mediaSourceStatus', 'DIV'],
+      ['clearMediaSourceBtn', 'BUTTON'],
     ];
 
     expectedIds.forEach(([id, tag]) => {

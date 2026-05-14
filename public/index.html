@@ -17,7 +17,7 @@
     <div class="site-header__row">
       <div class="brand">
         <a href="/" class="brand-link" aria-label="EZ Quiz Home">
-          <!-- Use a transparent placeholder at start; JS sets the theme-specific logo -->
+          <!-- Use a transparent pixel at start; JS sets the theme-specific logo -->
           <img id="brandTitle"
                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
                alt="EZ Quiz"
@@ -34,6 +34,36 @@
   </header>
 
   <main class="container" id="app" role="main">
+    <section id="landingHero" class="landing-band" aria-labelledby="landingTitle">
+      <div class="landing-copy">
+        <p class="landing-kicker">Generate, import, explain</p>
+        <h1 id="landingTitle">EZ Quiz</h1>
+        <p class="landing-dek">Create quizzes from a topic, a PDF or image source, or your own quiz lines. Results include on-demand explanations for review.</p>
+        <div class="landing-actions" aria-label="Primary setup actions">
+          <button class="btn primary" type="button" data-focus-target="topicInput">Generate from topic</button>
+          <button class="btn btn-outline beta-only" type="button" data-focus-target="importBtn">Import media</button>
+          <button class="btn btn-ghost" type="button" data-focus-target="editor">Paste quiz lines</button>
+        </div>
+      </div>
+      <div class="landing-preview" aria-hidden="true">
+        <div class="preview-bar">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="preview-question">
+          <strong>50-question generation</strong>
+          <span>Batch-backed output with explicit count checks.</span>
+        </div>
+        <div class="preview-question is-accent">
+          <strong>PDF/Image import</strong>
+          <span>Extracted source text feeds Generate directly.</span>
+        </div>
+        <div class="preview-question">
+          <strong>Explain in Results</strong>
+          <span>Lazy, per-question study rationale on demand.</span>
+        </div>
+      </div>
+    </section>
+
     <!-- Generator Card -->
     <section id="generatorCard" class="card">
       <div id="updateBanner" class="update-banner hidden" hidden role="status" aria-live="polite">
@@ -74,7 +104,7 @@
         <label class="toolbar-field narrow number-field">
           <span class="toolbar-label">Length</span>
           <div class="number-wrap">
-            <input id="countInput" type="number" class="toolbar-input" min="1" max="30" step="1" value="10" inputmode="numeric" />
+            <input id="countInput" type="number" class="toolbar-input" min="1" max="50" step="1" value="10" inputmode="numeric" />
             <div class="stepper-group" role="group" aria-label="Adjust length">
               <button type="button" class="stepper stepper-up" data-step="up" aria-label="Increase length">▲</button>
               <button type="button" class="stepper stepper-down" data-step="down" aria-label="Decrease length">▼</button>
@@ -91,6 +121,10 @@
       <!-- Subtle hint when inputs change after generation -->
       <div id="regenHint" class="regen-hint" role="status" aria-live="polite" hidden>
         Updated inputs — press Regenerate
+      </div>
+      <div id="mediaSourceStatus" class="media-source-status" role="status" aria-live="polite" hidden>
+        <span id="mediaSourceLabel" class="media-source-label"></span>
+        <button id="clearMediaSourceBtn" class="btn btn-ghost btn-small" type="button">Remove</button>
       </div>
 
       <!-- Options Drop-Down (includes Quiz Editor tools) -->
@@ -500,7 +534,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
             <li><strong>Results:</strong> continuous score bar, mobile overflow fixes, subtle transitions.</li>
             <li><strong>Generator:</strong> mobile stack layout refined; increased vertical spacing; Difficulty given more width.</li>
             <li><strong>Primary button:</strong> Start by default; Generate when QE open; flips back to Start after generation.</li>
-            <li><strong>Explain (beta):</strong> centered ribbon teaser only; real explanations coming soon.</li>
+            <li><strong>Explain (beta):</strong> on-demand result explanations now load from the lazy explanation endpoint.</li>
           </ul>
         </section>
         <section>

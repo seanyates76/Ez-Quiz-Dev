@@ -1,6 +1,7 @@
 import { S } from './state.js';
 import { isBetaEnabled } from './beta.mjs';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
+import { requestLazyExplanation } from './explain-api.js?v=1.5.28';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
@@ -233,15 +234,17 @@ export function renderResults(){
     const userDetail = buildUserAnswerDetail(q,a);
     const correctDetail = buildCorrectAnswerDetail(q);
     const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)}${isBeta ? ` <button type=\"button\" class=\"chip-btn explain-btn\" data-explain=\"${origIdx}\">Explain</button>` : ''}</div>`;
+    const explainer = renderExplanationSlot(origIdx, isBeta);
     if (item.isCorrect) {
       const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail} <span class=\"chip tag good\">Correct</span></div>`;
-      return `<div class="missed-item is-correct" data-orig="${origIdx}">` + header + line + `</div>`;
+      return `<div class="missed-item is-correct" data-orig="${origIdx}">` + header + line + explainer + `</div>`;
     } else {
       const yours = `<div class="user-ans ans-wrong"><strong>Your answer:</strong> ${userDetail} <span class="chip tag bad">Incorrect</span></div>`;
       const corr = `<div><strong>Correct:</strong> ${correctDetail}</div>`;
-      return `<div class="missed-item is-wrong" data-orig="${origIdx}">` + header + yours + corr + `</div>`;
+      return `<div class="missed-item is-wrong" data-orig="${origIdx}">` + header + yours + corr + explainer + `</div>`;
     }
   }).join('');
+  try{ hydrateExplanationSlots(); }catch{}
   // Sync retake controls UI when results are shown/updated
   try{ updateRetakeUI(); }catch{}
   // Wire Explain delegation once (beta only)
@@ -270,12 +273,171 @@ export function syncExplainButtonsVisibility(root = document){
 function wireExplainDelegation(){
   const host = document.getElementById('missedList'); if(!host) return;
   if(host.__explBound) return; host.__explBound = true;
-  host.addEventListener('click', (e)=>{
+  host.addEventListener('click', async (e)=>{
     const btn = e.target && (e.target.closest ? e.target.closest('.explain-btn') : null);
     if(!btn) return;
     e.preventDefault();
-    showToastNear(btn, 'Explanations are coming soon.');
+    if(!isBetaEnabled(S.settings)){
+      syncExplainButtonsVisibility(host);
+      return;
+    }
+    const origIdx = parseInt(btn.getAttribute('data-explain'), 10);
+    if(!Number.isInteger(origIdx) || origIdx < 0) return;
+    const cache = getExplanationCache();
+    if(cache[origIdx]?.state === 'loaded'){
+      renderExplanationPanel(origIdx, cache[origIdx]);
+      return;
+    }
+    if(cache[origIdx]?.state === 'loading') return;
+
+    let payload;
+    try {
+      payload = buildExplanationRequest(origIdx);
+    } catch (err) {
+      const message = err && err.message ? err.message : 'Unable to explain this question.';
+      cache[origIdx] = { state: 'error', message };
+      renderExplanationPanel(origIdx, cache[origIdx]);
+      showToastNear(btn, message);
+      return;
+    }
+
+    cache[origIdx] = { state: 'loading', message: 'Loading explanation…' };
+    btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
+    renderExplanationPanel(origIdx, cache[origIdx]);
+    try {
+      const data = await requestLazyExplanation(payload);
+      const item = data && data.explanations && data.explanations[String(origIdx)];
+      const explanation = item && item.explanation ? String(item.explanation).trim() : '';
+      if(!explanation) throw new Error('No explanation returned. Try again.');
+      cache[origIdx] = { state: 'loaded', explanation };
+      renderExplanationPanel(origIdx, cache[origIdx]);
+      btn.textContent = 'Explain';
+      btn.setAttribute('aria-expanded', 'true');
+    } catch (err) {
+      const message = err && err.message ? err.message : 'Explanation unavailable. Try again.';
+      cache[origIdx] = { state: 'error', message };
+      renderExplanationPanel(origIdx, cache[origIdx]);
+      showToastNear(btn, message);
+    } finally {
+      btn.disabled = false;
+      btn.removeAttribute('aria-busy');
+    }
   });
+}
+
+function getExplanationCache(){
+  S.quiz.explanations = S.quiz.explanations && typeof S.quiz.explanations === 'object' ? S.quiz.explanations : {};
+  return S.quiz.explanations;
+}
+
+function renderExplanationSlot(origIdx, isBeta){
+  if(!isBeta) return '';
+  return `<div class="explain-panel is-hidden" data-explain-slot="${origIdx}" role="status" aria-live="polite"></div>`;
+}
+
+function hydrateExplanationSlots(){
+  const cache = getExplanationCache();
+  Object.keys(cache).forEach((key)=>{
+    const idx = parseInt(key, 10);
+    if(Number.isInteger(idx)) renderExplanationPanel(idx, cache[key]);
+  });
+}
+
+function renderExplanationPanel(origIdx, entry){
+  const panel = document.querySelector(`[data-explain-slot="${origIdx}"]`);
+  if(!panel || !entry) return;
+  panel.textContent = '';
+  panel.classList.remove('is-hidden', 'is-loading', 'is-error');
+  panel.classList.toggle('is-loading', entry.state === 'loading');
+  panel.classList.toggle('is-error', entry.state === 'error');
+
+  const title = document.createElement('strong');
+  title.textContent = entry.state === 'error' ? 'Explanation unavailable' : 'Explanation';
+  panel.appendChild(title);
+
+  const body = document.createElement('div');
+  body.className = 'explain-text';
+  const text = entry.state === 'loaded' ? entry.explanation : entry.message;
+  String(text || '').split('\n').filter(Boolean).forEach((line)=>{
+    const p = document.createElement('p');
+    p.textContent = line;
+    body.appendChild(p);
+  });
+  if(!body.childNodes.length){
+    const p = document.createElement('p');
+    p.textContent = 'No explanation available.';
+    body.appendChild(p);
+  }
+  panel.appendChild(body);
+}
+
+function labelOptions(options){
+  return (Array.isArray(options) ? options : []).map((opt, idx)=>`${String.fromCharCode(65 + idx)}) ${String(opt || '').trim()}`).join(';');
+}
+
+export function questionToLegacyLine(q){
+  if(!q || !q.type) return '';
+  const prompt = String(q.text || q.prompt || '').trim();
+  if(q.type === 'MC'){
+    const correct = (Array.isArray(q.correct) ? q.correct : [])
+      .filter((idx)=>Number.isInteger(idx) && idx >= 0)
+      .map((idx)=>String.fromCharCode(65 + idx))
+      .join(',');
+    return `MC|${prompt}|${labelOptions(q.options)}|${correct || 'A'}`;
+  }
+  if(q.type === 'TF') return `TF|${prompt}|${q.correct ? 'T' : 'F'}`;
+  if(q.type === 'YN') return `YN|${prompt}|${q.correct ? 'Y' : 'N'}`;
+  if(q.type === 'MT'){
+    const left = (Array.isArray(q.left) ? q.left : []).map((item, idx)=>`${idx + 1}) ${String(item || '').trim()}`).join(';');
+    const right = (Array.isArray(q.right) ? q.right : []).map((item, idx)=>`${String.fromCharCode(65 + idx)}) ${String(item || '').trim()}`).join(';');
+    const pairs = (Array.isArray(q.pairs) ? q.pairs : [])
+      .filter(([li, ri])=>Number.isInteger(li) && Number.isInteger(ri))
+      .map(([li, ri])=>`${li + 1}-${String.fromCharCode(65 + ri)}`)
+      .join(',');
+    return `MT|${prompt}|${left}|${right}|${pairs}`;
+  }
+  return '';
+}
+
+function getBaseQuestionSet(){
+  return (Array.isArray(S.quiz.originalQuestions) && S.quiz.originalQuestions.length)
+    ? S.quiz.originalQuestions
+    : (Array.isArray(S.quiz.questions) ? S.quiz.questions : []);
+}
+
+function getOriginalAnswerSet(baseQs = getBaseQuestionSet()){
+  if(Array.isArray(S.quiz.originalAnswers) && S.quiz.originalAnswers.length === baseQs.length){
+    return S.quiz.originalAnswers.slice();
+  }
+  const answers = new Array(baseQs.length).fill(null);
+  const map = (Array.isArray(S.quiz.indexMap) && S.quiz.indexMap.length)
+    ? S.quiz.indexMap
+    : (Array.isArray(S.quiz.questions) ? S.quiz.questions.map((_, i)=>i) : []);
+  const current = Array.isArray(S.quiz.answers) ? S.quiz.answers : [];
+  for(let i=0;i<current.length;i++){
+    const origIdx = map[i];
+    if(Number.isInteger(origIdx) && origIdx >= 0 && origIdx < answers.length){
+      answers[origIdx] = current[i];
+    }
+  }
+  return answers;
+}
+
+export function buildExplanationRequest(origIdx){
+  const baseQs = getBaseQuestionSet();
+  if(!Number.isInteger(origIdx) || origIdx < 0 || origIdx >= baseQs.length){
+    throw new Error('Unable to locate that question.');
+  }
+  const lines = baseQs.map(questionToLegacyLine);
+  if(lines.some((line)=>!line)){
+    throw new Error('Unable to format this quiz for explanations.');
+  }
+  return {
+    lines,
+    index: origIdx,
+    attemptedAnswers: getOriginalAnswerSet(baseQs),
+  };
 }
 
 function buildUserAnswerDetail(q,a){
@@ -367,6 +529,7 @@ function renderMTResult(origIdx, q, a){
   return `<div class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
     <div class="res-head"><strong>${(origIdx+1)}.</strong> ${escapeHTML(q.text)}${explainBtn}</div>
     <div class="mt-result">${rows}</div>
+    ${renderExplanationSlot(origIdx, isBeta)}
   </div>`;
 }
 
