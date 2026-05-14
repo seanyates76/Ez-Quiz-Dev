@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EZ Quiz Product Hardening Brief - May 14, 2026</title>
+  <style>
+    :root {
+      --bg: #0f141b;
+      --panel: #171f2a;
+      --panel-2: #202a37;
+      --text: #f3f6fb;
+      --muted: #adbacb;
+      --line: #344154;
+      --good: #59d190;
+      --warn: #ffd166;
+      --blue: #8bbcff;
+      --accent: #ffb454;
+      --bad: #ff7583;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      background:
+        linear-gradient(180deg, rgba(255,180,84,.08), transparent 260px),
+        var(--bg);
+      color: var(--text);
+    }
+
+    main {
+      width: min(1120px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 38px 0 58px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 4vw, 3.55rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h2 { margin: 0 0 14px; font-size: 1.35rem; }
+    h3 { margin: 0 0 8px; font-size: 1rem; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    strong { color: var(--text); }
+
+    code {
+      color: #d9e7ff;
+      background: rgba(255,255,255,.07);
+      padding: 1px 5px;
+      border-radius: 5px;
+    }
+
+    .dek {
+      max-width: 900px;
+      font-size: 1.06rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: rgba(255,255,255,.04);
+      font-size: .9rem;
+      white-space: nowrap;
+    }
+
+    .pill.good {
+      color: #cdf8df;
+      border-color: rgba(89,209,144,.55);
+      background: rgba(89,209,144,.12);
+    }
+
+    .pill.warn {
+      color: #fff0bf;
+      border-color: rgba(255,209,102,.55);
+      background: rgba(255,209,102,.12);
+    }
+
+    section { margin-top: 24px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      grid-column: span 6;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(23,31,42,.96);
+      padding: 18px;
+    }
+
+    .card.wide { grid-column: 1 / -1; }
+    .card.third { grid-column: span 4; }
+    .kpi { grid-column: span 3; background: var(--panel-2); }
+    .kpi strong { display: block; font-size: 1.55rem; margin-bottom: 4px; }
+
+    ul, ol {
+      margin: 10px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    li { margin: 6px 0; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      border-top: 1px solid var(--line);
+      padding: 10px;
+      color: var(--muted);
+    }
+
+    th {
+      color: var(--text);
+      font-weight: 650;
+    }
+
+    .status {
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .done { color: var(--good); }
+    .active { color: var(--blue); }
+    .next { color: var(--warn); }
+    .risk { color: var(--bad); }
+
+    .callout {
+      border-left: 4px solid var(--accent);
+      background: rgba(255,180,84,.1);
+      padding: 14px 16px;
+      border-radius: 8px;
+    }
+
+    .roadmap {
+      counter-reset: step;
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px 16px 16px 58px;
+    }
+
+    .step:before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #1b1306;
+      font-weight: 800;
+    }
+
+    .small { font-size: .9rem; }
+
+    @media (max-width: 820px) {
+      main {
+        width: min(100vw - 20px, 1120px);
+        padding-top: 24px;
+      }
+
+      .card,
+      .card.third,
+      .kpi { grid-column: 1 / -1; }
+
+      th,
+      td {
+        display: block;
+        padding: 8px 0;
+      }
+
+      tr {
+        display: block;
+        border-top: 1px solid var(--line);
+        padding: 8px 0;
+      }
+
+      th,
+      td { border: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Product Hardening Brief</h1>
+      <p class="dek">State of the EZ Quiz hardening pass on May 14, 2026. This summarizes the import expansion, generation reliability work, reset and results UX adjustments, provider smoke caveat, and the remaining moves before promotion.</p>
+      <div class="meta">
+        <span class="pill">Branch: <code>codex-complete-explainers-50q-media</code></span>
+        <span class="pill good">Tests passed</span>
+        <span class="pill good">UI check passed</span>
+        <span class="pill good">Docs committed</span>
+        <span class="pill warn">50-question sync still has provider/runtime risk</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="card kpi"><strong>25 MiB</strong><p>Browser-local cap for text-ish source files before extraction and normalization.</p></div>
+      <div class="card kpi"><strong>30k chars</strong><p>Normalized source budget sent toward generation after deterministic extraction.</p></div>
+      <div class="card kpi"><strong>4 MiB</strong><p>Direct binary upload cap for PDF, DOCX, and images through Netlify functions.</p></div>
+      <div class="card kpi"><strong>125 tests</strong><p>Full Jest run passed, plus the local UI check passed after this pass.</p></div>
+    </section>
+
+    <section class="grid">
+      <article class="card wide">
+        <h2>Morning Verdict</h2>
+        <p>EZ Quiz is closer to final form. The app now treats imported material as source first, extracts deterministic text before spending AI tokens, gives larger note-style files room to breathe, and presents the quiz results endpoint with a cleaner finish.</p>
+        <p>The branch is locally verified and committed. The main promotion caveats are operational: normal <code>netlify dev</code> can still be misleading because team-level Netlify AI Gateway values can shadow direct provider keys, and 50-question generation is improved but not guaranteed as a single synchronous request in all live environments.</p>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card third">
+        <h2>Import Model</h2>
+        <p>Support is no longer PDF/image only. Text-like files are extracted locally or deterministically first, then normalized and capped before the model sees them.</p>
+        <ul>
+          <li><code>.txt</code>, <code>.md</code>, <code>.html</code>, <code>.csv</code>, <code>.json</code>, and <code>.rtf</code> are handled as text source.</li>
+          <li><code>.docx</code> is extracted server-side from Word document XML.</li>
+          <li>PDFs and images still use provider-backed extraction when deterministic text is not practical.</li>
+        </ul>
+      </article>
+
+      <article class="card third">
+        <h2>Generation Model</h2>
+        <p>Large quiz requests now use smaller provider calls with explicit failure copy instead of silently hanging. This reduces timeout risk but does not make 50 live questions universally synchronous-safe.</p>
+        <ul>
+          <li>Default large-request batch size is smaller.</li>
+          <li>Under-count and timeout copy is more honest.</li>
+          <li>Async jobs with progress remain the durable path.</li>
+        </ul>
+      </article>
+
+      <article class="card third">
+        <h2>UX Finish</h2>
+        <p>The pass focused on product behavior first, then made the final result screen feel less provisional.</p>
+        <ul>
+          <li>"Start New" became "New Quiz".</li>
+          <li>The landing information panel no longer looks like fake window chrome.</li>
+          <li>Correctness pills now sit in the top-right corner of result cards.</li>
+          <li>The results header has a more deliberate final-stop layout.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card wide">
+        <h2>Workstream Status</h2>
+        <table>
+          <thead>
+            <tr><th>Area</th><th>Status</th><th>What Changed</th><th>Remaining Risk</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Text and document import</td>
+              <td class="status done">Improved</td>
+              <td>Added deterministic extraction for common text formats and DOCX before model calls. Raised local text import capacity for RFPs, syllabi, and long pasted notes.</td>
+              <td>Richer Word features such as comments, footnotes, tables, and embedded images are still out of scope.</td>
+            </tr>
+            <tr>
+              <td>Binary import limits</td>
+              <td class="status active">Constrained</td>
+              <td>Kept direct PDF/image/DOCX uploads under Netlify buffered-function payload limits instead of pretending raw file size is the real budget.</td>
+              <td>Large binary documents need an async/blob upload path before the cap can be raised safely.</td>
+            </tr>
+            <tr>
+              <td>50-question generation</td>
+              <td class="status active">Hardened</td>
+              <td>Reduced provider batch size and improved user-facing timeout/retry copy.</td>
+              <td>A single synchronous 50-question request can still exceed provider or Netlify runtime behavior. Async generation is the right final architecture.</td>
+            </tr>
+            <tr>
+              <td>Topic/source/manual model</td>
+              <td class="status next">Next design step</td>
+              <td>Import paths are clearer and safer, but the product still needs explicit modes for short topics, pasted notes, imported source, and manual quiz lines.</td>
+              <td>Until then, motivated users may still paste large source material into the topic field because it feels like the obvious big input.</td>
+            </tr>
+            <tr>
+              <td>Reset/New Quiz</td>
+              <td class="status active">Renamed</td>
+              <td>The command now reads as "New Quiz" in active quiz flow.</td>
+              <td>Active source inputs should eventually be locked, grayed, or reset-gated so the state model feels intentional.</td>
+            </tr>
+            <tr>
+              <td>Info panel</td>
+              <td class="status active">Less confusing</td>
+              <td>Removed decorative window controls and made the panel purpose clearer.</td>
+              <td>Close and "do not show again" behavior remains a future preference-backed enhancement.</td>
+            </tr>
+            <tr>
+              <td>Results screen</td>
+              <td class="status done">Polished</td>
+              <td>Moved correctness indicators into result card corners and tightened the results header composition.</td>
+              <td>No known blocker from this pass.</td>
+            </tr>
+            <tr>
+              <td>Provider smoke</td>
+              <td class="status active">Path clarified</td>
+              <td>Direct-provider smoke passed from the Dev repo using local <code>.env</code> with <code>netlify dev --offline</code>.</td>
+              <td>Normal <code>netlify dev</code> may pull App-linked project env and Netlify AI Gateway values. Promotion smoke should use the intended runtime path deliberately.</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Limits Answer</h2>
+        <div class="callout">
+          <p><strong>Yes, there still needs to be a limit.</strong> Extracting text first means the model does not pay for raw file bytes, but the app still has browser memory, request payload, parsing time, provider context, abuse, and cost ceilings.</p>
+          <p>That is why text-ish files can be larger locally, while direct binary uploads remain smaller until the product has a blob-backed or async import flow.</p>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Model Answer</h2>
+        <p>Other models remain on the table only if they fit the free-tier constraint. No provider swap was made in this pass because the immediate reliability wins were batching, deterministic extraction, and better runtime clarity.</p>
+        <p>Before adding another provider, the better next test is a clean live smoke through the intended Netlify path with AI Gateway either disabled or intentionally integrated.</p>
+      </article>
+    </section>
+
+    <section>
+      <h2>Recommended Next Move</h2>
+      <div class="roadmap">
+        <article class="step">
+          <h3>Run Intentional Provider Smoke</h3>
+          <p>Use <code>netlify dev --offline</code> for direct-provider smoke, or disable/integrate Netlify AI Gateway before trusting normal <code>netlify dev</code>. Verify generation, lazy explanations, and import in the same runtime path.</p>
+        </article>
+        <article class="step">
+          <h3>Decide On Async Investment</h3>
+          <p>If 50 questions and large binary documents are core product promises, move generation and binary import to async jobs with progress, retry, and resumable state.</p>
+        </article>
+        <article class="step">
+          <h3>Redesign Source Modes</h3>
+          <p>Split the first screen into explicit choices: short topic prompt, pasted notes/source material, imported document source, and manual quiz lines. This is the highest-value UX cleanup still waiting.</p>
+        </article>
+        <article class="step">
+          <h3>Promotion Review</h3>
+          <p>With the branch clean and tests green, promotion readiness now depends on live runtime smoke and a conscious decision about whether synchronous 50-question generation is acceptable for the first release.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Verification</h2>
+        <ul>
+          <li><code>npm test -- --no-cache</code> passed: 25 suites, 125 tests.</li>
+          <li><code>npm run ui:check</code> passed locally.</li>
+          <li>Provider smoke passed through the direct local-env path with <code>netlify dev --offline</code>.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Commits In This Slice</h2>
+        <ul>
+          <li><code>3b728a7</code> - broaden source import and harden generation UX.</li>
+          <li><code>5f629fb</code> - raise text import capacity and refine results.</li>
+          <li>Docs also record the Dev/App/Netlify relationship and the AI Gateway caveat for future agents.</li>
+        </ul>
+        <p class="small">This brief is intentionally written as a wake-up artifact, not as release marketing. It should make the next engineering move obvious.</p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
