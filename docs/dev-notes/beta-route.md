@@ -56,7 +56,7 @@ Add the guard to Netlify Functions that should be beta-only (e.g., MCP, experime
 
 - **Endpoint:** `POST /api/mcp` → proxied to `/.netlify/functions/mcp`.
 - **Opt in:** Visit `/beta` (cookie) or add `x-ezq-beta: 1` header in dev/CI.
-- **Opt out:** `/beta?off=1` clears the cookie and future requests return `403` until re-enabled.
+- **Opt out:** `/beta?off=1` clears the cookie and later requests return `403` until re-enabled.
 
 ## Explain (beta)
 
@@ -65,7 +65,7 @@ Add the guard to Netlify Functions that should be beta-only (e.g., MCP, experime
 
 ## Media Import (beta)
 
-- Media import posts to `/.netlify/functions/ingest-media`. If the function is not deployed or disabled, the UI shows friendly hints (403/404/501).
+- Media import posts to `/.netlify/functions/ingest-media`. The endpoint extracts text from PDFs/images through the configured provider, then the UI uses that source text for quiz generation.
 - Enable via Settings → Beta features or visit `/beta` to set the cookie.
 
 ## Troubleshooting
