@@ -3,8 +3,8 @@
 const { requireBeta } = require('./lib/betaGuard.js');
 
 const BYTES_PER_MIB = 1024 * 1024;
-const MAX_MEDIA_BYTES = 5 * BYTES_PER_MIB;
-const MAX_BODY_BYTES = 8 * BYTES_PER_MIB;
+const MAX_MEDIA_BYTES = 4 * BYTES_PER_MIB;
+const MAX_BODY_BYTES = 6 * BYTES_PER_MIB;
 const MAX_EXTRACTED_TEXT_CHARS = 30000;
 const DEFAULT_LIMIT = 20;
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
@@ -180,7 +180,7 @@ function normalizePayload(payload) {
   if (!data) throw makeMediaError('Missing media data', 'MEDIA_BAD_REQUEST', 400);
   if (!Number.isFinite(size) || size <= 0) throw makeMediaError('Invalid media size', 'MEDIA_BAD_REQUEST', 400);
   if (size > MAX_MEDIA_BYTES) {
-    throw makeMediaError(`File too large. Maximum supported size is 5 MiB.`, 'MEDIA_TOO_LARGE', 413, { maxBytes: MAX_MEDIA_BYTES, size });
+    throw makeMediaError(`File too large for direct upload. Maximum supported size is 4 MiB.`, 'MEDIA_TOO_LARGE', 413, { maxBytes: MAX_MEDIA_BYTES, size });
   }
 
   let buffer;
@@ -191,7 +191,7 @@ function normalizePayload(payload) {
   }
   if (!buffer.length) throw makeMediaError('Invalid base64 media data', 'MEDIA_BAD_REQUEST', 400);
   if (buffer.length > MAX_MEDIA_BYTES) {
-    throw makeMediaError(`Decoded file too large. Maximum supported size is 5 MiB.`, 'MEDIA_TOO_LARGE', 413, { maxBytes: MAX_MEDIA_BYTES, decodedBytes: buffer.length });
+    throw makeMediaError(`Decoded file too large. Maximum supported size is 4 MiB.`, 'MEDIA_TOO_LARGE', 413, { maxBytes: MAX_MEDIA_BYTES, decodedBytes: buffer.length });
   }
 
   const sniffedKind = sniffBufferKind(buffer);

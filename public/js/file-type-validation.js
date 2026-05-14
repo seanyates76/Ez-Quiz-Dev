@@ -41,6 +41,7 @@ const EXTENSION_KIND_MAP = new Map([
 
 function looksLikeText(head) {
   if (!head || !head.length) return false;
+  if (head.length >= 2 && ((head[0] === 0xff && head[1] === 0xfe) || (head[0] === 0xfe && head[1] === 0xff))) return true;
   let suspicious = 0;
   for (const byte of head) {
     if (byte === 0) return false;

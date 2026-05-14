@@ -233,15 +233,16 @@ export function renderResults(){
     }
     const userDetail = buildUserAnswerDetail(q,a);
     const correctDetail = buildCorrectAnswerDetail(q);
+    const statusBadge = `<span class="result-status ${item.isCorrect ? 'is-correct' : 'is-wrong'}">${item.isCorrect ? 'Correct' : 'Incorrect'}</span>`;
     const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)}${isBeta ? ` <button type=\"button\" class=\"chip-btn explain-btn\" data-explain=\"${origIdx}\">Explain</button>` : ''}</div>`;
     const explainer = renderExplanationSlot(origIdx, isBeta);
     if (item.isCorrect) {
-      const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail} <span class=\"chip tag good\">Correct</span></div>`;
-      return `<div class="missed-item is-correct" data-orig="${origIdx}">` + header + line + explainer + `</div>`;
+      const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail}</div>`;
+      return `<div class="missed-item is-correct" data-orig="${origIdx}">` + statusBadge + header + line + explainer + `</div>`;
     } else {
-      const yours = `<div class="user-ans ans-wrong"><strong>Your answer:</strong> ${userDetail} <span class="chip tag bad">Incorrect</span></div>`;
+      const yours = `<div class="user-ans ans-wrong"><strong>Your answer:</strong> ${userDetail}</div>`;
       const corr = `<div><strong>Correct:</strong> ${correctDetail}</div>`;
-      return `<div class="missed-item is-wrong" data-orig="${origIdx}">` + header + yours + corr + explainer + `</div>`;
+      return `<div class="missed-item is-wrong" data-orig="${origIdx}">` + statusBadge + header + yours + corr + explainer + `</div>`;
     }
   }).join('');
   try{ hydrateExplanationSlots(); }catch{}
@@ -515,7 +516,7 @@ function renderMTResult(origIdx, q, a){
     const ok = (u>=0 && u===c);
     const your = u>=0 ? `— <span class="ans-text">${escapeHTML(rightText(u))}</span>` : `— <span class="ans-text">No selection</span>`;
     const corr = c>=0 ? `— <span class="ans-text">${escapeHTML(rightText(c))}</span>` : '';
-    const yourLine = `<div class=\"mt-your\"><span class=\"lbl\">Your answer</span> <span class=\"chip letter ${ok?'good':'bad'}\">${toLetter(u)}</span> ${your}${ok ? ' <span class=\\\"chip tag good\\\">Correct</span>' : ' <span class=\\\"chip tag bad\\\">Incorrect</span>'}</div>`;
+    const yourLine = `<div class=\"mt-your\"><span class=\"lbl\">Your answer</span> <span class=\"chip letter ${ok?'good':'bad'}\">${toLetter(u)}</span> ${your}</div>`;
     const corrLine = ok ? '' : `<div class=\"mt-correct\"><span class=\"lbl\">Correct answer</span> <span class=\"chip letter\">${toLetter(c)}</span> ${corr}</div>`;
     return `
       <div class="mt-row ${ok?'is-correct':'is-wrong'}">
@@ -526,7 +527,9 @@ function renderMTResult(origIdx, q, a){
   }).join('');
   const okAll = Array.isArray(a)&&a.length&&a.every((ri,li)=>ri===correctMap[li]);
   const explainBtn = isBeta ? ` <button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>` : '';
+  const statusBadge = `<span class="result-status ${okAll?'is-correct':'is-wrong'}">${okAll?'Correct':'Incorrect'}</span>`;
   return `<div class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
+    ${statusBadge}
     <div class="res-head"><strong>${(origIdx+1)}.</strong> ${escapeHTML(q.text)}${explainBtn}</div>
     <div class="mt-result">${rows}</div>
     ${renderExplanationSlot(origIdx, isBeta)}

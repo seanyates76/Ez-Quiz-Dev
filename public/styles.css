@@ -2543,27 +2543,39 @@ details.advanced>summary {
 /* Results */
 .results-header-row {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin: 0 0 var(--sp-4);
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--field-border);
   flex-wrap: wrap
 }
 
 .results-header-left {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
   flex: 1 1 280px;
   min-width: 0;
   flex-wrap: wrap
 }
 
+#resultsTitle {
+  margin: 0;
+  font-size: clamp(1.55rem, 3vw, 2.1rem);
+  line-height: 1.05;
+}
+
 .results-filter {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   flex: 0 1 auto;
-  min-width: 0
+  min-width: 0;
+  padding: 4px;
+  border: 1px solid var(--field-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--panel-2) 76%, transparent);
 }
 
 .chip-btn {
@@ -2604,7 +2616,8 @@ details.advanced>summary {
 }
 
 .results-missed .missed-item {
-  padding: 14px;
+  position: relative;
+  padding: 16px 112px 16px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
   background: var(--panel-2);
@@ -2612,6 +2625,48 @@ details.advanced>summary {
   overflow-wrap: anywhere;
   word-break: break-word;
   min-width: 0;
+}
+
+.result-status {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  max-width: 96px;
+  min-height: 28px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--field-border);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.result-status.is-correct {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 13%, var(--panel) 87%);
+  border-color: color-mix(in srgb, var(--success) 42%, var(--field-border));
+}
+
+.result-status.is-wrong {
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, var(--panel) 88%);
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--field-border));
+}
+
+@media (max-width: 560px) {
+  .results-missed .missed-item {
+    padding: 52px 14px 14px;
+  }
+
+  .result-status {
+    left: 14px;
+    right: auto;
+  }
 }
 
 .results-missed .missed-item.is-correct {
@@ -4240,7 +4295,8 @@ body[data-beta] .affix-btn.beta-only,
 .res-head {
   min-width: 0;
   overflow-wrap: anywhere;
-  word-break: break-word
+  word-break: break-word;
+  padding-right: 4px;
 }
 
 .results-missed .missed-item .mt-left,

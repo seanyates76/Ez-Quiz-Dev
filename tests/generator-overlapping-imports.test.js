@@ -114,6 +114,10 @@ describe('generator media import overlap regression', () => {
         this.file = file;
       }
 
+      readAsArrayBuffer(file) {
+        this.file = file;
+      }
+
       abort() {
         this.aborted = true;
       }
@@ -175,7 +179,7 @@ describe('generator media import overlap regression', () => {
     const validFile = new File(['good'], 'good.pdf', { type: 'application/pdf' });
 
     validateMediaImportSize
-      .mockReturnValueOnce({ ok: false, error: 'File too large. Maximum supported size is 5 MiB.' })
+      .mockReturnValueOnce({ ok: false, error: 'File too large for direct upload. Maximum supported size is 4 MiB.' })
       .mockReturnValue({ ok: true });
 
     Object.defineProperty(importInput, 'files', {
@@ -186,7 +190,7 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(hint.hidden).toBe(false);
-    expect(hint.textContent).toBe('File too large. Maximum supported size is 5 MiB.');
+    expect(hint.textContent).toBe('File too large for direct upload. Maximum supported size is 4 MiB.');
 
     Object.defineProperty(importInput, 'files', {
       configurable: true,
@@ -218,6 +222,31 @@ describe('generator media import overlap regression', () => {
     expect(state.media.sourceText).toBe('GOOD IMPORT TEXT');
     expect(parseEditorInput).not.toHaveBeenCalled();
     expect(validateMediaImportSize).toHaveBeenCalledTimes(2);
+  });
+
+  test('imports text files locally without calling media endpoint', async () => {
+    const importInput = document.getElementById('importFile');
+    const hint = document.getElementById('regenHint');
+    const textFile = new File(['Photosynthesis\n\nPlants use light.'], 'notes.txt', { type: 'text/plain' });
+
+    sniffFileKind.mockResolvedValueOnce('txt');
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [textFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(readers).toHaveLength(1);
+    readers[0].result = new TextEncoder().encode('Photosynthesis\n\nPlants use light.').buffer;
+    readers[0].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(0);
+    expect(hint.textContent).toBe('Imported notes.txt. Press Generate to build the quiz.');
+    expect(state.media.sourceText).toBe('Photosynthesis\nPlants use light.');
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('TXT ready: notes.txt');
   });
 
   test('keeps the newest overlapping import result and only re-enables controls after it finishes', async () => {

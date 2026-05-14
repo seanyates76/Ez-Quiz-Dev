@@ -91,6 +91,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     rtf: 'application/rtf',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   };
+  const LOCAL_TEXT_KINDS = new Set(['txt', 'md', 'html', 'csv', 'json', 'rtf']);
+  const MAX_IMPORTED_SOURCE_CHARS = 30000;
   const toolbar = document.querySelector('.gen-toolbar');
   const topicAffix = document.querySelector('.topic-affix');
   const editor = $('editor');
@@ -346,6 +348,58 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }
     return opts;
   }
+  function cleanLocalSourceText(raw){
+    return String(raw || '')
+      .replace(/^\uFEFF/, '')
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      .map((line) => line.trim().replace(/\s+/g, ' '))
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, MAX_IMPORTED_SOURCE_CHARS);
+  }
+  function decodeHtmlEntities(text){
+    return String(text || '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&#(\d+);/g, (_, n) => {
+        const code = parseInt(n, 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : _;
+      });
+  }
+  function stripHtml(raw){
+    return decodeHtmlEntities(String(raw || '')
+      .replace(/<script[\s\S]*?<\/script>/gi, '\n')
+      .replace(/<style[\s\S]*?<\/style>/gi, '\n')
+      .replace(/<\/(p|div|section|article|li|ul|ol|h[1-6]|tr|table|br)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' '));
+  }
+  function stripRtf(raw){
+    return String(raw || '')
+      .replace(/\\par[d]?/g, '\n')
+      .replace(/\\'[0-9a-fA-F]{2}/g, ' ')
+      .replace(/\\[a-zA-Z]+-?\d* ?/g, ' ')
+      .replace(/[{}]/g, ' ');
+  }
+  function decodeArrayBuffer(buffer){
+    const bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+    if(bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return new TextDecoder('utf-16le').decode(bytes.slice(2));
+    }
+    if(bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+      const swapped = new Uint8Array(Math.max(0, bytes.length - 2));
+      for(let i = 2; i + 1 < bytes.length; i += 2){
+        swapped[i - 2] = bytes[i + 1];
+        swapped[i - 1] = bytes[i];
+      }
+      return new TextDecoder('utf-16le').decode(swapped);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  }
   function formatGenerationError(err){
     const msg = String(err && err.message || err || 'Error');
     if(err && err.name === 'GenerationTimeout') return msg;
@@ -435,6 +489,50 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       reader.readAsDataURL(file);
     });
   }
+  function toArrayBuffer(file, { signal } = {}){
+    return new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      let settled = false;
+      const cleanup = ()=>{
+        settled = true;
+        reader.onload = null;
+        reader.onerror = null;
+        if(signal){
+          try{ signal.removeEventListener('abort', abort); }catch{}
+        }
+      };
+      const abort = ()=>{
+        if(settled) return;
+        cleanup();
+        try{ reader.abort(); }catch{}
+        reject(new DOMException('Aborted','AbortError'));
+      };
+      if(signal){
+        if(signal.aborted){ return abort(); }
+        signal.addEventListener('abort', abort, { once: true });
+      }
+      reader.onload = ()=>{
+        if(settled) return;
+        cleanup();
+        resolve(reader.result || new ArrayBuffer(0));
+      };
+      reader.onerror = ()=>{
+        if(settled) return;
+        cleanup();
+        reject(reader.error||new Error('Read failed'));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+  async function extractLocalSource(file, kind, { signal } = {}){
+    const buffer = await toArrayBuffer(file, { signal });
+    let raw = decodeArrayBuffer(buffer);
+    if(kind === 'html') raw = stripHtml(raw);
+    else if(kind === 'rtf') raw = stripRtf(raw);
+    const text = cleanLocalSourceText(raw);
+    if(!text) throw new Error('No readable text found in that file.');
+    return text;
+  }
   async function handleImportFile(file){
     if(!file) return;
     const { token, signal } = importCtl.start();
@@ -446,15 +544,6 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         try { announce('Importing file…', 'polite'); } catch {}
       }
 
-      const sizeCheck = validateMediaImportSize(file);
-      if(!sizeCheck.ok){
-        if(importCtl.isCurrent(token)) {
-          setHint(sizeCheck.error);
-          try { announce(`Import failed: ${sizeCheck.error}`, 'assertive'); } catch {}
-        }
-        return;
-      }
-
       const kind = await sniffFileKind(file);
       if(!importCtl.isCurrent(token)) return;
       if(!isSupportedImportKind(kind)){
@@ -464,11 +553,37 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         }
         return;
       }
+      const sizeCheck = validateMediaImportSize(file, { kind });
+      if(!sizeCheck.ok){
+        if(importCtl.isCurrent(token)) {
+          setHint(sizeCheck.error);
+          try { announce(`Import failed: ${sizeCheck.error}`, 'assertive'); } catch {}
+        }
+        return;
+      }
       if(hasImportMetadataMismatch(file, kind)){
         if(importCtl.isCurrent(token)) {
           setHint('File type does not match its contents. Choose a real source file.');
           try { announce('Import failed: File type does not match contents.', 'assertive'); } catch {}
         }
+        return;
+      }
+
+      if(LOCAL_TEXT_KINDS.has(kind)){
+        setHint('Reading source text…');
+        const text = await extractLocalSource(file, kind, { signal });
+        if(!importCtl.isCurrent(token)) return;
+        setImportedSource({
+          text,
+          name: file.name || 'Imported source',
+          kind,
+          size: file.size || 0,
+          charCount: text.length,
+        });
+        setPrimaryAction('generate');
+        updatePrimaryHint();
+        setHint(`Imported ${file.name || 'source text'}. Press Generate to build the quiz.`);
+        try { announce('Imported source ready. Press Generate to build the quiz.', 'polite'); } catch {}
         return;
       }
 

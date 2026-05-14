@@ -20,7 +20,7 @@
 
 ## Serverless Guardrails
 - The function accepts base64 PDF/image payloads only.
-- Guardrails: beta gate, origin checks, 5 MiB media cap, 8 MiB body cap, per-IP rate limit, provider timeout, and typed error codes.
+- Guardrails: beta gate, origin checks, direct-upload cap, extracted-text cap, per-IP rate limit, provider timeout, and typed error codes.
 - Gemini supports PDF/image extraction. OpenAI supports image extraction in this build.
 
 ## Acceptance Criteria

@@ -91,6 +91,12 @@ describe('file type validation', () => {
     await expect(sniffFileKind(blob)).resolves.toBe('txt');
   });
 
+  test('accepts utf-16 text files when metadata identifies text', async () => {
+    const blob = new NodeBlob([Buffer.from([0xff, 0xfe, 0x48, 0x00, 0x69, 0x00])], { type: 'text/plain' });
+    Object.defineProperty(blob, 'name', { value: 'notes.txt', configurable: true });
+    await expect(sniffFileKind(blob)).resolves.toBe('txt');
+  });
+
   test('flags MIME mismatches against sniffed file bytes', () => {
     const blob = makeBlob('89504e470d0a1a0a00', { type: 'application/pdf', name: 'image.png' });
     expect(hasImportMetadataMismatch(blob, 'png')).toBe(true);
