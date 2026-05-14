@@ -208,7 +208,7 @@ exports.handler = async (event) => {
     if (msg.includes('Timeout')) return reply(504, { error: 'Explanation generation timed out', code: 'EXPLAIN_TIMEOUT' }, responseOrigin);
     if (msg.includes('out of range') || msg.includes('Invalid') || msg.includes('Failed to parse') || msg.includes('attemptedAnswers')) return badRequest(msg, responseOrigin);
     if (err && err.code && status >= 400 && status < 600) {
-      const body = { error: msg, code: err.code };
+      const body = { error: status >= 500 && err.code !== 'EXPLAIN_PROVIDER_NOT_CONFIGURED' ? 'Explanation provider failed' : msg, code: err.code };
       if (err.details !== undefined && status < 500) body.details = err.details;
       return reply(status, body, responseOrigin);
     }

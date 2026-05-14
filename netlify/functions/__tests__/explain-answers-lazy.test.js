@@ -99,6 +99,20 @@ describe('explain-answers-lazy endpoint', () => {
     });
   });
 
+  test('hides raw provider auth failures from the browser response', async () => {
+    mockExplainQuestions.mockRejectedValue(Object.assign(new Error('API_KEY_INVALID from provider'), {
+      code: 'EXPLAIN_PROVIDER_ERROR',
+      status: 500,
+    }));
+    const handler = loadHandler();
+    const res = await handler(event());
+    expect(res.statusCode).toBe(500);
+    expect(json(res)).toEqual({
+      error: 'Explanation provider failed',
+      code: 'EXPLAIN_PROVIDER_ERROR',
+    });
+  });
+
   test('does not allow public payload to select provider or model', async () => {
     mockExplainQuestions.mockResolvedValue({ 0: { explanation: 'ok' } });
     const handler = loadHandler();
