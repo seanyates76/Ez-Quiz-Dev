@@ -66,6 +66,7 @@ Tips:
 - local dev normally serves on `http://localhost:8888`
 - `Ez-Quiz-Dev` is the active development repo, but the linked Netlify project/environment is tied to `Ez-Quiz-App`
 - normal `netlify dev` may inject App-linked project env while running Dev-repo code; this can make provider smoke results misleading
+- if Netlify AI Gateway is enabled, normal `netlify dev` can also inject internal `GEMINI_API_KEY`/`OPENAI_API_KEY` values that override local `.env`; these are not direct provider keys for the current SDK calls
 - for provider smoke from this repo, prefer local `.env` plus offline Netlify dev:
   ```bash
   set -a; source .env; set +a
@@ -132,6 +133,7 @@ Key redirects:
 Promotion note:
 - do not treat a normal `netlify dev` provider failure as proof that Dev-repo code is broken until you confirm which Netlify env supplied the key
 - if local `.env` plus `netlify dev --offline` passes but normal `netlify dev` fails, check the App-linked Netlify project env before changing code
+- if normal `netlify dev` shows a ~400-char `GEMINI_API_KEY` and matching `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` hashes, suspect Netlify AI Gateway injection rather than repo code or `.env` syntax
 - before promoting provider-backed work, make the App-linked Netlify env match the known-good local provider keys, then rerun a normal Netlify/App smoke or deploy smoke
 
 ## Mirror workflow model
