@@ -64,6 +64,14 @@ netlify dev
 Tips:
 - use `AI_PROVIDER=echo` for local work when you do not want to depend on provider keys
 - local dev normally serves on `http://localhost:8888`
+- `Ez-Quiz-Dev` is the active development repo, but the linked Netlify project/environment is tied to `Ez-Quiz-App`
+- normal `netlify dev` may inject App-linked project env while running Dev-repo code; this can make provider smoke results misleading
+- for provider smoke from this repo, prefer local `.env` plus offline Netlify dev:
+  ```bash
+  set -a; source .env; set +a
+  netlify dev --offline --port 8888
+  ```
+- known provider-smoke path: Gemini generation, lazy explanations, and media import passed from `Ez-Quiz-Dev` using local `.env` with `netlify dev --offline`
 
 ### Static-only preview
 ```bash
@@ -120,6 +128,10 @@ Key redirects:
 - `/api/generate` → `/.netlify/functions/generate-quiz`
 - `/api/health` → `/.netlify/functions/health`
 - `/api/mcp` → `/.netlify/functions/mcp`
+
+Promotion note:
+- do not treat a normal `netlify dev` provider failure as proof that Dev-repo code is broken until you confirm which Netlify env supplied the key
+- if local `.env` plus `netlify dev --offline` passes but normal `netlify dev` fails, check the App-linked Netlify project env before changing code
 
 ## Mirror workflow model
 
