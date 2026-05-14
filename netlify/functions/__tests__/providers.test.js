@@ -1,6 +1,7 @@
 'use strict';
 
 const {
+  buildPrompt,
   buildStructuredPrompt,
   callProvider,
   generateLines,
@@ -16,10 +17,19 @@ describe('providers helpers', () => {
     expect(out).toMatch(/"type": "MC" \| "TF" \| "YN" \| "MT"/);
   });
 
-  test('callProvider echo returns stub text', async () => {
+  test('buildPrompt grounds generated questions in source material when provided', () => {
+    const out = buildPrompt('Lecture Notes', 4, ['MC'], 'medium', [], 'Term A means alpha.\nTerm B means beta.');
+    expect(out).toMatch(/Task: Produce a quiz from the source material/);
+    expect(out).toMatch(/SOURCE MATERIAL START/);
+    expect(out).toMatch(/Term A means alpha/);
+    expect(out).toMatch(/Base every question and answer on this source material/);
+    expect(out).toMatch(/EXACTLY 4 quiz lines/);
+  });
+
+  test('callProvider echo returns deterministic text', async () => {
     const { text, provider, model } = await callProvider({ provider: 'echo', topic: 'Biology', count: 3, env: {} });
     expect(provider).toBe('echo');
-    expect(model).toBe('stub');
+    expect(model).toBe('echo');
     expect(text.split('\n')).toHaveLength(3);
   });
 

@@ -61,7 +61,15 @@ describe('clampCount', () => {
   });
 
   test('getMaxQuestions falls back to default when window absent', () => {
-    delete global.window;
-    expect(getMaxQuestions()).toBe(30);
+    const savedWindow = global.window;
+    const savedGlobalEzq = global.__EZQ__;
+    global.window = undefined;
+    global.__EZQ__ = undefined;
+    try {
+      expect(getMaxQuestions()).toBe(50);
+    } finally {
+      global.window = savedWindow;
+      global.__EZQ__ = savedGlobalEzq;
+    }
   });
 });

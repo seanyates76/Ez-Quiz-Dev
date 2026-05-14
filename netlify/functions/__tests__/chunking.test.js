@@ -41,7 +41,7 @@ describe('generateInBatches', () => {
     expect(normalizeLegacyLines).toHaveBeenCalledTimes(2);
     expect(result.title).toBe('First Title');
     expect(result.provider).toBe('echo');
-    expect(result.model).toBe('stub');
+    expect(result.model).toBe('echo');
 
     const lines = result.lines.split('\n');
     expect(lines).toHaveLength(4);
@@ -87,7 +87,7 @@ describe('generateInBatches', () => {
     expect(normalizeLegacyLines).toHaveBeenCalledTimes(3);
     expect(result.title).toBe('Sparse Batch');
     expect(result.provider).toBe('echo');
-    expect(result.model).toBe('stub');
+    expect(result.model).toBe('echo');
 
     const lines = result.lines.split('\n');
     expect(lines).toHaveLength(2);

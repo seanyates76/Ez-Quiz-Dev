@@ -2,8 +2,18 @@
 
 const { normalizeLegacyLines } = require('./normalizer.js');
 
+function cleanSourceMaterial(sourceText){
+  return String(sourceText || '')
+    .replace(/\r\n?/g, '\n')
+    .split('\n')
+    .map((line) => line.trim().replace(/\s+/g, ' '))
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 24000);
+}
+
 // Utility: build strict prompt compatible with front-end parser
-function buildPrompt(topic, count, types, difficulty){
+function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
   const allowLine = `Allowed question types: ${allowed.join(', ')} (use only these).`;
   const diff = (difficulty && String(difficulty).toLowerCase()) || '';
@@ -11,10 +21,24 @@ function buildPrompt(topic, count, types, difficulty){
   const diffLine = diff
     ? `Difficulty guidance: scale is Very Easy < Easy < Medium < Hard < Expert. Target level: ${prettyDiff}. Match question complexity, vocabulary, and expected knowledge to this level.`
     : '';
+  const avoid = Array.isArray(avoidStems) && avoidStems.length
+    ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
+    : '';
+  const source = cleanSourceMaterial(sourceText);
+  const sourceBlock = source
+    ? [
+        `Source material is provided below. Base every question and answer on this source material; do not invent facts outside it.`,
+        `SOURCE MATERIAL START`,
+        source,
+        `SOURCE MATERIAL END`,
+      ].join('\n')
+    : '';
   return [
-    `Task: Produce a quiz about ${topic}.`,
+    source ? `Task: Produce a quiz from the source material. Topic label: ${topic}.` : `Task: Produce a quiz about ${topic}.`,
+    sourceBlock,
     allowLine,
     diffLine,
+    avoid,
     `Output format:`,
     `1) First line must be: TITLE: <Professional Title>`,
     `   - Use Title Case, depluralize the last word if plural (e.g., "Histories" -> "History", "Ports" -> "Port").`,
@@ -31,18 +55,28 @@ function buildPrompt(topic, count, types, difficulty){
     `- Use only allowed types: ${allowed.join(', ')}.`,
     `- MC correct field may be single (A) or multiple (A,C).`,
     `- No blank lines.`,
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
-function buildStructuredPrompt(topic, count, types, difficulty){
+function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
   const diff = (difficulty && String(difficulty).toLowerCase()) || '';
   const prettyDiff = diff ? diff.split(/[-_\s]+/).map(w=> w ? w.charAt(0).toUpperCase()+w.slice(1) : '').join(' ') : '';
   const diffLine = diff
     ? `Match difficulty to ${prettyDiff} on a scale of Very Easy < Easy < Medium < Hard < Expert.`
     : '';
+  const source = cleanSourceMaterial(sourceText);
+  const sourceBlock = source
+    ? [
+        `Use only the source material below for factual content.`,
+        `SOURCE MATERIAL START`,
+        source,
+        `SOURCE MATERIAL END`,
+      ].join('\n')
+    : '';
   return [
-    `You are generating a structured quiz about ${topic}.`,
+    source ? `You are generating a structured quiz from source material. Topic label: ${topic}.` : `You are generating a structured quiz about ${topic}.`,
+    sourceBlock,
     diffLine,
     `Allowed question types: ${allowed.join(', ')}. Use only these codes.`,
     `Respond with valid minified JSON only. Do not include markdown fences or commentary.`,
@@ -89,19 +123,25 @@ function stemKeyFromLine(line){
     .toLowerCase();
 }
 
-async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt }){
+function outputTokenBudget(count, kind = 'legacy'){
+  const n = Math.max(1, Math.min(50, parseInt(count || 10, 10) || 10));
+  const perQuestion = kind === 'structured' ? 120 : 90;
+  return Math.max(1200, Math.min(6000, 500 + (n * perQuestion)));
+}
+
+async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024 }){
   if(!apiKey) throw new Error('Missing GEMINI_API_KEY');
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(apiKey);
   const m = genAI.getGenerativeModel({ model });
   const result = await m.generateContent({
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens: 1024 },
+    generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens },
   });
   return (result?.response?.text?.() || '').trim();
 }
 
-async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt }){
+async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800 }){
   if(!apiKey) throw new Error('Missing OPENAI_API_KEY');
   const resp = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -116,7 +156,7 @@ async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt }){
         { role: 'user', content: prompt },
       ],
       temperature: 0.6,
-      max_tokens: 800,
+      max_tokens: maxTokens,
     }),
   });
   if(!resp.ok){
@@ -182,26 +222,26 @@ function echoGenerate({ topic, count, types, kind }){
   return out.join('\n');
 }
 
-async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy' }){
+async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText }){
   const selected = (provider || (env.AI_PROVIDER || 'gemini')).toLowerCase();
   const normalizedCount = Math.max(1, Math.min(50, parseInt(count || 10, 10)));
-  const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty);
+  const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty, undefined, sourceText);
   // [quiz-v2: hook] provider call surface — swap prompt/response handling when structured default graduates.
 
   try {
     if (selected === 'gemini') {
       const resolvedModel = model || env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025';
-      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt });
+      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind) });
       return { provider: 'gemini', model: resolvedModel, text };
     }
     if (selected === 'openai') {
       const resolvedModel = model || env.OPENAI_MODEL || 'gpt-4o-mini';
-      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt });
+      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind) });
       return { provider: 'openai', model: resolvedModel, text };
     }
     if (selected === 'echo') {
       const text = echoGenerate({ topic, count: normalizedCount, types, difficulty, kind });
-      return { provider: 'echo', model: 'stub', text };
+      return { provider: 'echo', model: 'echo', text };
     }
     throw new Error(`Unknown provider: ${provider}`);
   } catch (err) {
@@ -212,15 +252,15 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
   }
 }
 
-async function generateLines({ provider, model, topic, count, types, difficulty, env }){
+async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText }){
   const n = Math.max(1, Math.min(50, parseInt(count||10,10)));
-  const prompt = buildPrompt(topic, n, types, difficulty);
-  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy' });
+  const prompt = buildPrompt(topic, n, types, difficulty, avoidStems, sourceText);
+  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText });
   const { title, lines } = normalizeLegacyLines(text, n);
   return { provider: usedProvider, model: usedModel, title, lines };
 }
 
-async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses }){
+async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText }){
   const targetRaw = count == null ? 10 : count;
   let target = parseInt(targetRaw, 10);
   if(!Number.isFinite(target)) target = 10;
@@ -245,7 +285,7 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   for(let attempt = 0; attempt < passes && collected.length < target; attempt++){
     const remaining = target - collected.length;
     const ask = Math.min(50, Math.max(batch, remaining));
-    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env });
+    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: Array.from(seen), sourceText });
 
     if(!resolvedTitle && title) resolvedTitle = title;
     if(usedProvider) resolvedProvider = usedProvider;
@@ -269,4 +309,4 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   };
 }
 
-module.exports = { generateLines, generateInBatches, callProvider, buildStructuredPrompt };
+module.exports = { generateLines, generateInBatches, callProvider, buildPrompt, buildStructuredPrompt, cleanSourceMaterial };
