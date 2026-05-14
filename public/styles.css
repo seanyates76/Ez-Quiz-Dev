@@ -1056,23 +1056,16 @@ textarea:focus,
   box-shadow: var(--shadow-card);
 }
 
-.preview-bar {
+.preview-label {
   display: flex;
-  gap: 6px;
   align-items: center;
-  height: 16px;
+  min-height: 18px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
-
-.preview-bar span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--muted);
-}
-
-.preview-bar span:nth-child(1) { background: #ffb454; }
-.preview-bar span:nth-child(2) { background: #44d08a; }
-.preview-bar span:nth-child(3) { background: #82b7ff; }
 
 .preview-question {
   display: grid;

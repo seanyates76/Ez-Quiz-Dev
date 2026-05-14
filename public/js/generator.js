@@ -83,6 +83,13 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     png: 'image/png',
     jpeg: 'image/jpeg',
     gif: 'image/gif',
+    txt: 'text/plain',
+    md: 'text/markdown',
+    html: 'text/html',
+    csv: 'text/csv',
+    json: 'application/json',
+    rtf: 'application/rtf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   };
   const toolbar = document.querySelector('.gen-toolbar');
   const topicAffix = document.querySelector('.topic-affix');
@@ -339,6 +346,20 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }
     return opts;
   }
+  function formatGenerationError(err){
+    const msg = String(err && err.message || err || 'Error');
+    if(err && err.name === 'GenerationTimeout') return msg;
+    try {
+      const parsed = JSON.parse(msg);
+      const status = parsed.status;
+      const body = parsed.body;
+      if(status === 429 || /quota|rate limit/i.test(JSON.stringify(body))) return 'Rate limit hit. Please wait ~30s and try again.';
+      if(status === 504) return 'Generation timed out. Try 20-25 questions, retry, or import a smaller source.';
+      if(typeof body === 'object' && body && body.error) return body.error;
+    } catch {}
+    if(/abort/i.test(msg)) return 'Generation timed out locally. Try fewer questions or retry.';
+    return msg;
+  }
   function withMediaSource(snapshot){
     const media = ensureMediaState();
     return {
@@ -350,7 +371,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   // Improve accessible label on import button
   try {
     if (importBtn) {
-      const improvedLabel = 'Attach PDF/Image to populate quiz editor (beta)';
+      const improvedLabel = 'Attach notes, documents, PDFs, or images (beta)';
       importBtn.setAttribute('title', improvedLabel);
       importBtn.setAttribute('aria-label', improvedLabel);
     }
@@ -438,14 +459,14 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       if(!importCtl.isCurrent(token)) return;
       if(!isSupportedImportKind(kind)){
         if(importCtl.isCurrent(token)) {
-          setHint('Unsupported file. Choose a PDF or image.');
+          setHint('Unsupported file. Choose text, Markdown, HTML, CSV, JSON, RTF, DOCX, PDF, or an image.');
           try { announce('Import failed: Unsupported file.', 'assertive'); } catch {}
         }
         return;
       }
       if(hasImportMetadataMismatch(file, kind)){
         if(importCtl.isCurrent(token)) {
-          setHint('File type does not match its contents. Choose a real PDF or image.');
+          setHint('File type does not match its contents. Choose a real source file.');
           try { announce('Import failed: File type does not match contents.', 'assertive'); } catch {}
         }
         return;
@@ -623,7 +644,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const m = mode || computePrimaryMode();
     ui.primaryMode = m;
     const label = (m === 'regenerate') ? 'Regenerate'
-                : (m === 'start-new') ? 'Start New'
+                : (m === 'start-new') ? 'New Quiz'
                 : (m === 'generate') ? 'Generate'
                 : 'Start';
     const dataMode = (m === 'regenerate') ? 'generate'
@@ -671,7 +692,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
           hint.hidden = false; return;
         }
         if(mode === 'start-new'){
-          hint.textContent = 'Changes detected. Start New will generate a new quiz and begin.';
+          hint.textContent = 'Changes detected. New Quiz will generate a fresh quiz and begin.';
           hint.hidden = false; return;
         }
       }
@@ -817,13 +838,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         setPrimaryAction('start');
         if (S.quiz.questions && S.quiz.questions.length){ syncSettingsFromUI(); beginQuiz(); }
       }catch(err){
-        const msg = String(err && err.message || err || 'Error'); let pretty = msg;
-        try { const parsed = JSON.parse(msg); const status = parsed.status; const body = parsed.body; if(status === 429 || /quota|rate limit/i.test(JSON.stringify(body))){ pretty = 'Rate limit hit. Please wait ~30s and try again.'; } else if (typeof body === 'object' && body && body.error){ pretty = body.error; } } catch {}
+        const pretty = formatGenerationError(err);
         statusBox && (statusBox.textContent = `Generation failed: ${pretty}`);
       }finally{ generateBtn.disabled = false; hideVeil('Done'); }
       return;
     }
-    // In Generate/Regenerate/Start New, (re)generate fresh content first
+    // In Generate/Regenerate/New Quiz, (re)generate fresh content first
     if(mode==='generate' || mode==='start-new'){
       setEditorText('');
     }
@@ -853,8 +873,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       }
       setPrimaryAction('start');
     }catch(err){
-      const msg = String(err && err.message || err || 'Error'); let pretty = msg;
-      try { const parsed = JSON.parse(msg); const status = parsed.status; const body = parsed.body; if(status === 429 || /quota|rate limit/i.test(JSON.stringify(body))){ pretty = 'Rate limit hit. Please wait ~30s and try again.'; } else if (typeof body === 'object' && body && body.error){ pretty = body.error; } } catch {}
+      const pretty = formatGenerationError(err);
       statusBox && (statusBox.textContent = `Generation failed: ${pretty}`);
     }finally{ generateBtn.disabled = false; hideVeil('Done'); }
   });

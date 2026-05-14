@@ -88,4 +88,39 @@ describe('ingest-media endpoint', () => {
     expect(res.statusCode).toBe(415);
     expect(json(res)).toMatchObject({ code: 'MEDIA_UNSUPPORTED_TYPE' });
   });
+
+  test('extracts plain text deterministically without provider usage', async () => {
+    const { handler } = require('../ingest-media.js');
+    const buf = Buffer.from('Heading\n\n First   fact.\nSecond fact.');
+    const res = await handler(event(mediaPayload(buf, {
+      name: 'notes.txt',
+      type: 'text/plain',
+      kind: 'txt',
+    })));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.text).toBe('Heading\nFirst fact.\nSecond fact.');
+    expect(body.metadata).toMatchObject({
+      kind: 'txt',
+      provider: 'deterministic',
+      model: 'txt',
+    });
+  });
+
+  test('extracts html deterministically as readable text', async () => {
+    const { handler } = require('../ingest-media.js');
+    const buf = Buffer.from('<h1>Cell Biology</h1><p>Mitochondria make ATP &amp; support cells.</p>');
+    const res = await handler(event(mediaPayload(buf, {
+      name: 'notes.html',
+      type: 'text/html',
+      kind: 'html',
+    })));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.text).toContain('Cell Biology');
+    expect(body.text).toContain('Mitochondria make ATP & support cells.');
+    expect(body.metadata.provider).toBe('deterministic');
+  });
 });

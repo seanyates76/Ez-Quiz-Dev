@@ -5,6 +5,7 @@ const {
   buildStructuredPrompt,
   callProvider,
   generateLines,
+  generateInBatches,
 } = require('../lib/providers.js');
 
 describe('providers helpers', () => {
@@ -39,5 +40,11 @@ describe('providers helpers', () => {
     expect(typeof title).toBe('string');
     const l = String(lines).trim().split('\n');
     expect(l).toHaveLength(5);
+  });
+
+  test('generateInBatches echo can fill a 50 question request', async () => {
+    const { lines, provider } = await generateInBatches({ provider: 'echo', topic: 'History', count: 50, env: {} });
+    expect(provider).toBe('echo');
+    expect(String(lines).trim().split('\n')).toHaveLength(50);
   });
 });

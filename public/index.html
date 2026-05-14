@@ -38,24 +38,22 @@
       <div class="landing-copy">
         <p class="landing-kicker">Generate, import, explain</p>
         <h1 id="landingTitle">EZ Quiz</h1>
-        <p class="landing-dek">Create quizzes from a topic, a PDF or image source, or your own quiz lines. Results include on-demand explanations for review.</p>
+        <p class="landing-dek">Create quizzes from a short topic, pasted quiz lines, or imported notes and documents. Results include on-demand explanations for review.</p>
         <div class="landing-actions" aria-label="Primary setup actions">
           <button class="btn primary" type="button" data-focus-target="topicInput">Generate from topic</button>
-          <button class="btn btn-outline beta-only" type="button" data-focus-target="importBtn">Import media</button>
+          <button class="btn btn-outline beta-only" type="button" data-focus-target="importBtn">Import notes</button>
           <button class="btn btn-ghost" type="button" data-focus-target="editor">Paste quiz lines</button>
         </div>
       </div>
       <div class="landing-preview" aria-hidden="true">
-        <div class="preview-bar">
-          <span></span><span></span><span></span>
-        </div>
+        <div class="preview-label">Ways to build a quiz</div>
         <div class="preview-question">
           <strong>50-question generation</strong>
           <span>Batch-backed output with explicit count checks.</span>
         </div>
         <div class="preview-question is-accent">
-          <strong>PDF/Image import</strong>
-          <span>Extracted source text feeds Generate directly.</span>
+          <strong>Source import</strong>
+          <span>Text, Markdown, HTML, DOCX, PDF, and images feed Generate directly.</span>
         </div>
         <div class="preview-question">
           <strong>Explain in Results</strong>
@@ -76,16 +74,16 @@
       <div class="gen-toolbar" role="group" aria-label="Generate toolbar">
         <div class="toolbar-left">
         <label class="toolbar-field">
-          <span class="toolbar-label">Topic</span>
+          <span class="toolbar-label">Topic or title</span>
           <div class="input-affix topic-affix">
-            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="e.g. Animals" />
-            <button id="importBtn" class="affix-btn beta-only" type="button" title="Attach PDF/Image (beta)" aria-label="Attach PDF or Image (beta)">
+            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="Short topic, e.g. Biology exam review" />
+            <button id="importBtn" class="affix-btn beta-only" type="button" title="Attach notes or documents (beta)" aria-label="Attach notes or documents (beta)">
               <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                 <!-- Material Symbols Rounded “attach_file” icon (beta only) -->
                 <path fill="currentColor" d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z"/>
               </svg>
             </button>
-            <input id="importFile" type="file" accept="application/pdf,image/*" style="display:none" />
+            <input id="importFile" type="file" accept="application/pdf,image/*,text/plain,text/markdown,text/html,text/csv,application/json,application/rtf,.txt,.md,.markdown,.html,.htm,.csv,.json,.rtf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" />
           </div>
         </label>
         <label class="toolbar-field toolbar-field--difficulty">

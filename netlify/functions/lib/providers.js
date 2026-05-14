@@ -268,6 +268,11 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
 
   let batch = parseInt(batchSize, 10);
   if(!Number.isFinite(batch)) batch = Math.min(40, target);
+  if(!batchSize && env && env.GENERATE_BATCH_SIZE) {
+    const configuredBatch = parseInt(env.GENERATE_BATCH_SIZE, 10);
+    if(Number.isFinite(configuredBatch)) batch = configuredBatch;
+  }
+  if(!batchSize && target > 25 && batch > 20) batch = 20;
   batch = Math.max(1, Math.min(50, batch));
 
   let passes = parseInt(maxPasses, 10);

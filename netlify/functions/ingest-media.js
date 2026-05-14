@@ -5,6 +5,7 @@ const { requireBeta } = require('./lib/betaGuard.js');
 const BYTES_PER_MIB = 1024 * 1024;
 const MAX_MEDIA_BYTES = 5 * BYTES_PER_MIB;
 const MAX_BODY_BYTES = 8 * BYTES_PER_MIB;
+const MAX_EXTRACTED_TEXT_CHARS = 30000;
 const DEFAULT_LIMIT = 20;
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite-preview-09-2025';
@@ -15,6 +16,13 @@ const KIND_TO_MIME = {
   png: 'image/png',
   jpeg: 'image/jpeg',
   gif: 'image/gif',
+  txt: 'text/plain',
+  md: 'text/markdown',
+  html: 'text/html',
+  csv: 'text/csv',
+  json: 'application/json',
+  rtf: 'application/rtf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 };
 
 const MIME_TO_KIND = new Map([
@@ -25,7 +33,40 @@ const MIME_TO_KIND = new Map([
   ['image/jpg', 'jpeg'],
   ['image/pjpeg', 'jpeg'],
   ['image/gif', 'gif'],
+  ['text/plain', 'txt'],
+  ['text/markdown', 'md'],
+  ['text/x-markdown', 'md'],
+  ['text/html', 'html'],
+  ['application/xhtml+xml', 'html'],
+  ['text/csv', 'csv'],
+  ['application/csv', 'csv'],
+  ['application/json', 'json'],
+  ['text/json', 'json'],
+  ['application/rtf', 'rtf'],
+  ['text/rtf', 'rtf'],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
 ]);
+
+const EXTENSION_TO_KIND = new Map([
+  ['pdf', 'pdf'],
+  ['png', 'png'],
+  ['jpg', 'jpeg'],
+  ['jpeg', 'jpeg'],
+  ['gif', 'gif'],
+  ['txt', 'txt'],
+  ['text', 'txt'],
+  ['md', 'md'],
+  ['markdown', 'md'],
+  ['html', 'html'],
+  ['htm', 'html'],
+  ['csv', 'csv'],
+  ['json', 'json'],
+  ['rtf', 'rtf'],
+  ['docx', 'docx'],
+]);
+
+const DETERMINISTIC_KINDS = new Set(['txt', 'md', 'html', 'csv', 'json', 'rtf', 'docx']);
+const BINARY_AI_KINDS = new Set(['pdf', 'png', 'jpeg', 'gif']);
 
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
@@ -94,11 +135,36 @@ function sniffBufferKind(buf) {
   if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4E && buf[3] === 0x47) return 'png';
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'jpeg';
   if (buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x38) return 'gif';
+  if (buf[0] === 0x50 && buf[1] === 0x4b && (buf[2] === 0x03 || buf[2] === 0x05 || buf[2] === 0x07)) return 'zip';
   return 'unknown';
 }
 
 function kindFromMime(type) {
   return MIME_TO_KIND.get(String(type || '').trim().toLowerCase()) || 'unknown';
+}
+
+function kindFromName(name) {
+  const match = String(name || '').trim().toLowerCase().match(/\.([a-z0-9]+)$/);
+  return match ? (EXTENSION_TO_KIND.get(match[1]) || 'unknown') : 'unknown';
+}
+
+function hasTextSignature(buf) {
+  if (!Buffer.isBuffer(buf) || !buf.length) return false;
+  const sample = buf.subarray(0, Math.min(buf.length, 4096));
+  let suspicious = 0;
+  for (const byte of sample) {
+    if (byte === 0) return false;
+    if (byte < 0x08) suspicious++;
+    else if (byte > 0x0d && byte < 0x20) suspicious++;
+  }
+  return suspicious / sample.length < 0.02;
+}
+
+function resolveDeclaredKind({ name, type, kind }) {
+  const declaredKind = KIND_TO_MIME[kind] ? kind : 'unknown';
+  const mimeKind = kindFromMime(type);
+  const nameKind = kindFromName(name);
+  return declaredKind !== 'unknown' ? declaredKind : (mimeKind !== 'unknown' ? mimeKind : nameKind);
 }
 
 function normalizePayload(payload) {
@@ -129,17 +195,32 @@ function normalizePayload(payload) {
   }
 
   const sniffedKind = sniffBufferKind(buffer);
-  if (!KIND_TO_MIME[sniffedKind]) throw makeMediaError('Unsupported file. Choose a PDF or image.', 'MEDIA_UNSUPPORTED_TYPE', 415);
   const declaredKind = KIND_TO_MIME[kind] ? kind : 'unknown';
   const mimeKind = kindFromMime(type);
-  if ((declaredKind !== 'unknown' && declaredKind !== sniffedKind) || (mimeKind !== 'unknown' && mimeKind !== sniffedKind)) {
+  const nameKind = kindFromName(name);
+  const resolvedKind = sniffedKind === 'zip' && (declaredKind === 'docx' || mimeKind === 'docx' || nameKind === 'docx')
+    ? 'docx'
+    : (KIND_TO_MIME[sniffedKind] ? sniffedKind : resolveDeclaredKind({ name, type, kind }));
+  if (!KIND_TO_MIME[resolvedKind]) {
+    throw makeMediaError('Unsupported file. Choose a PDF, image, text, Markdown, HTML, CSV, JSON, RTF, or DOCX file.', 'MEDIA_UNSUPPORTED_TYPE', 415);
+  }
+  if (BINARY_AI_KINDS.has(resolvedKind) && sniffedKind !== resolvedKind) {
+    throw makeMediaError('Unsupported file. Choose a real PDF or image.', 'MEDIA_UNSUPPORTED_TYPE', 415, { kind, type, sniffedKind });
+  }
+  if (DETERMINISTIC_KINDS.has(resolvedKind) && resolvedKind !== 'docx' && !hasTextSignature(buffer)) {
+    throw makeMediaError('Unsupported file. That document does not look like readable text.', 'MEDIA_UNSUPPORTED_TYPE', 415);
+  }
+  if (
+    BINARY_AI_KINDS.has(resolvedKind)
+    && ((declaredKind !== 'unknown' && declaredKind !== resolvedKind) || (mimeKind !== 'unknown' && mimeKind !== resolvedKind) || (nameKind !== 'unknown' && nameKind !== resolvedKind))
+  ) {
     throw makeMediaError('File type does not match its contents.', 'MEDIA_TYPE_MISMATCH', 400, { kind, type, sniffedKind });
   }
 
   return {
     name,
-    type: type || KIND_TO_MIME[sniffedKind],
-    kind: sniffedKind,
+    type: type || KIND_TO_MIME[resolvedKind],
+    kind: resolvedKind,
     size,
     data,
     buffer,
@@ -164,12 +245,13 @@ function echoAllowed(env) {
 
 function cleanExtractedText(text) {
   return String(text || '')
+    .replace(/^\uFEFF/, '')
     .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.trim().replace(/\s+/g, ' '))
     .filter(Boolean)
     .join('\n')
-    .slice(0, 30000);
+    .slice(0, MAX_EXTRACTED_TEXT_CHARS);
 }
 
 function assertText(text) {
@@ -178,6 +260,99 @@ function assertText(text) {
     throw makeMediaError('No readable text found in that file.', 'MEDIA_NO_TEXT', 422);
   }
   return cleaned;
+}
+
+function decodeTextBuffer(buf) {
+  if (!Buffer.isBuffer(buf)) return '';
+  if (buf.length >= 2 && buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+  if (buf.length >= 2 && buf[0] === 0xfe && buf[1] === 0xff) {
+    const swapped = Buffer.alloc(Math.max(0, buf.length - 2));
+    for (let i = 2; i + 1 < buf.length; i += 2) {
+      swapped[i - 2] = buf[i + 1];
+      swapped[i - 1] = buf[i];
+    }
+    return swapped.toString('utf16le');
+  }
+  return buf.toString('utf8');
+}
+
+function decodeEntities(text) {
+  return String(text || '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_, n) => {
+      const code = parseInt(n, 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : _;
+    });
+}
+
+function stripHtml(text) {
+  return decodeEntities(String(text || '')
+    .replace(/<script[\s\S]*?<\/script>/gi, '\n')
+    .replace(/<style[\s\S]*?<\/style>/gi, '\n')
+    .replace(/<\/(p|div|section|article|li|ul|ol|h[1-6]|tr|table|br)>/gi, '\n')
+    .replace(/<[^>]+>/g, ' '));
+}
+
+function stripRtf(text) {
+  return String(text || '')
+    .replace(/\\par[d]?/g, '\n')
+    .replace(/\\'[0-9a-fA-F]{2}/g, ' ')
+    .replace(/\\[a-zA-Z]+-?\d* ?/g, ' ')
+    .replace(/[{}]/g, ' ');
+}
+
+function unzipEntry(buffer, wantedPath) {
+  return new Promise((resolve, reject) => {
+    const yauzl = require('yauzl');
+    yauzl.fromBuffer(buffer, { lazyEntries: true }, (openErr, zipfile) => {
+      if (openErr) return reject(openErr);
+      zipfile.readEntry();
+      zipfile.on('entry', (entry) => {
+        if (entry.fileName !== wantedPath) {
+          zipfile.readEntry();
+          return;
+        }
+        zipfile.openReadStream(entry, (streamErr, stream) => {
+          if (streamErr) return reject(streamErr);
+          const chunks = [];
+          stream.on('data', (chunk) => chunks.push(chunk));
+          stream.on('end', () => {
+            try { zipfile.close(); } catch {}
+            resolve(Buffer.concat(chunks).toString('utf8'));
+          });
+          stream.on('error', reject);
+        });
+      });
+      zipfile.on('end', () => resolve(''));
+      zipfile.on('error', reject);
+    });
+  });
+}
+
+function stripDocxXml(xml) {
+  return decodeEntities(String(xml || '')
+    .replace(/<w:(p|br|tab)[^>]*>/g, '\n')
+    .replace(/<[^>]+>/g, ' '));
+}
+
+async function extractDeterministicText(file) {
+  let raw = '';
+  if (file.kind === 'docx') {
+    const xml = await unzipEntry(file.buffer, 'word/document.xml');
+    raw = stripDocxXml(xml);
+  } else if (file.kind === 'html') {
+    raw = stripHtml(decodeTextBuffer(file.buffer));
+  } else if (file.kind === 'rtf') {
+    raw = stripRtf(decodeTextBuffer(file.buffer));
+  } else {
+    raw = decodeTextBuffer(file.buffer);
+  }
+  return { text: assertText(raw), provider: 'deterministic', model: file.kind };
 }
 
 async function extractWithGemini(file, env) {
@@ -236,6 +411,7 @@ async function extractWithOpenAI(file, env) {
 }
 
 async function extractText(file, env) {
+  if (DETERMINISTIC_KINDS.has(file.kind)) return extractDeterministicText(file);
   const provider = resolveProvider(env, file.kind);
   if (!provider) throw makeMediaError('Media import provider is not configured', 'MEDIA_PROVIDER_NOT_CONFIGURED', 503);
   if (provider === 'gemini') return extractWithGemini(file, env);

@@ -99,7 +99,9 @@ export async function generateWithAI(topic, count, opts = {}){
         throw err;
       }
       if (err && err.name === 'AbortError') {
-        throw err;
+        const timeout = new Error('Generation timed out locally. Try fewer questions or retry.');
+        timeout.name = 'GenerationTimeout';
+        throw timeout;
       }
     } finally {
       clearTimeout(timer);
