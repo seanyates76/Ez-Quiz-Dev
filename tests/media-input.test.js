@@ -3,19 +3,21 @@
 
 const { loadDocument } = require('./utils');
 
-describe('Media Input (beta) UI', () => {
+describe('Media Input UI', () => {
   let document;
 
   beforeAll(async () => {
     document = await loadDocument('public/index.html');
   });
 
-  test('has import button flagged as beta-only with accessible labeling', () => {
+  test('has public import button with accessible labeling', () => {
     const importBtn = document.getElementById('importBtn');
     expect(importBtn).not.toBeNull();
-    expect(importBtn.classList.contains('beta-only')).toBe(true);
+    expect(importBtn.classList.contains('beta-only')).toBe(false);
     expect(importBtn.getAttribute('title')).toMatch(/Attach notes or documents/);
     expect(importBtn.getAttribute('aria-label')).toMatch(/Attach notes or documents/);
+    expect(importBtn.getAttribute('title')).not.toMatch(/beta/i);
+    expect(importBtn.getAttribute('aria-label')).not.toMatch(/beta/i);
   });
 
   test('file input accepts source documents, pdfs, images, and stays hidden', () => {

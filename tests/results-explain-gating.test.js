@@ -24,13 +24,13 @@ function loadSyncExplainButtonsVisibility() {
   return { S, ...factory(S, isBetaEnabled, document) };
 }
 
-describe('results explain button gating cleanup', () => {
+describe('results explain button visibility', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
     document.body.removeAttribute('data-beta');
   });
 
-  test('removes stale explain buttons when beta is disabled', () => {
+  test('keeps explain buttons when beta is disabled', () => {
     const { S, syncExplainButtonsVisibility } = loadSyncExplainButtonsVisibility();
     S.settings.betaEnabled = false;
     document.body.innerHTML = `
@@ -47,7 +47,7 @@ describe('results explain button gating cleanup', () => {
 
     syncExplainButtonsVisibility();
 
-    expect(document.querySelector('.explain-btn')).toBeNull();
+    expect(document.querySelector('.explain-btn')).not.toBeNull();
   });
 
   test('keeps explain buttons when beta is enabled', () => {

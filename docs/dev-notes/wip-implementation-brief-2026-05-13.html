@@ -115,18 +115,18 @@
   <main>
     <header>
       <h1>Implementation Brief</h1>
-      <p class="dek">Current state of the EZ Quiz completion branch on May 13, 2026. This brief tracks what is implemented, what is under verification, and the remaining roadmap for explainers, 50-question generation, media import, landing polish, and UX hardening.</p>
+      <p class="dek">Current state of the EZ Quiz completion branch on May 13, 2026. This brief tracks what is implemented, what is under verification, and the remaining roadmap for explainers, larger-question reliability work, media import, landing polish, and UX hardening.</p>
       <div class="meta">
         <span class="pill">Branch: <code>codex-complete-explainers-50q-media</code></span>
         <span class="pill good">Explainers wired</span>
-        <span class="pill good">50-question cap wired</span>
+        <span class="pill good">20-question public cap wired</span>
         <span class="pill good">Media extraction endpoint wired</span>
         <span class="pill good">Landing polish wired</span>
       </div>
     </header>
 
     <section class="grid">
-      <div class="card kpi"><strong>50</strong><p>Default maximum supported question count across client, parser, and generator.</p></div>
+      <div class="card kpi"><strong>20</strong><p>Current public maximum supported question count across client and generation flow.</p></div>
       <div class="card kpi"><strong>24</strong><p>Explainer-focused tests passing in the targeted suite.</p></div>
       <div class="card kpi"><strong>27</strong><p>Media import tests passing in the targeted suite.</p></div>
       <div class="card kpi"><strong>0</strong><p>Known user-facing "not ready" paths left in explainers or media import.</p></div>
@@ -135,8 +135,8 @@
     <section class="grid">
       <article class="card wide">
         <h2>Executive Readout</h2>
-        <p>We are past the review-only phase and into implementation. Results can call the lazy explanation endpoint and render safe explanation text inline. Generate now supports a 50-question public cap with batch fallback and explicit under-count errors. Media import now accepts PDFs/images, extracts source text through the configured provider, and routes that source into quiz generation instead of trying to parse it as quiz syntax.</p>
-        <p>The visual slice now has a compact landing band with direct actions into topic generation, media import, and manual quiz-line entry. The branch has a clean full Jest run; browser verification is still blocked in the current sandbox and should be rerun in an environment that can launch Chromium.</p>
+        <p>We are past the review-only phase and into implementation. Results can call the lazy explanation endpoint and render safe explanation text inline. Create Quiz now supports the public 5, 10, 15, and 20-question lengths with explicit under-count errors. Media import now accepts PDFs/images, extracts source text through the configured provider, and routes that source into quiz creation instead of trying to parse it as quiz syntax.</p>
+        <p>The visual slice now has a polished landing panel with direct actions into topic generation and study material, while manual quiz-line entry remains available from help. The branch has a clean full Jest run and UI check pass.</p>
       </article>
     </section>
 
@@ -151,26 +151,26 @@
             <tr>
               <td>Lazy explainers</td>
               <td class="status done">Implemented</td>
-              <td>Result cards have beta Explain buttons, request payload serialization, caching per original question, loading/error states, and text-only rendering.</td>
+              <td>Result cards have Explain buttons, request payload serialization, caching per original question, loading/error states, and text-only rendering.</td>
               <td>Focused explainer tests pass, including API errors and HTML injection resistance.</td>
             </tr>
             <tr>
-              <td>50-question generation</td>
+              <td>Public quiz lengths</td>
               <td class="status done">Implemented</td>
-              <td>Client max is 50. Server caps public requests at 50, raises token budgets, batches larger asks, de-duplicates stems, and fails explicitly if a provider returns too few lines.</td>
+              <td>Client-visible public lengths are 5, 10, 15, and 20. Larger 30/50-question generation remains future reliability work.</td>
               <td>Generator, provider chunking, parser limit, clamp, payload, and DOM id tests pass in the focused suite.</td>
             </tr>
             <tr>
               <td>Media import</td>
               <td class="status done">Implemented</td>
-              <td>PDF/image upload is beta-gated, size-limited, byte-sniffed, rate-limited, and extracted through Gemini or OpenAI where supported. Imported text becomes source material for Generate.</td>
+              <td>PDF/image upload is size-limited, byte-sniffed, rate-limited, and extracted through Gemini or OpenAI where supported. Imported text becomes source material for quiz creation.</td>
               <td>Endpoint, UI, file validation, constraints, and overlapping import tests pass.</td>
             </tr>
             <tr>
               <td>Landing and general UI</td>
               <td class="status done">Implemented</td>
-              <td>First viewport now introduces EZ Quiz, shows product capabilities, and routes users directly into topic generation, media import, or quiz-line paste.</td>
-              <td>DOM and flow tests pass. Browser screenshot pass is blocked by Chromium launch restrictions in this sandbox.</td>
+              <td>First viewport now introduces EZ Quiz, shows product capabilities, and routes users directly into topic generation or study-material import.</td>
+              <td>DOM and flow tests pass. The UI check passes across its configured viewports.</td>
             </tr>
             <tr>
               <td>Docs and copy</td>
@@ -188,7 +188,7 @@
       <div class="roadmap">
         <article class="step">
           <h3>Browser Verify Landing And Polish</h3>
-          <p>Rerun the UI check or a Playwright smoke pass in an environment that can launch Chromium, then inspect desktop and mobile screenshots.</p>
+          <p>Rerun the UI check before push, then inspect desktop and mobile artifacts if the visual surface changes.</p>
         </article>
         <article class="step">
           <h3>Run Full Verification</h3>
@@ -209,8 +209,8 @@
       <article class="card">
         <h2>Known Risks</h2>
         <ul>
-          <li>Provider quality for exactly 50 questions depends on upstream compliance. The branch mitigates this with batching and explicit under-count failures.</li>
-          <li>PDF/image extraction can be slow or costly. Caps, timeouts, beta gating, and rate limits are in place.</li>
+          <li>Larger 30/50-question generation depends on future reliability hardening rather than the current public flow.</li>
+          <li>PDF/image extraction can be slow or costly. Caps, timeouts, and rate limits are in place.</li>
           <li>Live provider smoke tests require credentials; local echo tests prove plumbing, not AI quality.</li>
         </ul>
       </article>
@@ -230,7 +230,7 @@
         <ul>
           <li>Imported media is source material, not quiz-line content. This avoids a broken Start path after extraction.</li>
           <li>Explanations are lazy and per-question. This keeps normal quiz generation fast and controls provider spend.</li>
-          <li>For 50 questions, batching is server-side. The client still sends one normal request.</li>
+          <li>For larger future lengths, staged or async generation should replace one-shot public requests.</li>
           <li>Docs should describe implemented behavior only. Historical notes stay accurate, but current docs should not tell users a shipped path is absent.</li>
         </ul>
       </article>

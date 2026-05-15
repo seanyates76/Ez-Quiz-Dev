@@ -36,13 +36,13 @@ describe('ingest-media endpoint', () => {
     process.env = originalEnv;
   });
 
-  test('requires beta access', async () => {
+  test('accepts public media import requests without beta access', async () => {
     const { handler } = require('../ingest-media.js');
     const buf = Buffer.from('%PDF-1.5\nhello');
     const res = await handler(event(mediaPayload(buf), { headers: {} }));
 
-    expect(res.statusCode).toBe(403);
-    expect(json(res)).toMatchObject({ code: 'MEDIA_BETA_REQUIRED' });
+    expect(res.statusCode).toBe(200);
+    expect(json(res).text).toContain('Imported PDF text from worksheet.pdf');
   });
 
   test('extracts text through echo provider in tests', async () => {

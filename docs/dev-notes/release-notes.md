@@ -1,3 +1,18 @@
+Release-Prep Notes
+==================
+
+Date: 2026-05-15
+
+Current-state source of truth
+- Create Quiz builds a valid quiz; Start Quiz begins taking it.
+- Public quiz lengths are 5, 10, 15, and 20 questions.
+- Larger 30/50-question generation is future reliability work.
+- For best results, paste a focused section of notes, a lesson, or a short study guide. Full course notes may work better when split into smaller chunks.
+
+Beta hardening notes
+- Study-material import and Results explanations are promoted into the production-facing flow.
+- The `/beta` route remains available for separate experimental endpoints such as MCP.
+
 EZ Quiz Web v3.3
 ================
 

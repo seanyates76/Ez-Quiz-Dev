@@ -48,6 +48,8 @@ describe('generator media import overlap regression', () => {
   let validateMediaImportSize;
   let generateWithAI;
   let state;
+  let beginQuiz;
+  let syncSettingsFromUI;
 
   beforeAll(() => {
     ({ ImportController } = loadBrowserModule('public/js/import-controller.js', ['ImportController']));
@@ -133,7 +135,7 @@ describe('generator media import overlap regression', () => {
         if (Number.isFinite(parsed) && parsed > 0) return parsed;
         return fallback ?? 10;
       },
-      getMaxQuestions: () => 50,
+      getMaxQuestions: () => 20,
       parseEditorInput,
       generateWithAI,
       ImportController,
@@ -161,8 +163,10 @@ describe('generator media import overlap regression', () => {
       isBetaEnabled: () => true,
     };
 
+    beginQuiz = jest.fn();
+    syncSettingsFromUI = jest.fn();
     ({ wireGenerator } = loadGeneratorModule(deps));
-    wireGenerator({ beginQuiz: jest.fn(), syncSettingsFromUI: jest.fn() });
+    wireGenerator({ beginQuiz, syncSettingsFromUI });
   });
 
   afterEach(() => {
@@ -216,7 +220,7 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(hint.textContent).toBe('Imported good.pdf. Press Generate to build the quiz.');
+    expect(hint.textContent).toBe('Imported good.pdf. Create a quiz from it.');
     expect(document.getElementById('mediaSourceStatus').hidden).toBe(false);
     expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: good.pdf');
     expect(state.media.sourceText).toBe('GOOD IMPORT TEXT');
@@ -244,9 +248,29 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(fetchCalls).toHaveLength(0);
-    expect(hint.textContent).toBe('Imported notes.txt. Press Generate to build the quiz.');
+    expect(hint.textContent).toBe('Imported notes.txt. Create a quiz from it.');
     expect(state.media.sourceText).toBe('Photosynthesis\nPlants use light.');
     expect(document.getElementById('mediaSourceLabel').textContent).toContain('TXT ready: notes.txt');
+  });
+
+  test('creates a topic quiz without auto-starting and sends the expected payload', async () => {
+    document.getElementById('topicInput').value = 'ccna 2025';
+    document.getElementById('countInput').value = '5';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(generateWithAI).toHaveBeenCalledWith('ccna 2025', 5, expect.objectContaining({
+      difficulty: 'medium',
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+    expect(generateWithAI.mock.calls[0][2]).not.toHaveProperty('sourceText');
+    expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question(s).');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(beginQuiz).not.toHaveBeenCalled();
+    expect(syncSettingsFromUI).not.toHaveBeenCalled();
   });
 
   test('keeps the newest overlapping import result and only re-enables controls after it finishes', async () => {
@@ -304,7 +328,7 @@ describe('generator media import overlap regression', () => {
 
     expect(editor.value).toBe('');
     expect(mirror.value).toBe('');
-    expect(hint.textContent).toBe('Imported second.pdf. Press Generate to build the quiz.');
+    expect(hint.textContent).toBe('Imported second.pdf. Create a quiz from it.');
     expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: second.pdf');
     expect(state.media.sourceText).toBe('SECOND IMPORT TEXT');
     expect(importBtn.hasAttribute('disabled')).toBe(false);
@@ -317,7 +341,7 @@ describe('generator media import overlap regression', () => {
     expect(editor.value).toBe('');
     expect(mirror.value).toBe('');
     expect(parseEditorInput).not.toHaveBeenCalled();
-    expect(announce).toHaveBeenCalledWith('Imported source ready. Press Generate to build the quiz.', 'polite');
+    expect(announce).toHaveBeenCalledWith('Imported source ready. Create a quiz from it.', 'polite');
 
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();

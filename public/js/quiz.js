@@ -1,7 +1,6 @@
 import { S } from './state.js';
-import { isBetaEnabled } from './beta.mjs';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=1.5.28';
+import { requestLazyExplanation } from './explain-api.js?v=1.5.29';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
@@ -191,7 +190,6 @@ export function renderResults(){
   const indexMap = (Array.isArray(S.quiz.indexMap) && S.quiz.indexMap.length)
     ? S.quiz.indexMap
     : S.quiz.questions.map((_,i)=>i);
-  const isBeta = isBetaEnabled(S.settings);
   // Prefer persistent originalAnswers when available; fallback to mapping current run
   let answersFull;
   if (Array.isArray(S.quiz.originalAnswers) && S.quiz.originalAnswers.length === baseQs.length) {
@@ -234,8 +232,8 @@ export function renderResults(){
     const userDetail = buildUserAnswerDetail(q,a);
     const correctDetail = buildCorrectAnswerDetail(q);
     const statusBadge = `<span class="result-status ${item.isCorrect ? 'is-correct' : 'is-wrong'}">${item.isCorrect ? 'Correct' : 'Incorrect'}</span>`;
-    const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)}${isBeta ? ` <button type=\"button\" class=\"chip-btn explain-btn\" data-explain=\"${origIdx}\">Explain</button>` : ''}</div>`;
-    const explainer = renderExplanationSlot(origIdx, isBeta);
+    const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)} <button type=\"button\" class=\"chip-btn explain-btn\" data-explain=\"${origIdx}\">Explain</button></div>`;
+    const explainer = renderExplanationSlot(origIdx);
     if (item.isCorrect) {
       const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail}</div>`;
       return `<div class="missed-item is-correct" data-orig="${origIdx}">` + statusBadge + header + line + explainer + `</div>`;
@@ -248,8 +246,7 @@ export function renderResults(){
   try{ hydrateExplanationSlots(); }catch{}
   // Sync retake controls UI when results are shown/updated
   try{ updateRetakeUI(); }catch{}
-  // Wire Explain delegation once (beta only)
-  try{ if(isBetaEnabled(S.settings)){ wireExplainDelegation(); } }catch{}
+  try{ wireExplainDelegation(); }catch{}
   // Update chip after we know full correctness
   if(chip){
     const labelText = `${correctCountFull}/${baseQs.length}`;
@@ -264,11 +261,7 @@ export function renderResults(){
 }
 
 export function syncExplainButtonsVisibility(root = document){
-  if(!root || isBetaEnabled(S.settings)) return;
-  const nodes = typeof root.querySelectorAll === 'function' ? root.querySelectorAll('.explain-btn') : [];
-  nodes.forEach((node)=>{
-    try{ node.remove(); }catch{}
-  });
+  return;
 }
 
 function wireExplainDelegation(){
@@ -278,10 +271,6 @@ function wireExplainDelegation(){
     const btn = e.target && (e.target.closest ? e.target.closest('.explain-btn') : null);
     if(!btn) return;
     e.preventDefault();
-    if(!isBetaEnabled(S.settings)){
-      syncExplainButtonsVisibility(host);
-      return;
-    }
     const origIdx = parseInt(btn.getAttribute('data-explain'), 10);
     if(!Number.isInteger(origIdx) || origIdx < 0) return;
     const cache = getExplanationCache();
@@ -332,8 +321,7 @@ function getExplanationCache(){
   return S.quiz.explanations;
 }
 
-function renderExplanationSlot(origIdx, isBeta){
-  if(!isBeta) return '';
+function renderExplanationSlot(origIdx){
   return `<div class="explain-panel is-hidden" data-explain-slot="${origIdx}" role="status" aria-live="polite"></div>`;
 }
 
@@ -503,7 +491,6 @@ function buildCorrectAnswerDetail(q){
 }
 
 function renderMTResult(origIdx, q, a){
-  const isBeta = isBetaEnabled(S.settings);
   // Build map of correct right indexes by left index
   const correctMap = new Array(q.left.length).fill(-1);
   (Array.isArray(q.pairs)?q.pairs:[]).forEach(([li,ri])=>{ correctMap[li]=ri; });
@@ -526,13 +513,13 @@ function renderMTResult(origIdx, q, a){
       </div>`;
   }).join('');
   const okAll = Array.isArray(a)&&a.length&&a.every((ri,li)=>ri===correctMap[li]);
-  const explainBtn = isBeta ? ` <button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>` : '';
+  const explainBtn = ` <button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>`;
   const statusBadge = `<span class="result-status ${okAll?'is-correct':'is-wrong'}">${okAll?'Correct':'Incorrect'}</span>`;
   return `<div class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
     ${statusBadge}
     <div class="res-head"><strong>${(origIdx+1)}.</strong> ${escapeHTML(q.text)}${explainBtn}</div>
     <div class="mt-result">${rows}</div>
-    ${renderExplanationSlot(origIdx, isBeta)}
+    ${renderExplanationSlot(origIdx)}
   </div>`;
 }
 

@@ -2,7 +2,8 @@ import { S } from './state.js';
 import { $, byQSA, showUpdateBannerIfReady } from './utils.js';
 import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel } from './settings.js';
 import { wireModals } from './modals.js';
-import { wireGenerator } from './generator.js?v=1.5.28';
+import { wireGenerator } from './generator.js?v=1.5.29';
+import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=1.5.29';
 import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
@@ -54,23 +55,24 @@ function init(){
   // Force-sync settings flag with computed beta state to avoid transient mismatch
   try { S.settings.betaEnabled = !!betaActive; } catch {}
 
-  // Check for beta auto-redirect when landing on root: if beta is active (cookie or local flag), go to /beta
-  if ((betaActive || S.settings.betaEnabled) && window.location.pathname === '/' && !window.location.search.includes('no-beta-redirect')) {
-    try { window.location.replace('/beta'); } catch { window.location.href = '/beta'; }
-    return;
-  }
-
   applyTheme(S.settings.theme);
   const els = getEls();
   reflectSettingsIntoUI(els);
   wireSettingsPanel(els);
   wireModals({ onPause: pauseTimerIfQuiz, onResume: resumeTimerIfQuiz });
-  wireGenerator({ beginQuiz, syncSettingsFromUI });
+  wireLandingIntro();
+  wireGenerator({
+    beginQuiz: () => {
+      dismissLandingIntro();
+      beginQuiz();
+    },
+    syncSettingsFromUI,
+  });
   wireQuizControls();
   wireResultsControls();
 
   (function hydrateVersionDetails(){
-    const PRODUCTION_VERSION = 'v3.3';
+    const PRODUCTION_VERSION = 'v3.4.0';
     const versionCopy = document.querySelector('[data-version-copy]');
     const modeLabel = versionCopy?.querySelector('[data-version-mode]') || null;
     const versionLabel = versionCopy?.querySelector('[data-version-label]') || null;
@@ -88,13 +90,6 @@ function init(){
 
     applyVersion('Production', productionVersion);
 
-    if(document.body.dataset.beta === 'true'){
-      const betaSection = sections.find(section => section && !section.classList.contains('release-notes--production')) || null;
-      const betaVersion = betaSection?.querySelector('h4')?.textContent?.trim();
-      if(betaVersion){
-        applyVersion('Beta', betaVersion);
-      }
-    }
   })();
 
   // Register service worker with gentle update signaling
@@ -144,13 +139,11 @@ function init(){
         await Promise.all(regs.map(r => r.unregister().catch(() => {})));
       }
     } catch {}
-    // After async cleanup completes, navigate cleanly to canonical route
-    // Prefer /beta when the cookie flag is present, otherwise root.
+    // After async cleanup completes, navigate cleanly to the canonical route.
     try {
-      const target = (typeof hasCookieFlag === 'function' && hasCookieFlag('beta')) ? '/beta' : '/';
-      window.location.replace(target);
+      window.location.replace('/');
     } catch {
-      try { window.location.href = (typeof hasCookieFlag === 'function' && hasCookieFlag('beta')) ? '/beta' : '/'; }
+      try { window.location.href = '/'; }
       catch { try { window.location.reload(true); } catch { window.location.reload(); } }
     }
   }

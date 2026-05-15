@@ -26,18 +26,29 @@ describe('generate-quiz count guarantees', () => {
     process.env = originalEnv;
   });
 
-  test('allows and returns 50 generated questions by default', async () => {
+  test('allows and returns 20 generated questions by default', async () => {
     const { handler } = require('../generate-quiz.js');
-    const res = await handler(event({ topic: 'Ports', count: 50, provider: 'echo' }));
+    const res = await handler(event({ topic: 'Ports', count: 20, provider: 'echo' }));
     const body = json(res);
 
     expect(res.statusCode).toBe(200);
-    expect(String(body.lines).trim().split('\n')).toHaveLength(50);
+    expect(String(body.lines).trim().split('\n')).toHaveLength(20);
   });
 
-  test('caps oversized public requests to the 50-question default max', async () => {
+  test('caps oversized public requests to the 20-question default max', async () => {
     const { handler } = require('../generate-quiz.js');
     const res = await handler(event({ topic: 'Ports', count: 99, provider: 'echo' }));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(String(body.lines).trim().split('\n')).toHaveLength(20);
+  });
+
+  test('can opt into a higher internal cap through env configuration', async () => {
+    process.env.GENERATE_CLIENT_MAX = '50';
+    process.env.GENERATE_MAX_COUNT = '50';
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({ topic: 'Ports', count: 50, provider: 'echo' }));
     const body = json(res);
 
     expect(res.statusCode).toBe(200);

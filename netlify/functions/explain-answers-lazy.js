@@ -1,7 +1,6 @@
 'use strict';
 
 const { explainQuestions } = require('./lib/providers.explain.js');
-const { requireBeta, betaForbiddenResponse } = require('./lib/betaGuard.js');
 
 const MC_RE = /^MC\|(.*)\|(.+?)\|([A-Za-z](?:\s*,\s*[A-Za-z])*)$/i;
 const TF_RE = /^TF\|(.*)\|(T|F)$/i;
@@ -182,7 +181,6 @@ exports.handler = async (event) => {
   if (!originAllowed) return reply(403, { error: 'Forbidden origin' }, '');
   const responseOrigin = origin || (allowedOrigins.length === 0 ? '*' : '');
 
-  if (!requireBeta({ headers: event.headers || {} })) return netlifyFromResponse(betaForbiddenResponse(), responseOrigin);
   if (event.httpMethod !== 'POST') return reply(405, { error: 'Method not allowed' }, responseOrigin);
   if (rateLimited(event)) return reply(429, { error: 'Rate limit exceeded' }, responseOrigin);
   if (!authorize(event)) return reply(401, { error: 'Unauthorized' }, responseOrigin);

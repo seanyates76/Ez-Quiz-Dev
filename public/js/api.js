@@ -65,7 +65,7 @@ export async function generateWithAI(topic, count, opts = {}){
   for (let i = 0; i < API_ENDPOINT_CANDIDATES.length; i++) {
     const { url: endpoint, allow404Fallback } = API_ENDPOINT_CANDIDATES[i];
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    const timer = setTimeout(() => controller.abort(), 45000);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',

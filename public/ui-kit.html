@@ -5,10 +5,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>EZ Quiz UI Kit</title>
-  <script src="js/theme-preload.js?v=1.5.28"></script>
-  <link rel="stylesheet" href="styles.css?v=1.5.28">
-  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.28">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.28">
+  <script src="js/theme-preload.js?v=1.5.29"></script>
+  <link rel="stylesheet" href="styles.css?v=1.5.29">
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.29">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.29">
   <style>
     body.kit-body {
       background: radial-gradient(circle at top, rgba(24, 28, 46, 0.95), rgba(6, 8, 16, 0.98));
@@ -104,7 +104,7 @@
       </div>
       <div class="header-actions" aria-label="Kit controls">
         <button id="kitThemeToggle" class="btn btn-outline" type="button">Theme: Dark</button>
-        <button id="kitBetaToggle" class="btn btn-outline" type="button">Beta: Off</button>
+        <button id="kitBetaToggle" class="btn btn-outline" type="button">Flag: Off</button>
       </div>
     </div>
   </header>
@@ -127,17 +127,17 @@
 
     <section class="card kit-pane" id="kit-toolbar">
       <div class="kit-pane__head">
-        <h2>Generator Toolbar</h2>
+        <h2>Create Quiz Toolbar</h2>
         <p>Exact markup from <code>public/index.html</code>.</p>
       </div>
-      <div class="gen-toolbar" role="group" aria-label="Generate toolbar">
+      <div class="gen-toolbar" role="group" aria-label="Create quiz toolbar">
         <div class="toolbar-left">
           <label class="toolbar-field">
             <span class="toolbar-label">Topic</span>
-            <div class="input-affix topic-affix" data-beta-scope>
+            <div class="input-affix topic-affix">
               <input type="text" class="toolbar-input has-affix" placeholder="Solar eclipse safety tips">
-              <button class="affix-btn beta-only" type="button" title="Attach PDF/Image (beta)">
-                <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+              <button class="affix-btn" type="button" title="Attach notes or documents">
+                <svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="currentColor"
                     d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z" />
                 </svg>
@@ -160,7 +160,12 @@
           <label class="toolbar-field narrow number-field">
             <span class="toolbar-label">Length</span>
             <div class="number-wrap">
-              <input type="number" class="toolbar-input" min="1" max="50" step="1" value="10" inputmode="numeric">
+              <select class="toolbar-input" aria-label="Length">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="15">15</option>
+                <option value="20">20</option>
+              </select>
               <div class="stepper-group" role="group" aria-label="Adjust length">
                 <button type="button" class="stepper stepper-up" aria-label="Increase length">▲</button>
                 <button type="button" class="stepper stepper-down" aria-label="Decrease length">▼</button>
@@ -169,7 +174,8 @@
           </label>
         </div>
         <div class="action-stack">
-          <button class="btn primary" type="button">Start</button>
+          <button class="btn primary" type="button">Create Quiz</button>
+          <button class="btn" type="button" disabled>Start Quiz</button>
           <button class="btn btn-outline" type="button">Options ▾</button>
         </div>
       </div>
@@ -243,7 +249,7 @@
       <div class="kit-pills">
         <span class="pill">All quizzes</span>
         <span class="pill">Missed</span>
-        <span class="pill">Beta</span>
+        <span class="pill">Attachment</span>
         <span class="pill success">Correct</span>
         <span class="pill danger">Incorrect</span>
       </div>
@@ -352,12 +358,12 @@
     <section class="card kit-pane" id="kit-attachment">
       <div class="kit-pane__head">
         <h2>Attachment Affix</h2>
-        <p>Beta scoping for the paperclip button.</p>
+        <p>Attachment affordance used by the study-material path.</p>
       </div>
-      <div class="input-affix topic-affix" data-beta-scope>
+      <div class="input-affix topic-affix">
         <input type="text" class="toolbar-input has-affix" placeholder="Attach supporting PDF">
-        <button class="affix-btn beta-only" type="button" title="Attach PDF/Image (beta)">
-          <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+        <button class="affix-btn" type="button" title="Attach notes or documents">
+          <svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
             <path fill="currentColor"
               d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z" />
           </svg>
@@ -370,8 +376,8 @@
     UI Kit mirrors production markup • <span id="kitTimestamp"></span>
   </footer>
 
-  <script src="js/boot-beta.js?v=1.5.28"></script>
-  <script src="js/ui-kit.js?v=1.5.28"></script>
+  <script src="js/boot-beta.js?v=1.5.29"></script>
+  <script src="js/ui-kit.js?v=1.5.29"></script>
 </body>
 
 </html>

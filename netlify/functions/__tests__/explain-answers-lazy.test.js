@@ -45,12 +45,13 @@ describe('explain-answers-lazy endpoint', () => {
     process.env = originalEnv;
   });
 
-  test('returns 403 for non-beta requests', async () => {
+  test('accepts public explanation requests without beta access', async () => {
+    mockExplainQuestions.mockResolvedValue({ 0: { explanation: 'Answer: D) 443.' } });
     const handler = loadHandler();
-    const res = await handler(event({ headers: {}, body: '{}' }));
-    expect(res.statusCode).toBe(403);
-    expect(json(res)).toMatchObject({ error: expect.any(String) });
-    expect(mockExplainQuestions).not.toHaveBeenCalled();
+    const res = await handler(event({ headers: {} }));
+    expect(res.statusCode).toBe(200);
+    expect(json(res)).toEqual({ explanations: { 0: { explanation: 'Answer: D) 443.' } } });
+    expect(mockExplainQuestions).toHaveBeenCalledTimes(1);
   });
 
   test('returns 405 for non-POST methods', async () => {

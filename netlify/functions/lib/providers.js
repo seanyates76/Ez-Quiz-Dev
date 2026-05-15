@@ -125,8 +125,8 @@ function stemKeyFromLine(line){
 
 function outputTokenBudget(count, kind = 'legacy'){
   const n = Math.max(1, Math.min(50, parseInt(count || 10, 10) || 10));
-  const perQuestion = kind === 'structured' ? 120 : 90;
-  return Math.max(1200, Math.min(6000, 500 + (n * perQuestion)));
+  const perQuestion = kind === 'structured' ? 220 : 260;
+  return Math.max(2500, Math.min(12000, 900 + (n * perQuestion)));
 }
 
 async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024 }){
@@ -314,4 +314,4 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   };
 }
 
-module.exports = { generateLines, generateInBatches, callProvider, buildPrompt, buildStructuredPrompt, cleanSourceMaterial };
+module.exports = { generateLines, generateInBatches, callProvider, buildPrompt, buildStructuredPrompt, cleanSourceMaterial, outputTokenBudget };

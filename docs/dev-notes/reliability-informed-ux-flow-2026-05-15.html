@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EZ Quiz Reliability-Informed UX Flow</title>
+  <style>
+    :root {
+      --bg: #0e131a;
+      --panel: #151d27;
+      --panel-2: #1c2633;
+      --panel-3: #101720;
+      --text: #f4f7fb;
+      --muted: #aeb9c8;
+      --soft: #d8e1ee;
+      --line: #334051;
+      --brand: #8ab9ff;
+      --good: #61d394;
+      --warn: #f6c760;
+      --risk: #ff7b8a;
+      --shadow: 0 18px 42px rgba(0, 0, 0, .24);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(138, 185, 255, .10), transparent 340px),
+        var(--bg);
+    }
+
+    main {
+      width: min(1160px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 38px 0 64px;
+    }
+
+    header {
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 24px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 12px;
+      font-size: clamp(2rem, 4vw, 3.35rem);
+      line-height: 1.03;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 12px;
+      font-size: 1.35rem;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 1rem;
+    }
+
+    p {
+      margin-bottom: 12px;
+      color: var(--muted);
+    }
+
+    strong {
+      color: var(--text);
+    }
+
+    code {
+      color: #dce9ff;
+      background: rgba(255, 255, 255, .07);
+      padding: 1px 5px;
+      border-radius: 5px;
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    section {
+      margin-top: 24px;
+    }
+
+    .dek {
+      max-width: 920px;
+      font-size: 1.06rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill,
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 4px 10px;
+      color: var(--soft);
+      background: rgba(255, 255, 255, .04);
+      font-size: .83rem;
+      font-weight: 700;
+    }
+
+    .pill.good {
+      color: #dffdea;
+      border-color: rgba(97, 211, 148, .45);
+      background: rgba(97, 211, 148, .11);
+    }
+
+    .pill.warn {
+      color: #fff2c4;
+      border-color: rgba(246, 199, 96, .45);
+      background: rgba(246, 199, 96, .10);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card,
+    .flow-step,
+    .status-card,
+    .roadmap-step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      padding: 20px;
+    }
+
+    .card.wide {
+      grid-column: 1 / -1;
+    }
+
+    .callout {
+      border-left: 4px solid var(--brand);
+      background: rgba(138, 185, 255, .08);
+      padding: 14px 16px;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .problem {
+      border-left-color: var(--risk);
+      background: rgba(255, 123, 138, .09);
+    }
+
+    .spine {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .spine-item {
+      min-height: 132px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 16px;
+    }
+
+    .spine-word {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--brand);
+      font-size: .82rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .cta-demo {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: end;
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-3);
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: .88rem;
+      font-weight: 700;
+    }
+
+    .input-box {
+      min-height: 42px;
+      border: 1px solid #415066;
+      border-radius: 7px;
+      padding: 10px 12px;
+      color: var(--soft);
+      background: #0b1118;
+      font-weight: 500;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      border: 1px solid #4b5c73;
+      border-radius: 7px;
+      padding: 0 14px;
+      color: var(--text);
+      background: #223047;
+      font-weight: 800;
+    }
+
+    .btn.primary {
+      border-color: rgba(138, 185, 255, .75);
+      background: #31588f;
+    }
+
+    .btn.disabled {
+      color: #7f8a99;
+      background: #18212d;
+      border-color: #303b4b;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .status-card {
+      position: relative;
+      min-height: 134px;
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .status-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 4px;
+      background: var(--line);
+    }
+
+    .status-card.good::before {
+      background: var(--good);
+    }
+
+    .status-card.warn::before {
+      background: var(--warn);
+    }
+
+    .status-card.risk::before {
+      background: var(--risk);
+    }
+
+    .status-name {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+      font-weight: 850;
+      text-transform: capitalize;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(140px, 1fr));
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .flow-step,
+    .roadmap-step {
+      padding: 16px;
+      min-height: 142px;
+      box-shadow: none;
+    }
+
+    .flow-kicker {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--brand);
+      font-size: .76rem;
+      font-weight: 850;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .flow-title {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--text);
+      font-size: 1rem;
+      font-weight: 850;
+    }
+
+    .split-path {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .path-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 16px;
+    }
+
+    .tag {
+      min-height: 24px;
+      margin-bottom: 10px;
+      padding: 3px 8px;
+      color: #dffdea;
+      border-color: rgba(97, 211, 148, .45);
+      background: rgba(97, 211, 148, .10);
+      font-size: .75rem;
+    }
+
+    .roadmap {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(150px, 1fr));
+      gap: 10px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+
+    .now-next {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .rule {
+      border: 1px solid rgba(97, 211, 148, .42);
+      background: rgba(97, 211, 148, .08);
+    }
+
+    @media (max-width: 860px) {
+      main {
+        width: min(100% - 24px, 1160px);
+        padding-top: 28px;
+      }
+
+      .grid,
+      .spine,
+      .status-grid,
+      .split-path,
+      .now-next,
+      .cta-demo {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        justify-content: stretch;
+      }
+
+      .btn {
+        flex: 1 1 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Reliability-Informed UX Flow</h1>
+      <p class="dek">Internal planning brief for aligning EZ Quiz first-use UX with the generation architecture it likely needs next: creation can take time, status should explain what is happening, and Start should only begin a ready quiz.</p>
+      <div class="meta" aria-label="Brief metadata">
+        <span class="pill">Created May 15, 2026</span>
+        <span class="pill good">Product spine: Create / Status / Start</span>
+        <span class="pill warn">No full async backend yet</span>
+      </div>
+    </header>
+
+    <section class="grid" aria-labelledby="spineTitle">
+      <article class="card wide">
+        <h2 id="spineTitle">New Product Spine</h2>
+        <div class="callout">
+          <strong>Create builds. Status explains progress. Start unlocks only when ready.</strong>
+          <p>The first-use experience should be durable if generation later moves from a single synchronous response into staged or job-style processing.</p>
+        </div>
+        <div class="spine" aria-label="Create Status Start spine">
+          <div class="spine-item">
+            <span class="spine-word">Create</span>
+            <h3>Build the quiz</h3>
+            <p>Topic and study material both lead to a build action. Create should never mean taking the quiz.</p>
+          </div>
+          <div class="spine-item">
+            <span class="spine-word">Status</span>
+            <h3>Explain the build</h3>
+            <p>Show honest states while the app imports, creates, validates, succeeds, or fails.</p>
+          </div>
+          <div class="spine-item">
+            <span class="spine-word">Start</span>
+            <h3>Take a ready quiz</h3>
+            <p>Start Quiz remains disabled until a valid quiz exists. It only begins the quiz runner.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid" aria-labelledby="problemTitle">
+      <article class="card">
+        <h2 id="problemTitle">Current Chameleon-Button Problem</h2>
+        <div class="callout problem">
+          <strong>One primary button changes meaning too much.</strong>
+          <p>The same surface can mean Start, Generate, Regenerate, or New Quiz. In some states, Start creates a quiz and immediately begins it.</p>
+        </div>
+        <ul>
+          <li>Users cannot build a clear mental model of what will happen next.</li>
+          <li>Large 30/50-question or source-backed builds look like instant one-shot actions.</li>
+          <li>Failure states are harder to explain because the app is already trying to move into quiz mode.</li>
+          <li>Async or staged generation would require reworking the CTA model later.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Proposed Button Model</h2>
+        <div class="cta-demo" aria-label="Button model example">
+          <label class="field">
+            Topic or study material
+            <span class="input-box">Biology exam review</span>
+          </label>
+          <div class="actions">
+            <span class="btn primary">Create Quiz</span>
+            <span class="btn disabled">Start Quiz</span>
+          </div>
+        </div>
+        <ul>
+          <li><strong>Create Quiz:</strong> builds from the topic path.</li>
+          <li><strong>Create Quiz from Material:</strong> builds from pasted notes, extracted files, or source material.</li>
+          <li><strong>Start Quiz:</strong> begins taking the current valid quiz only.</li>
+          <li><strong>Regenerate:</strong> should become a secondary create action, not a replacement for Start.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section aria-labelledby="roadmapTitle">
+      <h2 id="roadmapTitle">First-Use Roadmap</h2>
+      <div class="flow" aria-label="Small visual roadmap">
+        <div class="flow-step">
+          <span class="flow-kicker">1</span>
+          <span class="flow-title">Topic / Material Input</span>
+          <p>User chooses a short topic or study material without seeing manual syntax.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">2</span>
+          <span class="flow-title">Create Quiz</span>
+          <p>Create starts the build. Start remains disabled.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">3</span>
+          <span class="flow-title">Build Status</span>
+          <p>Status shows source ready, creating, validating, ready, or failed.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">4</span>
+          <span class="flow-title">Quiz Ready</span>
+          <p>A valid parsed quiz exists and is safe to take.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">5</span>
+          <span class="flow-title">Start Quiz</span>
+          <p>Start unlocks and opens the quiz runner.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">6</span>
+          <span class="flow-title">Results / Explanations</span>
+          <p>Review score, missed answers, retakes, and explanations.</p>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="statusTitle">
+      <h2 id="statusTitle">Build Status States</h2>
+      <div class="status-grid">
+        <article class="status-card">
+          <span class="status-name">Idle</span>
+          <p>Add a topic or study material, then create a quiz.</p>
+        </article>
+        <article class="status-card good">
+          <span class="status-name">Source ready</span>
+          <p>Study material is available and can be used to create a quiz.</p>
+        </article>
+        <article class="status-card warn">
+          <span class="status-name">Creating</span>
+          <p>The app is building questions. Larger sources can take longer; public quiz length is capped at 20.</p>
+        </article>
+        <article class="status-card warn">
+          <span class="status-name">Validating</span>
+          <p>The response is being checked before Start Quiz can unlock.</p>
+        </article>
+        <article class="status-card good">
+          <span class="status-name">Ready</span>
+          <p>A valid quiz exists. Start Quiz is enabled.</p>
+        </article>
+        <article class="status-card risk">
+          <span class="status-name">Failed</span>
+          <p>The new build did not produce a valid quiz. The user can retry with fewer questions or a smaller source.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid" aria-labelledby="inputsTitle">
+      <article class="card">
+        <h2 id="inputsTitle">Topic Path</h2>
+        <p>The simplest first-use path is a short topic plus optional length, difficulty, and question type controls.</p>
+        <ul>
+          <li>Primary copy: <strong>Use a topic</strong>.</li>
+          <li>Main action: <strong>Create Quiz</strong>.</li>
+          <li>Public length choices: <strong>5, 10, 15, 20</strong>.</li>
+          <li>Status after click: <strong>Creating quiz from topic...</strong></li>
+          <li>Do not show manual format examples in this path.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Study Material Path</h2>
+        <p>Study material should cover pasted notes and imported files. The user goal is source-grounded practice, not parser management.</p>
+        <ul>
+          <li>Primary copy: <strong>Use study material</strong>.</li>
+          <li>Main action: <strong>Create Quiz from Material</strong>.</li>
+          <li>Public length choices: <strong>5, 10, 15, 20</strong>.</li>
+          <li>Status after import: <strong>Study material ready.</strong></li>
+          <li>Status after click: <strong>Creating quiz from material...</strong></li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="grid" aria-labelledby="manualTitle">
+      <article class="card">
+        <h2 id="manualTitle">Advanced / Manual Quiz Import</h2>
+        <p>Formatted-line paste remains useful, but it should not define the beginner experience.</p>
+        <ul>
+          <li>Place it under <strong>Options</strong>, inside <strong>Advanced / Manual quiz import</strong>.</li>
+          <li>Use copy like: <strong>Already have EZ Quiz formatted lines? Paste them here to open or edit a quiz.</strong></li>
+          <li>Rename <strong>Parser reference</strong> to <strong>Manual format reference</strong>.</li>
+          <li>Keep Mirror and raw lines out of hero, primary cards, and beginner help.</li>
+        </ul>
+      </article>
+
+      <article class="card rule">
+        <h2>Failure Rule</h2>
+        <p><strong>Failed creation should not erase the last valid quiz.</strong></p>
+        <ul>
+          <li>If a new Create attempt fails, keep the previous ready quiz and keep Start Quiz available for it.</li>
+          <li>If inputs changed, show that Start uses the current ready quiz until Create succeeds.</li>
+          <li>Only replace the ready quiz after validation passes.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="grid" aria-labelledby="asyncTitle">
+      <article class="card wide">
+        <h2 id="asyncTitle">Async-Compatible Mental Model</h2>
+        <p>The current backend can stay synchronous for now, but the UX should already look like a build pipeline rather than a magic instant response.</p>
+        <div class="roadmap" aria-label="Future staged generation roadmap">
+          <div class="roadmap-step">
+            <span class="flow-kicker">Future</span>
+            <span class="flow-title">Source Ingest</span>
+            <p>Extract and store source material safely before generation.</p>
+          </div>
+          <div class="roadmap-step">
+            <span class="flow-kicker">Future</span>
+            <span class="flow-title">Coverage Plan</span>
+            <p>Build a topic/source outline before writing questions.</p>
+          </div>
+          <div class="roadmap-step">
+            <span class="flow-kicker">Future</span>
+            <span class="flow-title">Smaller Batches</span>
+            <p>Generate groups of questions instead of one large request.</p>
+          </div>
+          <div class="roadmap-step">
+            <span class="flow-kicker">Future</span>
+            <span class="flow-title">Validate / Repair</span>
+            <p>Dedupe, check answers, and repair weak questions.</p>
+          </div>
+          <div class="roadmap-step">
+            <span class="flow-kicker">Future</span>
+            <span class="flow-title">Final Quiz</span>
+            <p>Unlock Start only after the final valid quiz is assembled.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section aria-labelledby="scopeTitle">
+      <h2 id="scopeTitle">Implementation Scope</h2>
+      <div class="now-next">
+        <article class="card">
+          <h3>Can Implement Now</h3>
+          <ul>
+            <li>Replace chameleon primary action with stable Create and Start Quiz controls.</li>
+            <li>Limit public/default quiz lengths to 5, 10, 15, and 20 questions.</li>
+            <li>Stop auto-start after generation.</li>
+            <li>Add a visible build status region with the six states above.</li>
+            <li>Update landing and help copy around Topic and Study Material.</li>
+            <li>Keep the last valid quiz until a new build validates successfully.</li>
+            <li>Move formatted-line paste language under Advanced / Manual quiz import.</li>
+            <li>Update tests around import-ready copy, Start disabled behavior, and generation failure handling.</li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h3>Should Wait</h3>
+          <ul>
+            <li>30/50-question public generation.</li>
+            <li>Neon-backed generation jobs.</li>
+            <li>Polling, resumable async state, and cross-session job recovery.</li>
+            <li>True staged server progress events.</li>
+            <li>Coverage blueprint generation as a required backend step.</li>
+            <li>Automated dedupe, validation, and repair across batches.</li>
+            <li>Resumable large-file upload architecture.</li>
+            <li>Making structured quiz JSON the default response format.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

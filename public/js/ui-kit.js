@@ -25,11 +25,11 @@
   function setBeta(enabled) {
     if (enabled) {
       body.dataset.beta = 'true';
-      betaToggle.textContent = 'Beta: On';
+      betaToggle.textContent = 'Flag: On';
       localStorage.setItem('kit-beta', '1');
     } else {
       body.removeAttribute('data-beta');
-      betaToggle.textContent = 'Beta: Off';
+      betaToggle.textContent = 'Flag: Off';
       localStorage.removeItem('kit-beta');
     }
     betaToggle.setAttribute('aria-pressed', String(enabled));

@@ -6,6 +6,7 @@ const {
   callProvider,
   generateLines,
   generateInBatches,
+  outputTokenBudget,
 } = require('../lib/providers.js');
 
 describe('providers helpers', () => {
@@ -40,6 +41,10 @@ describe('providers helpers', () => {
     expect(typeof title).toBe('string');
     const l = String(lines).trim().split('\n');
     expect(l).toHaveLength(5);
+  });
+
+  test('legacy provider budget is large enough for complete small quizzes', () => {
+    expect(outputTokenBudget(5, 'legacy')).toBeGreaterThanOrEqual(2500);
   });
 
   test('generateInBatches echo can fill a 50 question request', async () => {

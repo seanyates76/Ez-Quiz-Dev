@@ -41,7 +41,7 @@ function wireStartHint(){
   const start = qs('startBtn'); if(!start) return;
   let hinted = false;
   const obs = new MutationObserver(()=>{
-    if(!hinted && !start.disabled){ hinted = true; announce('Ready — press Start to begin'); }
+    if(!hinted && !start.disabled){ hinted = true; announce('Ready — press Start Quiz to begin'); }
   });
   obs.observe(start, { attributes:true, attributeFilter:['disabled'] });
 }

@@ -233,7 +233,7 @@
         <span class="pill good">Tests passed</span>
         <span class="pill good">UI check passed</span>
         <span class="pill good">Docs committed</span>
-        <span class="pill warn">50-question sync still has provider/runtime risk</span>
+        <span class="pill warn">30/50 remains future reliability work</span>
       </div>
     </header>
 
@@ -248,7 +248,7 @@
       <article class="card wide">
         <h2>Morning Verdict</h2>
         <p>EZ Quiz is closer to final form. The app now treats imported material as source first, extracts deterministic text before spending AI tokens, gives larger note-style files room to breathe, and presents the quiz results endpoint with a cleaner finish.</p>
-        <p>The branch is locally verified and committed. The main promotion caveats are operational: normal <code>netlify dev</code> can still be misleading because team-level Netlify AI Gateway values can shadow direct provider keys, and 50-question generation is improved but not guaranteed as a single synchronous request in all live environments.</p>
+        <p>The branch is locally verified and committed. The main promotion caveats are operational: normal <code>netlify dev</code> can still be misleading because team-level Netlify AI Gateway values can shadow direct provider keys, and larger 30/50-question generation still needs reliability hardening before it becomes a public option.</p>
       </article>
     </section>
 
@@ -265,7 +265,7 @@
 
       <article class="card third">
         <h2>Generation Model</h2>
-        <p>Large quiz requests now use smaller provider calls with explicit failure copy instead of silently hanging. This reduces timeout risk but does not make 50 live questions universally synchronous-safe.</p>
+        <p>Public quiz creation now stays within 5, 10, 15, and 20-question lengths, with explicit failure copy instead of silently hanging. Larger 30/50-question creation remains future reliability work.</p>
         <ul>
           <li>Default large-request batch size is smaller.</li>
           <li>Under-count and timeout copy is more honest.</li>
@@ -306,10 +306,10 @@
               <td>Large binary documents need an async/blob upload path before the cap can be raised safely.</td>
             </tr>
             <tr>
-              <td>50-question generation</td>
-              <td class="status active">Hardened</td>
-              <td>Reduced provider batch size and improved user-facing timeout/retry copy.</td>
-              <td>A single synchronous 50-question request can still exceed provider or Netlify runtime behavior. Async generation is the right final architecture.</td>
+              <td>Public quiz lengths</td>
+              <td class="status active">Capped</td>
+              <td>Public options are 5, 10, 15, and 20 questions with improved user-facing timeout/retry copy.</td>
+              <td>Larger 30/50-question generation remains future reliability work. Async generation is the right final architecture.</td>
             </tr>
             <tr>
               <td>Topic/source/manual model</td>
@@ -371,7 +371,7 @@
         </article>
         <article class="step">
           <h3>Decide On Async Investment</h3>
-          <p>If 50 questions and large binary documents are core product promises, move generation and binary import to async jobs with progress, retry, and resumable state.</p>
+          <p>If larger 30/50-question quizzes and large binary documents become core product promises, move generation and binary import to async jobs with progress, retry, and resumable state.</p>
         </article>
         <article class="step">
           <h3>Redesign Source Modes</h3>
@@ -379,7 +379,7 @@
         </article>
         <article class="step">
           <h3>Promotion Review</h3>
-          <p>With the branch clean and tests green, promotion readiness now depends on live runtime smoke and a conscious decision about whether synchronous 50-question generation is acceptable for the first release.</p>
+          <p>With the branch clean and tests green, promotion readiness now depends on live runtime smoke and keeping larger 30/50-question generation out of the current public update.</p>
         </article>
       </div>
     </section>

@@ -1,7 +1,5 @@
 'use strict';
 
-const { requireBeta } = require('./lib/betaGuard.js');
-
 const BYTES_PER_MIB = 1024 * 1024;
 const MAX_MEDIA_BYTES = 4 * BYTES_PER_MIB;
 const MAX_BODY_BYTES = 6 * BYTES_PER_MIB;
@@ -447,9 +445,6 @@ exports.handler = async (event) => {
   if (!originAllowed) return reply(403, { error: 'Forbidden origin' }, '');
   const responseOrigin = origin || (allowedOrigins.length === 0 ? '*' : '');
   if (event.httpMethod !== 'POST') return reply(405, { error: 'Method Not Allowed' }, responseOrigin);
-  if (!requireBeta({ headers: event.headers || {} })) {
-    return reply(403, { error: 'Media import is beta-only. Enable beta in Settings or visit /beta.', code: 'MEDIA_BETA_REQUIRED' }, responseOrigin);
-  }
   if (rateLimited(event)) return reply(429, { error: 'Rate limit exceeded', code: 'MEDIA_RATE_LIMITED' }, responseOrigin);
   if (Buffer.byteLength(String(event.body || ''), 'utf8') > MAX_BODY_BYTES) {
     return reply(413, { error: `Request body too large (max ${MAX_BODY_BYTES} bytes)`, code: 'MEDIA_BODY_TOO_LARGE' }, responseOrigin);
