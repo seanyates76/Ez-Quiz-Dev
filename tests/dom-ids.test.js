@@ -43,7 +43,8 @@ describe('public/index.html structure', () => {
     expect(startBtn).not.toBeNull();
     expect(toolbarStart).not.toBeNull();
     expect(startBtn.hasAttribute('disabled')).toBe(true);
-    expect(toolbarStart.hasAttribute('disabled')).toBe(true);
+    expect(toolbarStart.hasAttribute('disabled')).toBe(false);
+    expect(toolbarStart.getAttribute('aria-disabled')).toBe('true');
     expect(startBtn.getAttribute('aria-describedby')).toBe('startHelp');
     expect(toolbarStart.getAttribute('aria-describedby')).toBe('startHelp');
   });

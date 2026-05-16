@@ -270,6 +270,7 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question.');
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').disabled).toBe(false);
+    expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
     expect(document.getElementById('startToolbarBtn').classList.contains('start-primary')).toBe(true);
     expect(document.getElementById('generateBtn').classList.contains('primary')).toBe(false);
     expect(document.getElementById('generateBtn').classList.contains('btn-outline')).toBe(true);

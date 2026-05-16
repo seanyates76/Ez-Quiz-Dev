@@ -1,13 +1,13 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.32';
+import { generateWithAI } from './api.js?v=1.5.33';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.32';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.32';
+import { announce } from './a11y-announcer.js?v=1.5.33';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.33';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
@@ -48,7 +48,12 @@ function setStartButtonsDisabled(disabled){
   const startBtn = $('startBtn');
   const startToolbarBtn = $('startToolbarBtn');
   if(startBtn) startBtn.disabled = isDisabled;
-  if(startToolbarBtn) startToolbarBtn.disabled = isDisabled;
+  if(startToolbarBtn) {
+    startToolbarBtn.disabled = false;
+    startToolbarBtn.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
+    startToolbarBtn.dataset.startDisabled = isDisabled ? 'true' : 'false';
+    startToolbarBtn.tabIndex = isDisabled ? -1 : 0;
+  }
   syncGeneratorActionHierarchy();
 }
 
