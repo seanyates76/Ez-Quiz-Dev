@@ -641,7 +641,10 @@ input[type="radio"]:focus-visible {
 }
 
 .btn.start-primary {
+  appearance: none;
+  -webkit-appearance: none;
   background: var(--start-bg);
+  background-color: var(--start-bg);
   border-color: transparent;
   color: var(--start-text);
   box-shadow: none;
@@ -650,15 +653,18 @@ input[type="radio"]:focus-visible {
 
 .btn.start-primary:hover {
   background: var(--start-hover);
+  background-color: var(--start-hover);
   filter: none;
 }
 
 .btn.start-primary:active {
   background: var(--start-hover);
+  background-color: var(--start-hover);
 }
 
 .btn.start-primary[disabled] {
   background: var(--panel-2);
+  background-color: var(--panel-2);
   border-color: var(--border);
   color: var(--muted);
   box-shadow: none;
