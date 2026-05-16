@@ -4441,6 +4441,25 @@ body[data-beta] .affix-btn.beta-only,
   border-radius: var(--radius-control);
 }
 
+.gen-toolbar #startToolbarBtn.start-primary {
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--start-bg);
+  background-color: var(--start-bg);
+  border-color: transparent;
+  color: var(--start-text);
+  box-shadow: none;
+  filter: none;
+}
+
+.gen-toolbar #startToolbarBtn.start-primary:hover,
+.gen-toolbar #startToolbarBtn.start-primary:active {
+  background: var(--start-hover);
+  background-color: var(--start-hover);
+  box-shadow: none;
+  filter: none;
+}
+
 .res-head {
   min-width: 0;
   overflow-wrap: anywhere;

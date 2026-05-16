@@ -8,8 +8,8 @@
  * page for navigation requests when offline.
  */
 
-const ASSET_VERSION = '1.5.33';
-const CACHE_NAME = 'ezq-v1217';
+const ASSET_VERSION = '1.5.34';
+const CACHE_NAME = 'ezq-v1218';
 const PRECACHE_URLS = [
   '/index.html',
   '/styles.css?v=' + ASSET_VERSION,
