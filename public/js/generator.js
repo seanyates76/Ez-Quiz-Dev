@@ -1,13 +1,13 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.30';
+import { generateWithAI } from './api.js?v=1.5.31';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.30';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.30';
+import { announce } from './a11y-announcer.js?v=1.5.31';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.31';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
@@ -15,9 +15,45 @@ import { STORAGE_KEYS } from './state.js';
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;
 
+function formatUnitCount(count, singular, plural = `${singular}s`){
+  const n = Number(count) || 0;
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+function hasStartableQuiz(){
+  const startBtn = $('startBtn');
+  return !!(Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0 && startBtn && !startBtn.disabled);
+}
+
+function syncGeneratorActionHierarchy(){
+  const ready = hasStartableQuiz();
+  const generateBtn = $('generateBtn');
+  const generatorCard = $('generatorCard');
+  const startButtons = [$('startBtn'), $('startToolbarBtn')].filter(Boolean);
+  if(generatorCard) generatorCard.setAttribute('data-quiz-ready', ready ? 'true' : 'false');
+  if(generateBtn) {
+    generateBtn.classList.toggle('primary', !ready);
+    generateBtn.classList.toggle('btn-outline', ready);
+    generateBtn.setAttribute('data-ready-secondary', ready ? 'true' : 'false');
+    if(ready) generateBtn.textContent = 'Create New Quiz';
+  }
+  startButtons.forEach((btn) => {
+    btn.classList.toggle('start-primary', ready);
+    btn.setAttribute('data-ready-primary', ready ? 'true' : 'false');
+  });
+}
+
+function setStartButtonsDisabled(disabled){
+  const isDisabled = !!disabled;
+  const startBtn = $('startBtn');
+  const startToolbarBtn = $('startToolbarBtn');
+  if(startBtn) startBtn.disabled = isDisabled;
+  if(startToolbarBtn) startToolbarBtn.disabled = isDisabled;
+  syncGeneratorActionHierarchy();
+}
+
 export function runParseFlow(sourceText, topicLabel, fullTitle){
   const mirror = $('mirror');
-  const startBtn = $('startBtn');
   const { questions, errors, error: limitError } = parseEditorInput(sourceText);
   S.quiz.questions = questions;
   // Preserve the full original question set for full retakes
@@ -45,11 +81,11 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
   }
   if (errors.length) parseErrorMessages.push(...errors);
   const summary = errors.length
-    ? `Parsed ${questions.length} question(s). ${errors.length} error(s). ${firstErrors.join(' | ')}`
-    : `Parsed ${questions.length} question(s).`;
+    ? `Parsed ${formatUnitCount(questions.length, 'question')}. ${formatUnitCount(errors.length, 'error')}. ${firstErrors.join(' | ')}`
+    : `Parsed ${formatUnitCount(questions.length, 'question')}.`;
   const statusMessage = limitError
     ? `${summary} ${limitError}`.trim()
-    : (questions.length ? `Quiz ready: ${questions.length} question(s).` : summary);
+    : (questions.length ? `Quiz ready: ${formatUnitCount(questions.length, 'question')}.` : summary);
   if(statusBox) {
     statusBox.textContent = statusMessage;
     statusBox.setAttribute('data-build-state', limitError ? 'failed' : (questions.length ? 'ready' : 'idle'));
@@ -66,7 +102,7 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
       }
     }
   } catch {}
-  if(startBtn) startBtn.disabled = questions.length === 0 || !!limitError;
+  setStartButtonsDisabled(questions.length === 0 || !!limitError);
 }
 
 export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
@@ -740,7 +776,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const qtMT = $('qtMT');
   const startBtn2 = startBtn;
 
-  // Primary action: Create Quiz | Create Quiz from Material | Recreate Quiz
+  // Primary action: Create Quiz | Create Quiz from Material | Create New Quiz
   function snapshotChanged(last, curr){
     if(!last || !curr) return false;
     return last.topic !== curr.topic || last.count !== curr.count || last.difficulty !== curr.difficulty || (last.sourceId || '') !== (curr.sourceId || '');
@@ -749,13 +785,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     try{ return !!(localStorage.getItem('EZQ_DEBUG') || /localhost|127\.0\.0\.1/.test(location && location.hostname)); }catch{ return false; }
   }
   function computePrimaryMode(){
-    const hasLoaded = Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0;
-    const ui = (window.EZQ.ui = window.EZQ.ui || {});
-    const last = ui.lastGeneratedParams;
-    const curr = getParamsSnapshot();
-    const changed = snapshotChanged(last, curr);
+    const ready = hasStartableQuiz();
+    if (ready) return 'new-quiz';
     if (hasMediaSource()) return 'create-from-material';
-    if (hasLoaded && last && changed) return 'regenerate';
     return 'generate';
   }
   function setPrimaryAction(mode){
@@ -763,11 +795,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const m = mode || computePrimaryMode();
     ui.primaryMode = m;
     const label = (m === 'create-from-material') ? 'Create Quiz from Material'
-                : (m === 'regenerate') ? 'Recreate Quiz'
+                : (m === 'new-quiz') ? 'Create New Quiz'
                 : 'Create Quiz';
     const dataMode = 'generate';
     generateBtn?.setAttribute('data-mode', dataMode);
     if (generateBtn) generateBtn.textContent = label;
+    syncGeneratorActionHierarchy();
     if(__devDebug() && ui.__lastPrimaryLogged !== m){ try{ console.debug('[ezq:dev] primary-action', { mode: m }); }catch{} ui.__lastPrimaryLogged = m; }
   }
   function updatePrimaryHint(){
@@ -792,7 +825,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
       // Quiz loaded
       if(last && changed){
-        hint.textContent = 'Inputs changed. Recreate Quiz will replace the ready quiz only after a valid build succeeds.';
+        hint.textContent = 'Inputs changed. Create New Quiz will replace the ready quiz only after a valid build succeeds.';
         hint.hidden = false; return;
       }
       // Loaded, unchanged
@@ -889,7 +922,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   clearBtn?.addEventListener('click', ()=>{
     setEditorText('');
     clearImportedSource();
-    if(startBtn) startBtn.disabled = true;
+    setStartButtonsDisabled(true);
     setBuildStatus('idle', 'Cleared. Add a topic or study material, then create a quiz.');
     try{
       const ui = (window.EZQ.ui = window.EZQ.ui || {});

@@ -58,6 +58,9 @@
   --danger: var(--c-danger);
   --success: var(--c-success);
   --success-press: var(--c-success-active);
+  --start-bg: #fbbf24;
+  --start-hover: #f59e0b;
+  --start-text: #111827;
   --ring: var(--c-accent);
   --border: var(--c-border-weak);
   --border-strong: var(--c-border-strong);
@@ -627,16 +630,38 @@ input[type="radio"]:focus-visible {
   color: #fff;
 }
 
-.btn.brand,
-#startBtn.btn {
+.btn.brand {
   background: var(--brand);
   border-color: transparent;
   color: #111;
 }
 
-#startBtn.btn:active,
 .btn.brand:active {
   background: var(--brand-press);
+}
+
+.btn.start-primary {
+  background: var(--start-bg);
+  border-color: transparent;
+  color: var(--start-text);
+  box-shadow: none;
+  font-weight: 700;
+}
+
+.btn.start-primary:hover {
+  background: var(--start-hover);
+  filter: none;
+}
+
+.btn.start-primary:active {
+  background: var(--start-hover);
+}
+
+.btn.start-primary[disabled] {
+  background: var(--panel-2);
+  border-color: var(--border);
+  color: var(--muted);
+  box-shadow: none;
 }
 
 .btn-outline {

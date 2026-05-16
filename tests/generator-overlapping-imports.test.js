@@ -267,10 +267,33 @@ describe('generator media import overlap regression', () => {
     }));
     expect(generateWithAI.mock.calls[0][2]).not.toHaveProperty('sourceText');
     expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
-    expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question(s).');
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question.');
     expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(document.getElementById('startToolbarBtn').disabled).toBe(false);
+    expect(document.getElementById('startToolbarBtn').classList.contains('start-primary')).toBe(true);
+    expect(document.getElementById('generateBtn').classList.contains('primary')).toBe(false);
+    expect(document.getElementById('generateBtn').classList.contains('btn-outline')).toBe(true);
+    expect(document.getElementById('generateBtn').textContent).toBe('Create New Quiz');
     expect(beginQuiz).not.toHaveBeenCalled();
     expect(syncSettingsFromUI).not.toHaveBeenCalled();
+  });
+
+  test('uses plural ready grammar for generated quizzes', async () => {
+    parseEditorInput.mockReturnValue({
+      questions: Array.from({ length: 10 }, (_, index) => ({ prompt: `Question ${index + 1}` })),
+      errors: [],
+      error: null,
+    });
+
+    document.getElementById('topicInput').value = 'routing basics';
+    document.getElementById('countInput').value = '10';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 10 questions.');
+    expect(document.getElementById('startToolbarBtn').classList.contains('start-primary')).toBe(true);
   });
 
   test('keeps the newest overlapping import result and only re-enables controls after it finishes', async () => {
