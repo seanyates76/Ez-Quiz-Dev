@@ -6,11 +6,11 @@
   <title>EZ Quiz</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=1.5.29"></script>
-  <link rel="stylesheet" href="styles.css?v=1.5.29" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.29">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.29">
-  <script src="js/boot-beta.js?v=1.5.29"></script>
+  <script src="js/theme-preload.js?v=1.5.30"></script>
+  <link rel="stylesheet" href="styles.css?v=1.5.30" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.30">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.30">
+  <script src="js/boot-beta.js?v=1.5.30"></script>
 </head>
 <body>
   <header class="site-header" role="banner">
@@ -35,59 +35,44 @@
 
   <main class="container" id="app" role="main">
     <section id="landingIntro" class="landing-intro" aria-labelledby="landingTitle">
+      <button id="landingIntroClose" class="preview-close landing-intro-close" type="button" aria-label="Close info panel">
+        <span aria-hidden="true">×</span>
+      </button>
       <div class="landing-copy">
         <p class="landing-kicker">Create, practice, review</p>
-        <h1 id="landingTitle">EZ Quiz</h1>
-        <p class="landing-dek">Create a reliable quiz from a short topic or study material, then start when the quiz is ready. Results include on-demand explanations for review.</p>
-        <div class="landing-actions" aria-label="Primary setup actions">
-          <button class="btn primary" type="button" data-focus-target="topicInput">Use a topic</button>
-          <button class="btn btn-outline" type="button" data-focus-target="importBtn">Use study material</button>
-          <button class="btn btn-ghost" type="button" data-focus-target="editor">Advanced manual import</button>
-        </div>
+        <h1 id="landingTitle">Welcome to EZ Quiz.</h1>
+        <p class="landing-dek">Create focused practice quizzes from a topic or study material.</p>
       </div>
-      <div id="landingPreview" class="landing-preview" aria-labelledby="landingPreviewTitle">
-        <div class="preview-head">
-          <div id="landingPreviewTitle" class="preview-label">What’s new</div>
-          <button id="landingPreviewClose" class="preview-close" type="button" aria-label="Close info panel">
-            <span aria-hidden="true">×</span>
-          </button>
+      <div id="landingPreview" class="landing-preview" aria-label="Intro sections">
+        <div class="preview-tabs" role="tablist" aria-label="Intro sections">
+          <button id="landingTabNew" class="preview-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="landingPanelNew" data-preview-tab="0">What’s new</button>
+          <button id="landingTabSoon" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelSoon" data-preview-tab="1" tabindex="-1">Coming soon</button>
+          <button id="landingTabTips" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelTips" data-preview-tab="2" tabindex="-1">Tips</button>
         </div>
-        <div class="preview-slide" data-preview-slide="0">
+        <div id="landingPanelNew" class="preview-panel" role="tabpanel" aria-labelledby="landingTabNew" data-preview-panel="0">
           <ul class="preview-list">
             <li>Create from a topic or your study material.</li>
             <li>Start when your quiz is ready.</li>
             <li>Review missed answers with simple explanations.</li>
           </ul>
         </div>
-        <div class="preview-slide" data-preview-slide="1" hidden>
+        <div id="landingPanelSoon" class="preview-panel" role="tabpanel" aria-labelledby="landingTabSoon" data-preview-panel="1" hidden>
           <ul class="preview-list">
             <li>Better support for larger quizzes.</li>
             <li>Clearer progress for big imports.</li>
             <li>Flashcards and review tools for missed concepts.</li>
           </ul>
         </div>
-        <div class="preview-slide" data-preview-slide="2" hidden>
+        <div id="landingPanelTips" class="preview-panel" role="tabpanel" aria-labelledby="landingTabTips" data-preview-panel="2" hidden>
           <ul class="preview-list">
             <li>Use a short topic for quick practice.</li>
             <li>Use study material for notes, documents, or pasted text.</li>
             <li>If a build fails, try a smaller source or shorter quiz.</li>
           </ul>
         </div>
-        <div class="preview-footer">
-          <div class="preview-controls" aria-label="Info panel navigation">
-            <button id="landingPreviewPrev" class="preview-nav" type="button" aria-label="Previous section">‹</button>
-            <div class="preview-steps" role="tablist" aria-label="Info panel sections">
-              <button class="preview-step is-active" type="button" data-preview-step="0" aria-label="What’s new" aria-selected="true"></button>
-              <button class="preview-step" type="button" data-preview-step="1" aria-label="Coming soon" aria-selected="false"></button>
-              <button class="preview-step" type="button" data-preview-step="2" aria-label="Tips" aria-selected="false"></button>
-            </div>
-            <button id="landingPreviewNext" class="preview-nav" type="button" aria-label="Next section">›</button>
-          </div>
-          <label class="preview-hide">
-            <input id="landingPreviewDontShow" type="checkbox" />
-            <span>Don’t show again</span>
-          </label>
-        </div>
+      </div>
+      <div class="landing-intro-footer">
+        <button id="landingIntroDontShow" class="preview-hide" type="button">Don’t show again</button>
       </div>
     </section>
 
@@ -709,10 +694,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=1.5.29"></script>
-  <script type="module" src="js/auto-refresh.js?v=1.5.29"></script>
-  <script type="module" src="js/patches.js?v=1.5.29"></script>
-  <script type="module" src="js/editor.gui.js?v=1.5.29"></script>
+  <script type="module" src="js/main.js?v=1.5.30"></script>
+  <script type="module" src="js/auto-refresh.js?v=1.5.30"></script>
+  <script type="module" src="js/patches.js?v=1.5.30"></script>
+  <script type="module" src="js/editor.gui.js?v=1.5.30"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">

@@ -28,17 +28,14 @@ describe('landing intro shell', () => {
     document.body.innerHTML = `
       <section id="landingIntro">
         <div class="landing-copy"></div>
+        <button id="landingIntroClose" type="button"></button>
         <div id="landingPreview">
-          <div id="landingPreviewTitle"></div>
-          <button id="landingPreviewClose" type="button"></button>
-          <div data-preview-slide="0"></div>
-          <div data-preview-slide="1"></div>
-          <button id="landingPreviewPrev" type="button"></button>
-          <button data-preview-step="0" type="button"></button>
-          <button data-preview-step="1" type="button"></button>
-          <button id="landingPreviewNext" type="button"></button>
-          <input id="landingPreviewDontShow" type="checkbox" />
+          <button data-preview-tab="0" type="button" role="tab"></button>
+          <button data-preview-tab="1" type="button" role="tab"></button>
+          <div data-preview-panel="0"></div>
+          <div data-preview-panel="1"></div>
         </div>
+        <button id="landingIntroDontShow" type="button"></button>
       </section>
     `;
   });
@@ -46,19 +43,32 @@ describe('landing intro shell', () => {
   test('close control hides the unified landing intro shell', () => {
     wireLandingIntro();
 
-    document.getElementById('landingPreviewClose').click();
+    document.getElementById('landingIntroClose').click();
 
     expect(document.getElementById('landingIntro').hidden).toBe(true);
   });
 
   test('don’t show again persists full-section dismissal', () => {
-    document.getElementById('landingPreviewDontShow').checked = true;
     wireLandingIntro();
 
-    document.getElementById('landingPreviewClose').click();
+    document.getElementById('landingIntroDontShow').click();
 
     expect(localStorage.getItem(LANDING_INTRO_STORAGE_KEY)).toBe(LANDING_INTRO_VISIBILITY.NEVER);
     expect(localStorage.getItem(LEGACY_LANDING_PREVIEW_STORAGE_KEY)).toBe('1');
+    expect(document.getElementById('landingIntro').hidden).toBe(true);
+  });
+
+  test('tabs swap visible intro content', () => {
+    wireLandingIntro();
+
+    const tabs = Array.from(document.querySelectorAll('[data-preview-tab]'));
+    const panels = Array.from(document.querySelectorAll('[data-preview-panel]'));
+    tabs[1].click();
+
+    expect(tabs[0].getAttribute('aria-selected')).toBe('false');
+    expect(tabs[1].getAttribute('aria-selected')).toBe('true');
+    expect(panels[0].hidden).toBe(true);
+    expect(panels[1].hidden).toBe(false);
   });
 
   test('stored never preference hides the shell on init', () => {

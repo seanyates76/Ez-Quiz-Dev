@@ -7,8 +7,6 @@ export const LANDING_INTRO_VISIBILITY = Object.freeze({
 });
 
 const VALID_VISIBILITY = new Set(Object.values(LANDING_INTRO_VISIBILITY));
-const SLIDE_LABELS = ['What’s new', 'Coming soon', 'Tips'];
-
 function readStorage(key){
   try { return localStorage.getItem(key); } catch { return null; }
 }
@@ -53,33 +51,43 @@ export function wireLandingIntro(){
   intro.hidden = false;
 
   const panel = document.getElementById('landingPreview');
-  const title = document.getElementById('landingPreviewTitle');
-  const closeBtn = document.getElementById('landingPreviewClose');
-  const dontShow = document.getElementById('landingPreviewDontShow');
-  const prevBtn = document.getElementById('landingPreviewPrev');
-  const nextBtn = document.getElementById('landingPreviewNext');
-  const slides = Array.from(panel?.querySelectorAll('[data-preview-slide]') || []);
-  const steps = Array.from(panel?.querySelectorAll('[data-preview-step]') || []);
+  const closeBtn = document.getElementById('landingIntroClose') || document.getElementById('landingPreviewClose');
+  const dontShow = document.getElementById('landingIntroDontShow') || document.getElementById('landingPreviewDontShow');
+  const panels = Array.from(panel?.querySelectorAll('[data-preview-panel], [data-preview-slide]') || []);
+  const tabs = Array.from(panel?.querySelectorAll('[data-preview-tab], [data-preview-step]') || []);
   let current = 0;
 
   function show(index){
-    if(!slides.length) return;
-    current = (index + slides.length) % slides.length;
-    slides.forEach((slide, i) => { slide.hidden = i !== current; });
-    steps.forEach((step, i) => {
-      step.classList.toggle('is-active', i === current);
-      step.setAttribute('aria-selected', i === current ? 'true' : 'false');
+    if(!panels.length) return;
+    current = Math.max(0, Math.min(index, panels.length - 1));
+    panels.forEach((tabPanel, i) => { tabPanel.hidden = i !== current; });
+    tabs.forEach((tab, i) => {
+      const active = i === current;
+      tab.classList.toggle('is-active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+      tab.tabIndex = active ? 0 : -1;
     });
-    if(title) title.textContent = SLIDE_LABELS[current] || SLIDE_LABELS[0];
   }
 
   closeBtn?.addEventListener('click', () => {
-    dismissLandingIntro({ persist: !!dontShow?.checked });
+    dismissLandingIntro();
   });
-  prevBtn?.addEventListener('click', () => show(current - 1));
-  nextBtn?.addEventListener('click', () => show(current + 1));
-  steps.forEach((step) => {
-    step.addEventListener('click', () => show(Number(step.dataset.previewStep || 0)));
+  dontShow?.addEventListener('click', () => {
+    dismissLandingIntro({ persist: true });
+  });
+  tabs.forEach((tab, index) => {
+    tab.addEventListener('click', () => show(index));
+    tab.addEventListener('keydown', (event) => {
+      let nextIndex = null;
+      if(event.key === 'ArrowRight') nextIndex = (current + 1) % tabs.length;
+      if(event.key === 'ArrowLeft') nextIndex = (current - 1 + tabs.length) % tabs.length;
+      if(event.key === 'Home') nextIndex = 0;
+      if(event.key === 'End') nextIndex = tabs.length - 1;
+      if(nextIndex == null) return;
+      event.preventDefault();
+      show(nextIndex);
+      tabs[nextIndex]?.focus();
+    });
   });
 
   show(0);
