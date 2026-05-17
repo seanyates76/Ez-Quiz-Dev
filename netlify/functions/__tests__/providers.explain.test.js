@@ -16,13 +16,14 @@ describe('providers.explain', () => {
     correct: [3],
   };
 
-  test('builds a structured prompt with JSON instructions and learner answer context', () => {
+  test('builds a structured prompt without learner answer context', () => {
     const prompt = buildExplanationPrompt([question], [[2]]);
 
     expect(prompt).toContain('Return minified JSON only.');
     expect(prompt).toContain('Line 1 must start with "Answer:".');
     expect(prompt).toContain('Q1: Which port does HTTPS use by default?');
-    expect(prompt).toContain('Learner answer: C) 80');
+    expect(prompt).not.toContain('Learner answer:');
+    expect(prompt).not.toContain('Learner answer: C) 80');
     expect(prompt).toContain('Correct answer(s): D');
     expect(prompt).toContain('Correct option text: D) 443');
   });

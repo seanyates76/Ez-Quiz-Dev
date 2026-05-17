@@ -152,13 +152,6 @@ function isSafeInteger(value) {
   return Number.isInteger(value) && Number.isSafeInteger(value);
 }
 
-function normalizeAttemptedAnswers(payload, requestedIndices) {
-  if (payload.attemptedAnswers === undefined) return [];
-  if (!Array.isArray(payload.attemptedAnswers)) throw new Error('"attemptedAnswers" must be an array');
-  if (payload.attemptedAnswers.length === requestedIndices.length) return payload.attemptedAnswers;
-  return requestedIndices.map((idx) => payload.attemptedAnswers[idx]);
-}
-
 function validatePayload(payload, origin) {
   const { lines, index, indices } = payload;
   if (!Array.isArray(lines)) return { error: badRequest('Missing or invalid "lines" array', origin) };
@@ -204,15 +197,14 @@ exports.handler = async (event) => {
   const TIMEOUT_MS = Math.max(5000, Math.min(30000, parseInt(process.env.EXPLAIN_TIMEOUT_MS || '15000', 10)));
   try {
     const { questions, originalIndices } = parseRequestedQuestions(validated.lines, validated.requestedIndices);
-    const attemptedAnswers = normalizeAttemptedAnswers(payload, originalIndices);
-    const explanations = await withTimeout(explainQuestions({ provider: undefined, model: undefined, questions, originalIndices, attemptedAnswers, env: process.env }), TIMEOUT_MS);
+    const explanations = await withTimeout(explainQuestions({ provider: undefined, model: undefined, questions, originalIndices, env: process.env }), TIMEOUT_MS);
     return reply(200, { explanations }, responseOrigin);
   } catch (err) {
     console.error('Explanation error:', err && { message: err.message, code: err.code, status: err.status });
     const msg = String((err && err.message) || err || 'Error');
     const status = (err && err.status) || 500;
     if (msg.includes('Timeout')) return reply(504, { error: 'Explanation generation timed out', code: 'EXPLAIN_TIMEOUT' }, responseOrigin);
-    if (msg.includes('out of range') || msg.includes('Invalid') || msg.includes('Failed to parse') || msg.includes('attemptedAnswers')) return badRequest(msg, responseOrigin);
+    if (msg.includes('out of range') || msg.includes('Invalid') || msg.includes('Failed to parse')) return badRequest(msg, responseOrigin);
     if (err && err.code && status >= 400 && status < 600) {
       const body = { error: status >= 500 && err.code !== 'EXPLAIN_PROVIDER_NOT_CONFIGURED' ? 'Explanation provider failed' : msg, code: err.code };
       if (err.details !== undefined && status < 500) body.details = err.details;

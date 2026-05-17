@@ -10,7 +10,7 @@
 
 const ASSET_VERSION = '1.5.35';
 const CACHE_NAME = 'ezq-v1219';
-const MODULE_IMPORT_VERSION = '1.5.34';
+const MODULE_IMPORT_VERSION = ASSET_VERSION;
 const PRECACHE_URLS = [
   '/index.html',
   '/styles.css?v=' + ASSET_VERSION,

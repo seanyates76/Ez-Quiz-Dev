@@ -1,6 +1,6 @@
 import { S } from './state.js';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=1.5.34';
+import { requestLazyExplanation } from './explain-api.js?v=1.5.35';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
@@ -395,24 +395,6 @@ function getBaseQuestionSet(){
     : (Array.isArray(S.quiz.questions) ? S.quiz.questions : []);
 }
 
-function getOriginalAnswerSet(baseQs = getBaseQuestionSet()){
-  if(Array.isArray(S.quiz.originalAnswers) && S.quiz.originalAnswers.length === baseQs.length){
-    return S.quiz.originalAnswers.slice();
-  }
-  const answers = new Array(baseQs.length).fill(null);
-  const map = (Array.isArray(S.quiz.indexMap) && S.quiz.indexMap.length)
-    ? S.quiz.indexMap
-    : (Array.isArray(S.quiz.questions) ? S.quiz.questions.map((_, i)=>i) : []);
-  const current = Array.isArray(S.quiz.answers) ? S.quiz.answers : [];
-  for(let i=0;i<current.length;i++){
-    const origIdx = map[i];
-    if(Number.isInteger(origIdx) && origIdx >= 0 && origIdx < answers.length){
-      answers[origIdx] = current[i];
-    }
-  }
-  return answers;
-}
-
 export function buildExplanationRequest(origIdx){
   const baseQs = getBaseQuestionSet();
   if(!Number.isInteger(origIdx) || origIdx < 0 || origIdx >= baseQs.length){
@@ -425,7 +407,6 @@ export function buildExplanationRequest(origIdx){
   return {
     lines,
     index: origIdx,
-    attemptedAnswers: getOriginalAnswerSet(baseQs),
   };
 }
 

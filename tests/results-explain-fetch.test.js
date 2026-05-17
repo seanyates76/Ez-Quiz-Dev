@@ -107,7 +107,7 @@ describe('results explanation UI', () => {
     expect(document.querySelector('.mt-correct')).not.toBeNull();
   });
 
-  test('builds an explanation request from original questions and answers', () => {
+  test('builds an explanation request from original questions without answers', () => {
     const S = {
       settings: { betaEnabled: true },
       quiz: {
@@ -127,7 +127,6 @@ describe('results explanation UI', () => {
     expect(buildExplanationRequest(1)).toEqual({
       lines: ['TF|One.|T', 'MC|Two?|A) A;B) B|B'],
       index: 1,
-      attemptedAnswers: [false, [0]],
     });
   });
 
@@ -169,7 +168,6 @@ describe('results explanation UI', () => {
     expect(requestLazyExplanation).toHaveBeenCalledWith({
       lines: ['MC|Pick one?|A) Alpha;B) Beta|A'],
       index: 0,
-      attemptedAnswers: [[1]],
     });
     expect(panel.classList.contains('is-hidden')).toBe(false);
     expect(panel.textContent).toContain('Answer: A) Alpha.');

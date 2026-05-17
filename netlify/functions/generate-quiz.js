@@ -10,7 +10,7 @@
   */
 
 const { generateLines, generateInBatches, callProvider, buildStructuredPrompt } = require('./lib/providers.js');
-const { normalizeQuizV2, quizToLegacyLines } = require('./lib/normalizer.js');
+const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
 
 const MAX_SOURCE_TEXT_CHARS = 24000;
 
@@ -96,7 +96,12 @@ function authorize(event) {
 }
 
 function countQuizLines(lines) {
-  return String(lines || '').split('\n').map((line) => line.trim()).filter((line) => /^(MC|TF|YN|MT)\|/i.test(line)).length;
+  return String(lines || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !!parseLegacyQuestion(line))
+    .length;
 }
 
 function underCountError(actual, expected) {

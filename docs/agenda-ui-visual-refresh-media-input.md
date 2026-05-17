@@ -1,9 +1,9 @@
-# Agenda: UI Visual Refresh + Media Input (PDF/Images)
+# Agenda: UI Visual Refresh + Source Import
 
 ## Goals
 - Soften “outlined wrappers” across the app; move to lighter borders, subtle elevation, and cleaner spacing.
 - Refresh CSS tokens for radius, shadows, neutral surface, and brand accents (consistent across light/dark).
-- Introduce a new Media Input feature to import content from PDFs and images (e.g., syllabi snapshots) to seed quiz topics/questions.
+- Introduce a new source import feature to import content from text, document, PDF, and image files (e.g., notes, study guides, syllabi snapshots) to seed quiz topics/questions.
 - Keep changes incremental, reversible, and well‑tested (serverless safe; no new deps unless approved).
 
 ## Design Approach (Preview)
@@ -13,15 +13,15 @@
 - Footer: keep current structure; ensure CTA stays centered with dynamic reserve (already done).
 
 ## Media Input Implementation
-- The topic paperclip accepts `application/pdf` and `image/*` in beta mode.
+- The topic paperclip is production-facing and accepts text, Markdown, HTML, CSV, JSON, RTF, DOCX, PDF, and image files.
 - Client guardrails validate size, sniff file bytes, reject MIME/extension mismatches, and cancel stale overlapping imports.
-- `/.netlify/functions/ingest-media` extracts readable text from PDFs/images through the configured provider and returns `{ text, metadata }`.
+- `/.netlify/functions/ingest-media` extracts readable text from text/document files locally where practical and uses the configured provider for PDF/image extraction, then returns `{ text, metadata }`.
 - Imported text is treated as source material for quiz generation. It is not parsed as quiz-line syntax.
 
 ## Serverless Guardrails
-- The function accepts base64 PDF/image payloads only.
-- Guardrails: beta gate, origin checks, direct-upload cap, extracted-text cap, per-IP rate limit, provider timeout, and typed error codes.
-- Gemini supports PDF/image extraction. OpenAI supports image extraction in this build.
+- The function accepts base64 source-import payloads for the supported text, document, PDF, and image formats.
+- Guardrails: origin checks, direct-upload cap, extracted-text cap, DOCX XML expansion cap, per-IP rate limit, provider timeout, and typed error codes.
+- Gemini supports PDF/image extraction. OpenAI supports image extraction in this build. Text, Markdown, HTML, CSV, JSON, RTF, and DOCX extraction uses deterministic local parsing.
 
 ## Acceptance Criteria
 - Visual refresh: wrappers look lighter and more modern (consistent across states), no layout regressions on mobile.

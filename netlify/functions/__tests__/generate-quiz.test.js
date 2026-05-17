@@ -99,4 +99,33 @@ describe('generate-quiz count guarantees', () => {
       provider: 'mock',
     });
   });
+
+  test('does not count malformed prefixed lines toward requested total', async () => {
+    jest.doMock('../lib/providers.js', () => ({
+      generateLines: jest.fn(async () => ({
+        title: 'Malformed Quiz',
+        lines: 'MC|Bad|A) one|D\nTF|Good one.|T',
+        provider: 'mock',
+        model: 'mock',
+      })),
+      generateInBatches: jest.fn(async () => ({
+        title: 'Still Malformed',
+        lines: 'MC|Bad|A) one|D\nTF|Good one.|T',
+        provider: 'mock',
+        model: 'mock',
+      })),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({ topic: 'Malformed', count: 2, provider: 'mock' }));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(502);
+    expect(body).toMatchObject({
+      error: 'Generation failed',
+      details: 'Only generated 1 of 2 requested questions',
+      provider: 'mock',
+    });
+  });
 });

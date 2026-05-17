@@ -70,7 +70,7 @@ describe('explain-answers-lazy endpoint', () => {
     expect(mockExplainQuestions).not.toHaveBeenCalled();
   });
 
-  test('returns 200 for mocked provider success and passes attempted answer context', async () => {
+  test('returns 200 for mocked provider success without forwarding attempted answers', async () => {
     mockExplainQuestions.mockResolvedValue({ 0: { explanation: 'Answer: D) 443.\nWhy it fits: HTTPS uses 443.' } });
     const handler = loadHandler();
     const res = await handler(event());
@@ -79,11 +79,11 @@ describe('explain-answers-lazy endpoint', () => {
     expect(mockExplainQuestions).toHaveBeenCalledWith(expect.objectContaining({
       questions: [expect.objectContaining({ type: 'MC', text: 'Which port does HTTPS use?' })],
       originalIndices: [0],
-      attemptedAnswers: [[2]],
       provider: undefined,
       model: undefined,
       env: process.env,
     }));
+    expect(mockExplainQuestions.mock.calls[0][0]).not.toHaveProperty('attemptedAnswers');
   });
 
   test('maps provider unavailable and provider errors to stable responses', async () => {

@@ -27,24 +27,7 @@ function formatChoice(options, idx) {
   return text ? `${letter}) ${text}` : letter;
 }
 
-function formatAttemptedAnswer(q, answer) {
-  if (!q) return 'No answer selected';
-  if (q.type === 'MC') {
-    const picked = Array.isArray(answer) ? answer : [];
-    if (!picked.length) return 'No answer selected';
-    return picked.map((idx) => formatChoice(q.options, idx)).join('; ');
-  }
-  if (q.type === 'TF') return typeof answer === 'boolean' ? (answer ? 'True' : 'False') : 'No answer selected';
-  if (q.type === 'YN') return typeof answer === 'boolean' ? (answer ? 'Yes' : 'No') : 'No answer selected';
-  if (q.type === 'MT') {
-    const picked = Array.isArray(answer) ? answer : [];
-    if (!picked.length) return 'No answer selected';
-    return picked.map((ri, li) => Number.isInteger(ri) && ri >= 0 ? `${li + 1}-${String.fromCharCode(65 + ri)}` : `${li + 1}-?`).join('; ');
-  }
-  return 'No answer selected';
-}
-
-function buildExplanationPrompt(questions, attemptedAnswers = []) {
+function buildExplanationPrompt(questions) {
   const prompt = [
     'You write short, accurate quiz answer explanations for study review.',
     'Return minified JSON only.',
@@ -63,7 +46,6 @@ function buildExplanationPrompt(questions, attemptedAnswers = []) {
   questions.forEach((q, index) => {
     const qNum = index + 1;
     prompt.push(`Q${qNum}: ${q.text}`);
-    prompt.push(`Learner answer: ${formatAttemptedAnswer(q, attemptedAnswers[index])}`);
     if (q.type === 'MC') {
       prompt.push(`Options: ${q.options.map((opt, i) => `${String.fromCharCode(65 + i)}) ${opt}`).join('; ')}`);
       const correctLetters = q.correct.map((i) => String.fromCharCode(65 + i)).join(', ');
@@ -208,7 +190,7 @@ function echoExplain(questions, originalIndices) {
   return explanations;
 }
 
-async function explainQuestions({ provider, model, questions = [], originalIndices = [], attemptedAnswers = [], env = process.env, callGemini, callOpenai } = {}) {
+async function explainQuestions({ provider, model, questions = [], originalIndices = [], env = process.env, callGemini, callOpenai } = {}) {
   const selected = resolveExplainProvider(provider, env);
   if (!selected) throw makeExplainError('Explanation provider is not configured', 'EXPLAIN_PROVIDER_NOT_CONFIGURED', 503);
 
@@ -218,7 +200,7 @@ async function explainQuestions({ provider, model, questions = [], originalIndic
       return echoExplain(questions, originalIndices);
     }
 
-    const prompt = buildExplanationPrompt(questions, attemptedAnswers);
+    const prompt = buildExplanationPrompt(questions);
     let text = '';
     if (selected === 'gemini') {
       text = await (callGemini || defaultGeminiCall)({ apiKey: env.GEMINI_API_KEY, model: model || env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL, prompt });

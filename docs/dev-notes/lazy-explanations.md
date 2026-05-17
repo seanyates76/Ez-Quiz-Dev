@@ -70,7 +70,7 @@ All four existing question types are fully supported:
 - `EXPLAIN_PROVIDER` - Optional explanation provider override
   - `gemini` - Gemini explanation generation
   - `openai` - OpenAI explanation generation
-  - `echo` - Deterministic development/test response when explicitly enabled
+  - `echo` - Deterministic development/test response when `ALLOW_ECHO_EXPLANATIONS=1` or `NODE_ENV=test`
 - `AI_PROVIDER` - Shared provider fallback when `EXPLAIN_PROVIDER` is unset
 - `EXPLAIN_LIMIT` - Rate limit per IP (default: 30 requests)
 - `EXPLAIN_WINDOW_MS` - Rate limit window in milliseconds (default: 15 minutes)
@@ -113,6 +113,8 @@ curl -X POST https://your-site.netlify.app/.netlify/functions/explain-answers-la
 
 The echo provider returns deterministic explanations for development and testing:
 
+- It is disabled by default outside tests.
+- Enable it with `ALLOW_ECHO_EXPLANATIONS=1`, or run under `NODE_ENV=test`.
 - **MC questions**: Shows correct answer letters
 - **TF questions**: Indicates True/False 
 - **YN questions**: Indicates Yes/No
@@ -125,7 +127,7 @@ Example output:
 
 ## Operational Notes
 
-The endpoint is intentionally lazy: it only spends provider tokens when a learner clicks Explain in Results. Cost controls are handled through rate limits, timeouts, optional bearer auth, and the beta gate on the browser entry point.
+The endpoint is intentionally lazy: it only spends provider tokens when a learner clicks Explain in Results. Cost controls are handled through rate limits, timeouts, optional bearer auth, origin checks, payload caps, and provider configuration.
 
 ## Security Considerations
 
