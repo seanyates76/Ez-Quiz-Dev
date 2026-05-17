@@ -406,21 +406,21 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   function decodeHtmlEntities(text){
     return String(text || '')
       .replace(/&nbsp;/gi, ' ')
-      .replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<')
       .replace(/&gt;/gi, '>')
       .replace(/&quot;/gi, '"')
       .replace(/&#39;/gi, "'")
       .replace(/&#(\d+);/g, (_, n) => {
         const code = parseInt(n, 10);
-        return Number.isFinite(code) ? String.fromCodePoint(code) : _;
-      });
+        return Number.isFinite(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : _;
+      })
+      .replace(/&amp;/gi, '&');
   }
   function stripHtml(raw){
     return decodeHtmlEntities(String(raw || '')
-      .replace(/<script[\s\S]*?<\/script>/gi, '\n')
-      .replace(/<style[\s\S]*?<\/style>/gi, '\n')
-      .replace(/<\/(p|div|section|article|li|ul|ol|h[1-6]|tr|table|br)>/gi, '\n')
+      .replace(/<script\b[\s\S]*?<\s*\/\s*script\s*>/gi, '\n')
+      .replace(/<style\b[\s\S]*?<\s*\/\s*style\s*>/gi, '\n')
+      .replace(/<\s*\/\s*(p|div|section|article|li|ul|ol|h[1-6]|tr|table|br)\s*>/gi, '\n')
       .replace(/<[^>]+>/g, ' '));
   }
   function stripRtf(raw){
