@@ -133,11 +133,19 @@ function authorize(event) {
   return authHeader.replace(/^Bearer\s+/i, '') === BEARER_TOKEN;
 }
 
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => { setTimeout(() => reject(new Error('Timeout')), ms); }),
-  ]);
+async function withTimeout(promise, ms) {
+  let timer;
+
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Timeout')), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function isSafeInteger(value) {
