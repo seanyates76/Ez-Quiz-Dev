@@ -41,7 +41,7 @@ describe('generateInBatches', () => {
     expect(normalizeLegacyLines).toHaveBeenCalledTimes(2);
     expect(result.title).toBe('First Title');
     expect(result.provider).toBe('echo');
-    expect(result.model).toBe('stub');
+    expect(result.model).toBe('echo');
 
     const lines = result.lines.split('\n');
     expect(lines).toHaveLength(4);
@@ -87,7 +87,7 @@ describe('generateInBatches', () => {
     expect(normalizeLegacyLines).toHaveBeenCalledTimes(3);
     expect(result.title).toBe('Sparse Batch');
     expect(result.provider).toBe('echo');
-    expect(result.model).toBe('stub');
+    expect(result.model).toBe('echo');
 
     const lines = result.lines.split('\n');
     expect(lines).toHaveLength(2);
@@ -122,5 +122,26 @@ describe('generateInBatches', () => {
     const lines = result.lines.split('\n');
     expect(new Set(lines).size).toBe(lines.length);
     expect(lines).toContain('MC|Gamma stem?|A) 1;B) 2|B');
+  });
+
+  test('bounds each provider pass by the configured batch size', async () => {
+    let stem = 0;
+    normalizeLegacyLines.mockImplementation((text, count) => ({
+      title: 'Batch Size',
+      lines: Array.from({ length: count }, () => {
+        stem += 1;
+        return `MC|Stem ${stem}?|A) 1;B) 2|A`;
+      }).join('\n'),
+    }));
+
+    const result = await generateInBatches({
+      provider: 'echo',
+      topic: 'Chunked Topic',
+      count: 50,
+      env: { GENERATE_BATCH_SIZE: '20' },
+    });
+
+    expect(normalizeLegacyLines.mock.calls.map((call) => call[1])).toEqual([20, 20, 10]);
+    expect(result.lines.split('\n')).toHaveLength(50);
   });
 });

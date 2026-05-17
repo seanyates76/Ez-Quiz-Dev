@@ -1,3 +1,18 @@
+Release-Prep Notes
+==================
+
+Date: 2026-05-15
+
+Current-state source of truth
+- Create Quiz builds a valid quiz; Start Quiz begins taking it.
+- Public quiz lengths are 5, 10, 15, and 20 questions.
+- Larger 30/50-question generation is future reliability work.
+- For best results, paste a focused section of notes, a lesson, or a short study guide. Full course notes may work better when split into smaller chunks.
+
+Beta hardening notes
+- Study-material import and Results explanations are promoted into the production-facing flow.
+- The `/beta` route remains available for separate experimental endpoints such as MCP.
+
 EZ Quiz Web v3.3
 ================
 
@@ -41,7 +56,7 @@ EZ Quiz Web v1.5.0-beta.12
 Release date: 2025-10-22
 
 Highlights
-- Explain (beta): Localized toast near the result item; inline block removed. Full explanations will arrive in a future release.
+- Explain (beta): Result cards now request concise explanations on demand from the lazy explanation endpoint.
 - Topic input polish: Topic + paperclip unified as a single control with one soft focus border; hover/autofill no longer cause double highlights.
 - Tests: Stabilized jsdom environment; hardened HTML parsing for DOM tests; header‑byte tests use Node Blob.
 EZ Quiz Web v1.1.0
@@ -73,7 +88,7 @@ Release date: 2025-08-29
 Fixes & polish
 - Modals: stabilized visibility and CSS parsing so Settings/FAQ open reliably
 - FAQ: updated AI section to prioritize the ✨ Prompt Builder; manual prompt moved to an advanced section
-- Menu: textarea placeholder now reads “Paste text or load file here...”
+- Menu: textarea hint now reads “Paste text or load file here...”
 - Support FAB: removed transform on hover/active to prevent position jump on mobile; subtle brightness feedback only
 - Button colors: replaced color-mix fallbacks for broader browser support (grey ⚙, blue ?, purple ✨ retained)
 - Tip/Ready: compact, wrapped row under the textarea; button row spacing adjusted

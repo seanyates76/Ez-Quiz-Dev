@@ -40,8 +40,8 @@ describe('parseLinesToState cap enforcement', () => {
     expect(result.questions).toHaveLength(5);
   });
 
-  test('defaults to 30 when no global cap override is defined', () => {
-    const result = parseLinesToState(buildTrueFalseLines(31));
-    expect(result.error).toMatch(/Limit is 30/);
+  test('defaults to 20 when no global cap override is defined', () => {
+    const result = parseLinesToState(buildTrueFalseLines(21));
+    expect(result.error).toMatch(/Limit is 20/);
   });
 });

@@ -3,19 +3,40 @@ const DEFAULT_NETLIFY_ORIGINS = [
   'https://eq-quiz.netlify.app'
 ];
 
+function isAbsoluteUrl(url) {
+  return /^[a-z][a-z0-9+.-]*:/i.test(String(url || '').trim());
+}
+
+function isSameOriginEndpoint(url, origin) {
+  const raw = String(url || '').trim();
+  if (!raw) return false;
+  if (!isAbsoluteUrl(raw)) return true;
+  if (!origin || origin === 'null') return false;
+  try {
+    return new URL(raw, origin).origin === origin;
+  } catch {
+    return false;
+  }
+}
+
 function normalizeEndpointSpecs(){
   const seen = new Set();
   const out = [];
 
-  const push = (url, allow404Fallback) => {
+  const origin = (typeof window !== 'undefined' && window && window.location && window.location.origin) ? window.location.origin : '';
+
+  const push = (url, allow404Fallback, options = {}) => {
     if (!url || typeof url !== 'string') return;
     const trimmed = url.trim();
     if (!trimmed || seen.has(`${trimmed}::${allow404Fallback ? '1' : '0'}`)) return;
     seen.add(`${trimmed}::${allow404Fallback ? '1' : '0'}`);
-    out.push({ url: trimmed, allow404Fallback: !!allow404Fallback });
+    out.push({
+      url: trimmed,
+      allow404Fallback: !!allow404Fallback,
+      allowSourceFallback: !!options.allowSourceFallback || isSameOriginEndpoint(trimmed, origin),
+    });
   };
 
-  const origin = (typeof window !== 'undefined' && window && window.location && window.location.origin) ? window.location.origin : '';
   const configured = (typeof window !== 'undefined' && window && Array.isArray(window.EZQ_API_ENDPOINTS)) ? window.EZQ_API_ENDPOINTS : null;
 
   // Primary endpoints on the current origin.
@@ -31,7 +52,7 @@ function normalizeEndpointSpecs(){
         return;
       }
       if (entry && typeof entry === 'object') {
-        push(entry.url, !!entry.allow404Fallback);
+        push(entry.url, !!entry.allow404Fallback, { allowSourceFallback: !!entry.allowSourceFallback });
       }
     });
   }
@@ -61,11 +82,15 @@ const API_ENDPOINT_CANDIDATES = normalizeEndpointSpecs();
 export async function generateWithAI(topic, count, opts = {}){
   const payload = JSON.stringify({ topic, count, ...opts });
   const attemptErrors = [];
+  const hasSourceText = !!String(opts && opts.sourceText || '').trim();
+  const endpointCandidates = hasSourceText
+    ? API_ENDPOINT_CANDIDATES.filter((spec) => spec.allowSourceFallback)
+    : API_ENDPOINT_CANDIDATES;
 
-  for (let i = 0; i < API_ENDPOINT_CANDIDATES.length; i++) {
-    const { url: endpoint, allow404Fallback } = API_ENDPOINT_CANDIDATES[i];
+  for (let i = 0; i < endpointCandidates.length; i++) {
+    const { url: endpoint, allow404Fallback } = endpointCandidates[i];
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 30000);
+    const timer = setTimeout(() => controller.abort(), 45000);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -80,7 +105,7 @@ export async function generateWithAI(topic, count, opts = {}){
         catch { body = await res.text().catch(() => String(res.status)); }
 
         // Fallback to the next endpoint when the route is missing (404).
-        if (res.status === 404 && allow404Fallback && i < API_ENDPOINT_CANDIDATES.length - 1) {
+        if (res.status === 404 && allow404Fallback && i < endpointCandidates.length - 1) {
           attemptErrors.push({ endpoint, status: res.status, body });
           continue;
         }
@@ -99,7 +124,9 @@ export async function generateWithAI(topic, count, opts = {}){
         throw err;
       }
       if (err && err.name === 'AbortError') {
-        throw err;
+        const timeout = new Error('Generation timed out locally. Try fewer questions or retry.');
+        timeout.name = 'GenerationTimeout';
+        throw timeout;
       }
     } finally {
       clearTimeout(timer);

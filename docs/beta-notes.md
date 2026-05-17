@@ -1,4 +1,4 @@
-# QUIZ_RESPONSE Branch Rollout
+# QUIZ_RESPONSE Branch Notes
 
 This branch gates the structured quiz response pipeline behind the `QUIZ_RESPONSE` environment flag so we can validate v2 without affecting production.
 
@@ -21,13 +21,13 @@ The existing `/beta` edge route still sets the `FEATURE_FLAGS=beta` cookie for U
 - Prefer this when coordinating with consumers that have not yet adopted the JSON schema.
 - Log `{ error, details, fallback: { tried: 'legacy' } }` with a `[quiz-v2][fallback]` prefix so we can audit usage.
 
-## Rollout checklist
+## Release-prep checklist
 
 1. Enable the flag only on the `mcp-implementation` branch context until QA signs off.
 2. Shadow traffic: fetch both JSON and legacy formats and compare normalized results using `normalizeQuizV2`.
 3. Monitor Netlify logs for `[quiz-v2]` warnings (validation failures, fallbacks, chunk exhaustion).
 4. When ready to graduate, add `QUIZ_RESPONSE=v2` to production context and remove the branch override.
-5. Update `agents.md` and release notes to announce the schema once the beta flag is removed.
+5. Update `AGENTS.md` and release notes to announce the schema once the beta flag is removed.
 
 ## Backout runbook
 

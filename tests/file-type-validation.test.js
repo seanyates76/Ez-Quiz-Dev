@@ -71,14 +71,30 @@ describe('file type validation', () => {
     expect(getImportKindFromMime('application/pdf')).toBe('pdf');
     expect(getImportKindFromMime('image/jpeg')).toBe('jpeg');
     expect(getImportKindFromMime('image/jpg')).toBe('jpeg');
-    expect(getImportKindFromMime('text/plain')).toBe('unknown');
+    expect(getImportKindFromMime('text/plain')).toBe('txt');
+    expect(getImportKindFromMime('text/markdown')).toBe('md');
+    expect(getImportKindFromMime('application/vnd.openxmlformats-officedocument.wordprocessingml.document')).toBe('docx');
   });
 
   test('maps supported filename extensions to import kinds', () => {
     expect(getImportKindFromName('scan.PDF')).toBe('pdf');
     expect(getImportKindFromName('photo.jpeg')).toBe('jpeg');
     expect(getImportKindFromName('photo.jpg')).toBe('jpeg');
+    expect(getImportKindFromName('notes.md')).toBe('md');
+    expect(getImportKindFromName('outline.docx')).toBe('docx');
     expect(getImportKindFromName('archive.zip')).toBe('unknown');
+  });
+
+  test('detects text-ish files from metadata and readable bytes', async () => {
+    const blob = new NodeBlob([Buffer.from('Photosynthesis\\nPlants make sugar.')], { type: 'text/plain' });
+    Object.defineProperty(blob, 'name', { value: 'notes.txt', configurable: true });
+    await expect(sniffFileKind(blob)).resolves.toBe('txt');
+  });
+
+  test('accepts utf-16 text files when metadata identifies text', async () => {
+    const blob = new NodeBlob([Buffer.from([0xff, 0xfe, 0x48, 0x00, 0x69, 0x00])], { type: 'text/plain' });
+    Object.defineProperty(blob, 'name', { value: 'notes.txt', configurable: true });
+    await expect(sniffFileKind(blob)).resolves.toBe('txt');
   });
 
   test('flags MIME mismatches against sniffed file bytes', () => {
@@ -103,6 +119,10 @@ describe('file type validation', () => {
     expect(isSupportedImportKind('png')).toBe(true);
     expect(isSupportedImportKind('jpeg')).toBe(true);
     expect(isSupportedImportKind('gif')).toBe(true);
+    expect(isSupportedImportKind('txt')).toBe(true);
+    expect(isSupportedImportKind('md')).toBe(true);
+    expect(isSupportedImportKind('html')).toBe(true);
+    expect(isSupportedImportKind('docx')).toBe(true);
     expect(isSupportedImportKind('bmp')).toBe(false);
   });
 });

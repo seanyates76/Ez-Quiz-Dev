@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EZ Quiz Implementation Brief - May 13, 2026</title>
+  <style>
+    :root {
+      --bg: #10151f;
+      --panel: #172031;
+      --panel-2: #1f2a3d;
+      --text: #eff4ff;
+      --muted: #aab7ca;
+      --line: #334055;
+      --good: #44d08a;
+      --warn: #ffd166;
+      --blue: #82b7ff;
+      --accent: #ffb454;
+      --bad: #ff6b7a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      background: var(--bg);
+      color: var(--text);
+    }
+    main { width: min(1120px, calc(100vw - 32px)); margin: 0 auto; padding: 38px 0 56px; }
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 22px;
+      margin-bottom: 24px;
+    }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1; letter-spacing: 0; }
+    h2 { margin: 0 0 14px; font-size: 1.35rem; }
+    h3 { margin: 0 0 8px; font-size: 1rem; }
+    p { margin: 0 0 12px; color: var(--muted); }
+    code { color: #d7e5ff; background: rgba(255,255,255,.07); padding: 1px 5px; border-radius: 5px; }
+    .dek { max-width: 850px; font-size: 1.06rem; }
+    .meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: rgba(255,255,255,.04);
+      font-size: .9rem;
+    }
+    .pill.good { color: #cdf8df; border-color: rgba(68,208,138,.55); background: rgba(68,208,138,.12); }
+    .pill.warn { color: #fff0bf; border-color: rgba(255,209,102,.55); background: rgba(255,209,102,.12); }
+    section { margin-top: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+    .card {
+      grid-column: span 6;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+    }
+    .card.wide { grid-column: 1 / -1; }
+    .kpi { grid-column: span 3; background: var(--panel-2); }
+    .kpi strong { display: block; font-size: 1.6rem; color: var(--text); margin-bottom: 4px; }
+    ul, ol { margin: 10px 0 0; padding-left: 20px; color: var(--muted); }
+    li { margin: 6px 0; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { text-align: left; vertical-align: top; border-top: 1px solid var(--line); padding: 10px; color: var(--muted); }
+    th { color: var(--text); font-weight: 650; }
+    .status { font-weight: 700; white-space: nowrap; }
+    .done { color: var(--good); }
+    .active { color: var(--blue); }
+    .next { color: var(--warn); }
+    .risk { color: var(--bad); }
+    .roadmap {
+      counter-reset: step;
+      display: grid;
+      gap: 12px;
+    }
+    .step {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px 16px 16px 58px;
+    }
+    .step:before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #1b1306;
+      font-weight: 800;
+    }
+    .small { font-size: .9rem; }
+    @media (max-width: 820px) {
+      .card, .kpi { grid-column: 1 / -1; }
+      main { width: min(100vw - 20px, 1120px); padding-top: 24px; }
+      th, td { display: block; padding: 8px 0; }
+      tr { display: block; border-top: 1px solid var(--line); padding: 8px 0; }
+      th { border: 0; }
+      td { border: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Implementation Brief</h1>
+      <p class="dek">Current state of the EZ Quiz completion branch on May 13, 2026. This brief tracks what is implemented, what is under verification, and the remaining roadmap for explainers, larger-question reliability work, media import, landing polish, and UX hardening.</p>
+      <div class="meta">
+        <span class="pill">Branch: <code>codex-complete-explainers-50q-media</code></span>
+        <span class="pill good">Explainers wired</span>
+        <span class="pill good">20-question public cap wired</span>
+        <span class="pill good">Media extraction endpoint wired</span>
+        <span class="pill good">Landing polish wired</span>
+      </div>
+    </header>
+
+    <section class="grid">
+      <div class="card kpi"><strong>20</strong><p>Current public maximum supported question count across client and generation flow.</p></div>
+      <div class="card kpi"><strong>24</strong><p>Explainer-focused tests passing in the targeted suite.</p></div>
+      <div class="card kpi"><strong>27</strong><p>Media import tests passing in the targeted suite.</p></div>
+      <div class="card kpi"><strong>0</strong><p>Known user-facing "not ready" paths left in explainers or media import.</p></div>
+    </section>
+
+    <section class="grid">
+      <article class="card wide">
+        <h2>Executive Readout</h2>
+        <p>We are past the review-only phase and into implementation. Results can call the lazy explanation endpoint and render safe explanation text inline. Create Quiz now supports the public 5, 10, 15, and 20-question lengths with explicit under-count errors. Media import now accepts PDFs/images, extracts source text through the configured provider, and routes that source into quiz creation instead of trying to parse it as quiz syntax.</p>
+        <p>The visual slice now has a polished landing panel with direct actions into topic generation and study material, while manual quiz-line entry remains available from help. The branch has a clean full Jest run and UI check pass.</p>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card wide">
+        <h2>Workstream Status</h2>
+        <table>
+          <thead>
+            <tr><th>Area</th><th>Status</th><th>Current Implementation</th><th>Verification</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Lazy explainers</td>
+              <td class="status done">Implemented</td>
+              <td>Result cards have Explain buttons, request payload serialization, caching per original question, loading/error states, and text-only rendering.</td>
+              <td>Focused explainer tests pass, including API errors and HTML injection resistance.</td>
+            </tr>
+            <tr>
+              <td>Public quiz lengths</td>
+              <td class="status done">Implemented</td>
+              <td>Client-visible public lengths are 5, 10, 15, and 20. Larger 30/50-question generation remains future reliability work.</td>
+              <td>Generator, provider chunking, parser limit, clamp, payload, and DOM id tests pass in the focused suite.</td>
+            </tr>
+            <tr>
+              <td>Media import</td>
+              <td class="status done">Implemented</td>
+              <td>PDF/image upload is size-limited, byte-sniffed, rate-limited, and extracted through Gemini or OpenAI where supported. Imported text becomes source material for quiz creation.</td>
+              <td>Endpoint, UI, file validation, constraints, and overlapping import tests pass.</td>
+            </tr>
+            <tr>
+              <td>Landing and general UI</td>
+              <td class="status done">Implemented</td>
+              <td>First viewport now introduces EZ Quiz, shows product capabilities, and routes users directly into topic generation or study-material import.</td>
+              <td>DOM and flow tests pass. The UI check passes across its configured viewports.</td>
+            </tr>
+            <tr>
+              <td>Docs and copy</td>
+              <td class="status done">Implemented</td>
+              <td>Explainer, media, beta-route, agenda, release-note, and implementation brief copy now match the implemented behavior.</td>
+              <td>Critical string audit returns no hits for unshipped-path wording.</td>
+            </tr>
+          </tbody>
+        </table>
+      </article>
+    </section>
+
+    <section>
+      <h2>Roadmap To Stability</h2>
+      <div class="roadmap">
+        <article class="step">
+          <h3>Browser Verify Landing And Polish</h3>
+          <p>Rerun the UI check before push, then inspect desktop and mobile artifacts if the visual surface changes.</p>
+        </article>
+        <article class="step">
+          <h3>Run Full Verification</h3>
+          <p>Full Jest is clean. Browser automation remains the one blocked verification item in this sandbox.</p>
+        </article>
+        <article class="step">
+          <h3>Provider Smoke</h3>
+          <p>With keys configured, manually verify one Gemini or OpenAI generation, one explanation request, and one media extraction path. Keep echo available only for explicit development/test runs.</p>
+        </article>
+        <article class="step">
+          <h3>Stability Review</h3>
+          <p>Review diff ownership, confirm pre-existing package changes were not disturbed, decide whether to split into PRs, and only then merge or promote.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Known Risks</h2>
+        <ul>
+          <li>Larger 30/50-question generation depends on future reliability hardening rather than the current public flow.</li>
+          <li>PDF/image extraction can be slow or costly. Caps, timeouts, and rate limits are in place.</li>
+          <li>Live provider smoke tests require credentials; local echo tests prove plumbing, not AI quality.</li>
+        </ul>
+      </article>
+      <article class="card">
+        <h2>Recent Targeted Verification</h2>
+        <ul>
+          <li><code>explain-api</code>, result explainer fetch, gating, lazy endpoint, and provider tests passed.</li>
+          <li><code>generate-quiz</code>, provider chunking, parser cap, clamp, payload, and DOM tests passed.</li>
+          <li><code>ingest-media</code>, media UI, constraints, file validation, import controller, and overlap tests passed.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card wide">
+        <h2>Decision Log</h2>
+        <ul>
+          <li>Imported media is source material, not quiz-line content. This avoids a broken Start path after extraction.</li>
+          <li>Explanations are lazy and per-question. This keeps normal quiz generation fast and controls provider spend.</li>
+          <li>For larger future lengths, staged or async generation should replace one-shot public requests.</li>
+          <li>Docs should describe implemented behavior only. Historical notes stay accurate, but current docs should not tell users a shipped path is absent.</li>
+        </ul>
+      </article>
+    </section>
+
+    <footer>
+      <p class="small">Prepared for implementation tracking. Refresh this document after browser verification and provider smoke tests.</p>
+    </footer>
+  </main>
+</body>
+</html>

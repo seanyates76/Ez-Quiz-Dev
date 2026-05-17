@@ -2,14 +2,16 @@
 
 ## Overview
 
-The `/beta` edge route grants temporary access to beta-only features by setting a feature-flag cookie (`FEATURE_FLAGS=beta`). The cookie lasts for 24 hours and applies across the app, allowing both client and server code to detect beta status. Append `?off=1` to clear the flag.
+The `/beta` edge route grants temporary access to experimental endpoints by setting a feature-flag cookie (`FEATURE_FLAGS=beta`). The cookie lasts for 24 hours and allows server code to detect beta status. Append `?off=1` to clear the flag.
+
+Study-material import and Results explanations have been promoted into the production-facing flow. Do not require the beta cookie for those features.
 
 ## Flow Summary
 
-1. **Opt-in** — Visiting `/beta` issues a `302` redirect back to `/` and sets `FEATURE_FLAGS=beta; Max-Age=86400; SameSite=Lax`.
-2. **Opt-out** — Visiting `/beta?off=1` clears the cookie via `Max-Age=0` and redirects home.
+1. **Opt-in** — Visiting `/beta` serves the app with `FEATURE_FLAGS=beta; Max-Age=86400; SameSite=Lax`.
+2. **Opt-out** — Visiting `/beta?off=1` clears the cookie via `Max-Age=0`.
 3. **Client flags** — `public/js/flags.js` merges the cookie with `EZQ_FLAGS` in `localStorage` for lightweight feature checks (`has('beta')`).
-4. **Server guard** — `netlify/functions/lib/betaGuard.js` inspects the cookie (or `x-ezq-beta: 1` header in local dev) to allow/deny beta endpoints.
+4. **Server guard** — `netlify/functions/lib/betaGuard.js` inspects the cookie (or `x-ezq-beta: 1` header in dev/CI) to allow/deny endpoints that are still beta-only.
 
 ## Netlify Configuration
 
@@ -30,9 +32,10 @@ force = true
 
 ## Client Integration
 
-- Import `has` from `./js/flags.js` to toggle beta UI affordances.
+- Import `has` from `./js/flags.js` only for features that are still beta-only.
 - Optional power-user toggle can call `setFlag('beta', true/false)`; this only affects local flags, not the cookie.
 - Keep beta UI accessible and fail-safe if the cookie expires mid-session.
+- Do not hide promoted production features behind `beta-only` classes.
 
 ## Server Integration
 
@@ -56,20 +59,20 @@ Add the guard to Netlify Functions that should be beta-only (e.g., MCP, experime
 
 - **Endpoint:** `POST /api/mcp` → proxied to `/.netlify/functions/mcp`.
 - **Opt in:** Visit `/beta` (cookie) or add `x-ezq-beta: 1` header in dev/CI.
-- **Opt out:** `/beta?off=1` clears the cookie and future requests return `403` until re-enabled.
+- **Opt out:** `/beta?off=1` clears the cookie and later requests return `403` until re-enabled.
 
-## Explain (beta)
+## Results Explanations
 
-- In beta builds, Explain buttons show a small localized toast near the result item.
-- Full explanation plumbing (server + UI) remains experimental and may change. Non‑beta builds do not make any explanation network calls.
+- Explain buttons are production-facing.
+- The explainer endpoint remains rate-limited and uses generic provider-failure copy for user-facing errors.
 
-## Media Import (beta)
+## Media Import
 
-- Media import posts to `/.netlify/functions/ingest-media`. If the function is not deployed or disabled, the UI shows friendly hints (403/404/501).
-- Enable via Settings → Beta features or visit `/beta` to set the cookie.
+- Media import posts to `/.netlify/functions/ingest-media`. The endpoint extracts text from PDFs/images through the configured provider, then the UI uses that source text for quiz generation.
+- Text-like imports are handled deterministically when possible; binary PDF/image extraction still uses the configured provider path.
 
 ## Troubleshooting
 
-- If the browser keeps returning `403`, confirm the cookie exists and is not blocked.
+- If a beta-only endpoint such as MCP keeps returning `403`, confirm the cookie exists and is not blocked.
 - Ensure CSP `connect-src` includes your own origin (the default config already allows `self`).
 - Clear site data or visit `/beta?off=1` if testing multiple states quickly.

@@ -46,6 +46,10 @@ describe('generator media import overlap regression', () => {
   let readers;
   let consoleDebugSpy;
   let validateMediaImportSize;
+  let generateWithAI;
+  let state;
+  let beginQuiz;
+  let syncSettingsFromUI;
 
   beforeAll(() => {
     ({ ImportController } = loadBrowserModule('public/js/import-controller.js', ['ImportController']));
@@ -67,6 +71,11 @@ describe('generator media import overlap regression', () => {
       errors: [],
       error: null,
     }));
+    generateWithAI = jest.fn().mockResolvedValue({
+      title: 'Imported Source Quiz',
+      lines: 'TF|Imported fact.|T',
+    });
+    state = { settings: { beta: true }, quiz: {}, media: {} };
     announce = jest.fn();
     validateMediaImportSize = jest.fn(() => ({ ok: true }));
     fetchCalls = [];
@@ -83,7 +92,15 @@ describe('generator media import overlap regression', () => {
         ok: true,
         status: 200,
         headers: { get: () => 'application/json' },
-        json: async () => ({ text: payload.text }),
+        json: async () => ({
+          text: payload.text,
+          metadata: {
+            name: body.name,
+            kind: body.kind,
+            size: body.size,
+            charCount: String(payload.text || '').length,
+          },
+        }),
       };
     });
 
@@ -99,13 +116,17 @@ describe('generator media import overlap regression', () => {
         this.file = file;
       }
 
+      readAsArrayBuffer(file) {
+        this.file = file;
+      }
+
       abort() {
         this.aborted = true;
       }
     };
 
     const deps = {
-      S: { settings: { beta: true }, quiz: {} },
+      S: state,
       $: (id) => document.getElementById(id),
       byQSA: (selector) => Array.from(document.querySelectorAll(selector)),
       mmSsToMs: () => 0,
@@ -114,9 +135,9 @@ describe('generator media import overlap regression', () => {
         if (Number.isFinite(parsed) && parsed > 0) return parsed;
         return fallback ?? 10;
       },
-      getMaxQuestions: () => 50,
+      getMaxQuestions: () => 20,
       parseEditorInput,
-      generateWithAI: jest.fn(),
+      generateWithAI,
       ImportController,
       sniffFileKind,
       isSupportedImportKind: () => true,
@@ -124,7 +145,14 @@ describe('generator media import overlap regression', () => {
       validateMediaImportSize,
       attachDragDrop: () => ({ dispose() {} }),
       announce,
-      buildGeneratorPayload: ({ topic, difficulty, count }) => ({ topic, difficulty, count }),
+      buildGeneratorPayload: ({ topic, difficulty, count, sourceText, sourceName }) => {
+        const payload = { topic, difficulty, count };
+        if (sourceText) {
+          payload.sourceText = sourceText;
+          payload.sourceName = sourceName;
+        }
+        return payload;
+      },
       showVeil: () => {},
       hideVeil: () => {},
       MESSAGES: ['hello'],
@@ -135,8 +163,10 @@ describe('generator media import overlap regression', () => {
       isBetaEnabled: () => true,
     };
 
+    beginQuiz = jest.fn();
+    syncSettingsFromUI = jest.fn();
     ({ wireGenerator } = loadGeneratorModule(deps));
-    wireGenerator({ beginQuiz: jest.fn(), syncSettingsFromUI: jest.fn() });
+    wireGenerator({ beginQuiz, syncSettingsFromUI });
   });
 
   afterEach(() => {
@@ -153,7 +183,7 @@ describe('generator media import overlap regression', () => {
     const validFile = new File(['good'], 'good.pdf', { type: 'application/pdf' });
 
     validateMediaImportSize
-      .mockReturnValueOnce({ ok: false, error: 'File too large. Maximum supported size is 5 MiB.' })
+      .mockReturnValueOnce({ ok: false, error: 'File too large for direct upload. Maximum supported size is 4 MiB.' })
       .mockReturnValue({ ok: true });
 
     Object.defineProperty(importInput, 'files', {
@@ -164,7 +194,7 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(hint.hidden).toBe(false);
-    expect(hint.textContent).toBe('File too large. Maximum supported size is 5 MiB.');
+    expect(hint.textContent).toBe('File too large for direct upload. Maximum supported size is 4 MiB.');
 
     Object.defineProperty(importInput, 'files', {
       configurable: true,
@@ -190,8 +220,106 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(hint.textContent).toBe('Imported text added to editor.');
+    expect(hint.textContent).toBe('Imported good.pdf. Create a quiz from it.');
+    expect(document.getElementById('mediaSourceStatus').hidden).toBe(false);
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: good.pdf');
+    expect(state.media.sourceText).toBe('GOOD IMPORT TEXT');
+    expect(parseEditorInput).not.toHaveBeenCalled();
     expect(validateMediaImportSize).toHaveBeenCalledTimes(2);
+  });
+
+  test('imports text files locally without calling media endpoint', async () => {
+    const importInput = document.getElementById('importFile');
+    const hint = document.getElementById('regenHint');
+    const textFile = new File(['Photosynthesis\n\nPlants use light.'], 'notes.txt', { type: 'text/plain' });
+
+    sniffFileKind.mockResolvedValueOnce('txt');
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [textFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(readers).toHaveLength(1);
+    readers[0].result = new TextEncoder().encode('Photosynthesis\n\nPlants use light.').buffer;
+    readers[0].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(0);
+    expect(hint.textContent).toBe('Imported notes.txt. Create a quiz from it.');
+    expect(state.media.sourceText).toBe('Photosynthesis\nPlants use light.');
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('TXT ready: notes.txt');
+  });
+
+  test('reads only a bounded slice for large local text imports', async () => {
+    const importInput = document.getElementById('importFile');
+    const textFile = new File(['A'.repeat(200000)], 'large-notes.txt', { type: 'text/plain' });
+
+    sniffFileKind.mockResolvedValueOnce('txt');
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [textFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(readers).toHaveLength(1);
+    expect(readers[0].file.size).toBe(128 * 1024);
+
+    readers[0].result = new TextEncoder().encode('B'.repeat(50000)).buffer;
+    readers[0].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(0);
+    expect(state.media.sourceText).toHaveLength(30000);
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('30,000 chars extracted');
+  });
+
+  test('creates a topic quiz without auto-starting and sends the expected payload', async () => {
+    document.getElementById('topicInput').value = 'ccna 2025';
+    document.getElementById('countInput').value = '5';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(generateWithAI).toHaveBeenCalledWith('ccna 2025', 5, expect.objectContaining({
+      difficulty: 'medium',
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+    expect(generateWithAI.mock.calls[0][2]).not.toHaveProperty('sourceText');
+    expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question.');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(document.getElementById('startToolbarBtn').disabled).toBe(false);
+    expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
+    expect(document.getElementById('startToolbarBtn').classList.contains('start-primary')).toBe(true);
+    expect(document.getElementById('generateBtn').classList.contains('primary')).toBe(false);
+    expect(document.getElementById('generateBtn').classList.contains('btn-outline')).toBe(true);
+    expect(document.getElementById('generateBtn').textContent).toBe('Create New Quiz');
+    expect(beginQuiz).not.toHaveBeenCalled();
+    expect(syncSettingsFromUI).not.toHaveBeenCalled();
+  });
+
+  test('uses plural ready grammar for generated quizzes', async () => {
+    parseEditorInput.mockReturnValue({
+      questions: Array.from({ length: 10 }, (_, index) => ({ prompt: `Question ${index + 1}` })),
+      errors: [],
+      error: null,
+    });
+
+    document.getElementById('topicInput').value = 'routing basics';
+    document.getElementById('countInput').value = '10';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 10 questions.');
+    expect(document.getElementById('startToolbarBtn').classList.contains('start-primary')).toBe(true);
   });
 
   test('keeps the newest overlapping import result and only re-enables controls after it finishes', async () => {
@@ -247,9 +375,11 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(editor.value).toBe('SECOND IMPORT TEXT');
-    expect(mirror.value).toBe('SECOND IMPORT TEXT');
-    expect(hint.textContent).toBe('Imported text added to editor.');
+    expect(editor.value).toBe('');
+    expect(mirror.value).toBe('');
+    expect(hint.textContent).toBe('Imported second.pdf. Create a quiz from it.');
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: second.pdf');
+    expect(state.media.sourceText).toBe('SECOND IMPORT TEXT');
     expect(importBtn.hasAttribute('disabled')).toBe(false);
 
     fetchDeferredByName.get('first.pdf').resolve({ text: 'STALE FIRST IMPORT TEXT' });
@@ -257,10 +387,23 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(editor.value).toBe('SECOND IMPORT TEXT');
-    expect(mirror.value).toBe('SECOND IMPORT TEXT');
-    expect(parseEditorInput).toHaveBeenCalledTimes(1);
-    expect(parseEditorInput).toHaveBeenCalledWith('SECOND IMPORT TEXT');
-    expect(announce).toHaveBeenCalledWith('Imported text added to editor.', 'polite');
+    expect(editor.value).toBe('');
+    expect(mirror.value).toBe('');
+    expect(parseEditorInput).not.toHaveBeenCalled();
+    expect(announce).toHaveBeenCalledWith('Imported source ready. Create a quiz from it.', 'polite');
+
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(generateWithAI).toHaveBeenCalledWith('second', 10, expect.objectContaining({
+      sourceText: 'SECOND IMPORT TEXT',
+      sourceName: 'second.pdf',
+      difficulty: 'medium',
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+    expect(editor.value).toBe('TF|Imported fact.|T');
+    expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
   });
 });

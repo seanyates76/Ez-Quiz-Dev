@@ -67,10 +67,11 @@ All four existing question types are fully supported:
 
 ### Environment Variables
 
-- `AI_PROVIDER` - Provider to use (default: `echo`)
-  - `echo` - Returns stub explanations for testing
-  - `gemini` - Future: Gemini AI integration  
-  - `openai` - Future: OpenAI integration
+- `EXPLAIN_PROVIDER` - Optional explanation provider override
+  - `gemini` - Gemini explanation generation
+  - `openai` - OpenAI explanation generation
+  - `echo` - Deterministic development/test response when `ALLOW_ECHO_EXPLANATIONS=1` or `NODE_ENV=test`
+- `AI_PROVIDER` - Shared provider fallback when `EXPLAIN_PROVIDER` is unset
 - `EXPLAIN_LIMIT` - Rate limit per IP (default: 30 requests)
 - `EXPLAIN_WINDOW_MS` - Rate limit window in milliseconds (default: 15 minutes)
 - `EXPLAIN_TIMEOUT_MS` - Explanation generation timeout (default: 15 seconds)
@@ -110,8 +111,10 @@ curl -X POST https://your-site.netlify.app/.netlify/functions/explain-answers-la
 
 ## Echo Provider
 
-The echo provider returns stub explanations for development and testing:
+The echo provider returns deterministic explanations for development and testing:
 
+- It is disabled by default outside tests.
+- Enable it with `ALLOW_ECHO_EXPLANATIONS=1`, or run under `NODE_ENV=test`.
 - **MC questions**: Shows correct answer letters
 - **TF questions**: Indicates True/False 
 - **YN questions**: Indicates Yes/No
@@ -119,17 +122,12 @@ The echo provider returns stub explanations for development and testing:
 
 Example output:
 ```
-"Rationale stub for practice. Correct: B. This is a practice explanation for MC question type."
+"Answer: MC item.\nWhy it fits: Echo fallback should only run in explicit test environments."
 ```
 
-## Future Enhancements
+## Operational Notes
 
-The implementation includes placeholders for:
-
-1. **Real AI Integration**: Gemini and OpenAI providers with actual explanation generation
-2. **Caching**: Hash-based caching of explanations to reduce costs
-3. **Integrity Verification**: Hash validation of quiz lines to prevent tampering
-4. **Enhanced Rate Limiting**: Per-user limits and premium tiers
+The endpoint is intentionally lazy: it only spends provider tokens when a learner clicks Explain in Results. Cost controls are handled through rate limits, timeouts, optional bearer auth, origin checks, payload caps, and provider configuration.
 
 ## Security Considerations
 
@@ -150,7 +148,6 @@ The implementation includes comprehensive test coverage:
 ## No Breaking Changes
 
 This feature is purely additive:
-- No existing files were modified
-- No changes to existing generation pipeline
+- The explanation path is separate from quiz generation
 - Existing endpoints remain unchanged
 - Backward compatibility maintained

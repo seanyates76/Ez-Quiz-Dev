@@ -1,4 +1,5 @@
-const SUPPORTED_KINDS = new Set(['pdf', 'png', 'jpeg', 'gif']);
+const SUPPORTED_KINDS = new Set(['pdf', 'png', 'jpeg', 'gif', 'txt', 'md', 'html', 'csv', 'json', 'rtf', 'docx']);
+const TEXT_KINDS = new Set(['txt', 'md', 'html', 'csv', 'json', 'rtf']);
 const MIME_KIND_MAP = new Map([
   ['application/pdf', 'pdf'],
   ['image/pdf', 'pdf'],
@@ -7,6 +8,18 @@ const MIME_KIND_MAP = new Map([
   ['image/jpg', 'jpeg'],
   ['image/pjpeg', 'jpeg'],
   ['image/gif', 'gif'],
+  ['text/plain', 'txt'],
+  ['text/markdown', 'md'],
+  ['text/x-markdown', 'md'],
+  ['text/html', 'html'],
+  ['application/xhtml+xml', 'html'],
+  ['text/csv', 'csv'],
+  ['application/csv', 'csv'],
+  ['application/json', 'json'],
+  ['text/json', 'json'],
+  ['application/rtf', 'rtf'],
+  ['text/rtf', 'rtf'],
+  ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'docx'],
 ]);
 const EXTENSION_KIND_MAP = new Map([
   ['pdf', 'pdf'],
@@ -14,7 +27,29 @@ const EXTENSION_KIND_MAP = new Map([
   ['jpg', 'jpeg'],
   ['jpeg', 'jpeg'],
   ['gif', 'gif'],
+  ['txt', 'txt'],
+  ['text', 'txt'],
+  ['md', 'md'],
+  ['markdown', 'md'],
+  ['html', 'html'],
+  ['htm', 'html'],
+  ['csv', 'csv'],
+  ['json', 'json'],
+  ['rtf', 'rtf'],
+  ['docx', 'docx'],
 ]);
+
+function looksLikeText(head) {
+  if (!head || !head.length) return false;
+  if (head.length >= 2 && ((head[0] === 0xff && head[1] === 0xfe) || (head[0] === 0xfe && head[1] === 0xff))) return true;
+  let suspicious = 0;
+  for (const byte of head) {
+    if (byte === 0) return false;
+    if (byte < 0x08) suspicious++;
+    else if (byte > 0x0d && byte < 0x20) suspicious++;
+  }
+  return suspicious / head.length < 0.02;
+}
 
 export async function sniffFileKind(file) {
   try {
@@ -36,6 +71,17 @@ export async function sniffFileKind(file) {
     if (head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x38) {
       return 'gif';
     }
+    // DOCX is a ZIP container; rely on MIME/extension to distinguish it.
+    if (head[0] === 0x50 && head[1] === 0x4b && (head[2] === 0x03 || head[2] === 0x05 || head[2] === 0x07)) {
+      const metaKind = getImportKindFromMime(file && file.type) !== 'unknown'
+        ? getImportKindFromMime(file && file.type)
+        : getImportKindFromName(file && file.name);
+      if (metaKind === 'docx') return 'docx';
+    }
+    const metaKind = getImportKindFromMime(file && file.type) !== 'unknown'
+      ? getImportKindFromMime(file && file.type)
+      : getImportKindFromName(file && file.name);
+    if (TEXT_KINDS.has(metaKind) && looksLikeText(head)) return metaKind;
   } catch {
     // Ignore read errors and fall through to unknown
   }
@@ -56,6 +102,7 @@ export function getImportKindFromName(name) {
 
 export function hasImportMetadataMismatch(file, sniffedKind) {
   if (!isSupportedImportKind(sniffedKind)) return false;
+  if (TEXT_KINDS.has(sniffedKind) || sniffedKind === 'docx') return false;
 
   const mimeKind = getImportKindFromMime(file && file.type);
   if (mimeKind !== 'unknown' && mimeKind !== sniffedKind) {

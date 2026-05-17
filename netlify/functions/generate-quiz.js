@@ -10,7 +10,8 @@
   */
 
 const { generateLines, generateInBatches, callProvider, buildStructuredPrompt } = require('./lib/providers.js');
-const { normalizeQuizV2, quizToLegacyLines } = require('./lib/normalizer.js');
+const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
+const { cleanSourceText } = require('./lib/sourceMaterial.js');
 
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
@@ -52,7 +53,7 @@ function toPositiveInt(value, fallback) {
 
 const LIMIT = toPositiveInt(process.env.GENERATE_LIMIT, DEFAULT_LIMIT);
 const WINDOW_MS = toPositiveInt(process.env.GENERATE_WINDOW_MS, DEFAULT_WINDOW_MS);
-const CLIENT_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_CLIENT_MAX || process.env.CLIENT_MAX_QUESTIONS, 30)));
+const CLIENT_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_CLIENT_MAX || process.env.CLIENT_MAX_QUESTIONS, 20)));
 const CONFIGURED_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_MAX_COUNT, CLIENT_MAX)));
 const MAX_COUNT = Math.min(CLIENT_MAX, CONFIGURED_MAX);
 const BEARER_TOKEN = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
@@ -93,6 +94,24 @@ function authorize(event) {
   return token === BEARER_TOKEN;
 }
 
+function countQuizLines(lines) {
+  return String(lines || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !!parseLegacyQuestion(line))
+    .length;
+}
+
+function underCountError(actual, expected) {
+  const err = new Error(`Only generated ${actual} of ${expected} requested questions`);
+  err.status = 502;
+  err.code = 'GENERATION_UNDER_COUNT';
+  err.actual = actual;
+  err.expected = expected;
+  return err;
+}
+
 exports.handler = async (event) => {
   const allowedOrigins = parseAllowedOrigins();
   const origin = getOrigin(event.headers);
@@ -130,6 +149,8 @@ exports.handler = async (event) => {
   // Normalization + validation (non‑breaking)
   const topicRaw = (payload.topic == null ? '' : String(payload.topic)).trim();
   const topic = topicRaw || 'General knowledge';
+  const sourceText = cleanSourceText(payload.sourceText);
+  const sourceName = String(payload.sourceName || '').trim().slice(0, 160);
 
   let count = payload.count;
   if (count == null) { count = 10; }
@@ -162,11 +183,13 @@ exports.handler = async (event) => {
   const requestedFormat = String(payload.format || headerFormat || queryFormat).toLowerCase();
   const wantsLegacyOnly = requestedFormat === 'legacy-lines';
   const wantsStructured = useV2 && !wantsLegacyOnly && (requestedFormat === 'quiz-json' || requestedFormat === 'quiz-v2' || requestedFormat === 'json');
-  const structuredPrompt = wantsStructured ? buildStructuredPrompt(topic, count, types, difficulty) : null;
+  const structuredPrompt = wantsStructured ? buildStructuredPrompt(topic, count, types, difficulty, sourceText) : null;
   // [quiz-v2: hook] structured payload remains opt-in; default path keeps legacy lines for compatibility.
 
   function buildStructuredResponse({ quiz, provider: providerName, model: modelName, fallbackUsed = false, fallbackFrom, errorPrimary }) {
     const legacy = quizToLegacyLines(quiz, { count });
+    const actual = countQuizLines(legacy.lines);
+    if (actual < count) throw underCountError(actual, count);
     const meta = {
       provider: providerName,
       model: modelName,
@@ -174,6 +197,7 @@ exports.handler = async (event) => {
     };
     if (fallbackUsed && fallbackFrom) meta.fallbackFrom = fallbackFrom;
     if (fallbackUsed && errorPrimary) meta.errorPrimary = errorPrimary;
+    if (sourceText) meta.source = { name: sourceName, charCount: sourceText.length };
     const response = {
       ...meta,
       title: legacy.title,
@@ -193,14 +217,30 @@ exports.handler = async (event) => {
     });
   }
 
-  const TIMEOUT_MS = Math.max(8000, Math.min(20000, parseInt(process.env.GENERATE_TIMEOUT_MS || '15000', 10)));
+  const TIMEOUT_MS = Math.max(8000, Math.min(30000, parseInt(process.env.GENERATE_TIMEOUT_MS || '25000', 10)));
 
   const corsHeaders = makeCorsHeaders(responseOrigin);
+  const selectGenerator = (providerName) => {
+    const normalized = String(providerName || '').toLowerCase();
+    return count > 25 && normalized !== 'echo' ? generateInBatches : generateLines;
+  };
+  const runGeneratorExact = async (args) => {
+    let generator = selectGenerator(args.provider);
+    let result = await withTimeout(generator(args), TIMEOUT_MS);
+    let actual = countQuizLines(result.lines);
+    if (actual < count && generator !== generateInBatches) {
+      generator = generateInBatches;
+      result = await withTimeout(generator(args), TIMEOUT_MS);
+      actual = countQuizLines(result.lines);
+    }
+    if (actual < count) throw underCountError(actual, count);
+    return result;
+  };
 
   try {
     if(wantsStructured){
       const primary = await withTimeout(
-        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured' }),
+        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText }),
         TIMEOUT_MS
       );
       const quiz = normalizeQuizV2(primary.text, { topic, count, types });
@@ -212,15 +252,11 @@ exports.handler = async (event) => {
       };
     }
 
-    const generator = count > 50 ? generateInBatches : generateLines;
-    const { title, lines, provider: usedProvider, model: usedModel } = await withTimeout(
-      generator({ provider, model, topic, count, types, difficulty, env: process.env }),
-      TIMEOUT_MS
-    );
+    const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, env: process.env });
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false }),
+      body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
     };
   } catch (err) {
     const msg = String((err && err.message) || err || 'Error');
@@ -234,7 +270,7 @@ exports.handler = async (event) => {
       if (canFallbackToGemini && !isTimeout) {
         try {
           const fallback = await withTimeout(
-            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured' }),
+            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText }),
             TIMEOUT_MS
           );
           const fallbackLen = typeof fallback.text === 'string' ? fallback.text.length : 0;
@@ -272,16 +308,12 @@ exports.handler = async (event) => {
 
       // Structured path failed entirely; fall back to legacy generator so the UI still renders a quiz.
       try {
-        const generator = count > 50 ? generateInBatches : generateLines;
-        const { title, lines, provider: usedProvider, model: usedModel } = await withTimeout(
-          generator({ provider, model, topic, count, types, difficulty, env: process.env }),
-          TIMEOUT_MS
-        );
+        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, env: process.env });
         console.warn('[quiz-v2]', { reason: 'structured-fallback-legacy' });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false }),
+          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
         };
       } catch (legacyErr) {
         const legacyMsg = String((legacyErr && legacyErr.message) || legacyErr || 'Error');
@@ -294,16 +326,12 @@ exports.handler = async (event) => {
     }
 
     if (canFallbackToGemini && !isTimeout) {
-      const generator = count > 50 ? generateInBatches : generateLines;
       try {
-        const { title, lines, provider: usedProvider, model: usedModel } = await withTimeout(
-          generator({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env }),
-          TIMEOUT_MS
-        );
+        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, env: process.env });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: true, fallbackFrom: primary, errorPrimary: msg }),
+          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: true, fallbackFrom: primary, errorPrimary: msg, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
         };
       } catch (fallbackErr) {
         const fbMsg = String((fallbackErr && fallbackErr.message) || fallbackErr || 'Error');

@@ -1,32 +1,73 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.28';
+import { generateWithAI } from './api.js?v=1.5.35';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.28';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.28';
+import { announce } from './a11y-announcer.js?v=1.5.35';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.35';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
-import { isBetaEnabled } from './beta.mjs';
 
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;
 
+function formatUnitCount(count, singular, plural = `${singular}s`){
+  const n = Number(count) || 0;
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+function hasStartableQuiz(){
+  const startBtn = $('startBtn');
+  return !!(Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0 && startBtn && !startBtn.disabled);
+}
+
+function syncGeneratorActionHierarchy(){
+  const ready = hasStartableQuiz();
+  const generateBtn = $('generateBtn');
+  const generatorCard = $('generatorCard');
+  const startButtons = [$('startBtn'), $('startToolbarBtn')].filter(Boolean);
+  if(generatorCard) generatorCard.setAttribute('data-quiz-ready', ready ? 'true' : 'false');
+  if(generateBtn) {
+    generateBtn.classList.toggle('primary', !ready);
+    generateBtn.classList.toggle('btn-outline', ready);
+    generateBtn.setAttribute('data-ready-secondary', ready ? 'true' : 'false');
+    if(ready) generateBtn.textContent = 'Create New Quiz';
+  }
+  startButtons.forEach((btn) => {
+    btn.classList.toggle('start-primary', ready);
+    btn.setAttribute('data-ready-primary', ready ? 'true' : 'false');
+  });
+}
+
+function setStartButtonsDisabled(disabled){
+  const isDisabled = !!disabled;
+  const startBtn = $('startBtn');
+  const startToolbarBtn = $('startToolbarBtn');
+  if(startBtn) startBtn.disabled = isDisabled;
+  if(startToolbarBtn) {
+    startToolbarBtn.disabled = false;
+    startToolbarBtn.setAttribute('aria-disabled', isDisabled ? 'true' : 'false');
+    startToolbarBtn.dataset.startDisabled = isDisabled ? 'true' : 'false';
+    startToolbarBtn.tabIndex = isDisabled ? -1 : 0;
+  }
+  syncGeneratorActionHierarchy();
+}
+
 export function runParseFlow(sourceText, topicLabel, fullTitle){
   const mirror = $('mirror');
-  const startBtn = $('startBtn');
   const { questions, errors, error: limitError } = parseEditorInput(sourceText);
   S.quiz.questions = questions;
-  // Preserve the full original question set for future full retakes
+  // Preserve the full original question set for full retakes
   S.quiz.originalQuestions = Array.isArray(questions) ? questions.slice() : [];
   // Map current question indexes to original indexes (identity on first parse)
   S.quiz.indexMap = questions.map((_, i) => i);
   // Reset original answers snapshot (one slot per original question)
   S.quiz.originalAnswers = new Array(questions.length).fill(null);
+  S.quiz.explanations = {};
   S.quiz.index = 0;
   S.quiz.answers = new Array(questions.length).fill(null);
   if (topicLabel) { S.quiz.topic = String(topicLabel).trim(); }
@@ -45,10 +86,15 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
   }
   if (errors.length) parseErrorMessages.push(...errors);
   const summary = errors.length
-    ? `Parsed ${questions.length} question(s). ${errors.length} error(s). ${firstErrors.join(' | ')}`
-    : `Parsed ${questions.length} question(s).`;
-  const statusMessage = limitError ? `${summary} ${limitError}`.trim() : summary;
-  statusBox && (statusBox.textContent = statusMessage);
+    ? `Parsed ${formatUnitCount(questions.length, 'question')}. ${formatUnitCount(errors.length, 'error')}. ${firstErrors.join(' | ')}`
+    : `Parsed ${formatUnitCount(questions.length, 'question')}.`;
+  const statusMessage = limitError
+    ? `${summary} ${limitError}`.trim()
+    : (questions.length ? `Quiz ready: ${formatUnitCount(questions.length, 'question')}.` : summary);
+  if(statusBox) {
+    statusBox.textContent = statusMessage;
+    statusBox.setAttribute('data-build-state', limitError ? 'failed' : (questions.length ? 'ready' : 'idle'));
+  }
   try {
     const pe = document.getElementById('parseErrors');
     if (pe) {
@@ -61,7 +107,7 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
       }
     }
   } catch {}
-  if(startBtn) startBtn.disabled = questions.length === 0 || !!limitError;
+  setStartButtonsDisabled(questions.length === 0 || !!limitError);
 }
 
 export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
@@ -73,13 +119,26 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const countDownBtn = document.querySelector('[data-step="down"]');
   const importBtn = $('importBtn');
   const importFile = $('importFile');
+  const mediaSourceStatus = $('mediaSourceStatus');
+  const mediaSourceLabel = $('mediaSourceLabel');
+  const clearMediaSourceBtn = $('clearMediaSourceBtn');
   const importCtl = new ImportController();
   const MIME_BY_KIND = {
     pdf: 'application/pdf',
     png: 'image/png',
     jpeg: 'image/jpeg',
     gif: 'image/gif',
+    txt: 'text/plain',
+    md: 'text/markdown',
+    html: 'text/html',
+    csv: 'text/csv',
+    json: 'application/json',
+    rtf: 'application/rtf',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   };
+  const LOCAL_TEXT_KINDS = new Set(['txt', 'md', 'html', 'csv', 'json', 'rtf']);
+  const MAX_IMPORTED_SOURCE_CHARS = 30000;
+  const MAX_LOCAL_TEXT_READ_BYTES = 128 * 1024;
   const toolbar = document.querySelector('.gen-toolbar');
   const topicAffix = document.querySelector('.topic-affix');
   const editor = $('editor');
@@ -130,7 +189,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   registerCountSoftTarget(startToolbarBtn);
   function getCountInvalidMessage(){
     const max = getMaxQuestions();
-    return `Enter 1 to ${max} questions before starting.`;
+    return `Choose 5, 10, 15, or 20 questions before creating.`;
   }
   function updateCountHint(){
     const max = getMaxQuestions();
@@ -141,7 +200,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       }
       const hint = document.getElementById('genCountHint');
       if (hint) {
-        hint.textContent = `Max ${max} questions`;
+        hint.textContent = `Public quiz limit is ${max} questions.`;
       }
     } catch {}
   }
@@ -251,8 +310,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const copyPromptsBtn = $('copyPromptsBtn');
   const exportTxtBtn = $('exportTxtBtn');
   
-  // --- Media Import (beta) ---
-  function isBeta(){ return isBetaEnabled(S.settings); }
+  // --- Media Import ---
   function setHint(msg){ try{ const hint=document.getElementById('regenHint'); if(hint){ hint.textContent = msg; hint.hidden = false; } }catch{} }
   function clearHint(){
     try{
@@ -263,10 +321,156 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       }
     }catch{}
   }
+  function ensureMediaState(){
+    S.media = S.media || { sourceText: '', sourceName: '', sourceKind: '', sourceCharCount: 0 };
+    return S.media;
+  }
+  function cleanImportedSource(raw){
+    return String(raw || '')
+      .replace(/\r\n?/g, '\n')
+      .split('\n')
+      .map((line) => line.trim().replace(/\s+/g, ' '))
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, MAX_IMPORTED_SOURCE_CHARS);
+  }
+  function mediaSourceId(){
+    const media = ensureMediaState();
+    const text = String(media.sourceText || '');
+    if(!text.trim()) return '';
+    return [media.sourceName || '', media.sourceKind || '', media.sourceCharCount || text.length, text.slice(0, 96)].join('|');
+  }
+  function hasMediaSource(){
+    return !!mediaSourceId();
+  }
+  function sourceTopicLabel(name){
+    const raw = String(name || '').trim();
+    if(!raw) return 'Imported source';
+    return raw.replace(/\.[a-z0-9]{1,8}$/i, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Imported source';
+  }
+  function renderMediaSourceStatus(){
+    const media = ensureMediaState();
+    const text = String(media.sourceText || '');
+    if(!mediaSourceStatus || !mediaSourceLabel) return;
+    if(!text.trim()){
+      mediaSourceLabel.textContent = '';
+      mediaSourceStatus.hidden = true;
+      return;
+    }
+    const name = media.sourceName || 'Imported source';
+    const chars = Number(media.sourceCharCount || text.length);
+    const kind = media.sourceKind ? String(media.sourceKind).toUpperCase() : 'MEDIA';
+    mediaSourceLabel.textContent = `${kind} ready: ${name} · ${chars.toLocaleString()} chars extracted`;
+    mediaSourceStatus.hidden = false;
+  }
+  function setImportedSource({ text, name, kind, size, charCount } = {}){
+    const cleaned = cleanImportedSource(text);
+    const media = ensureMediaState();
+    media.sourceText = cleaned;
+    media.sourceName = String(name || '').trim();
+    media.sourceKind = String(kind || '').trim();
+    media.sourceSize = Number(size || 0);
+    media.sourceCharCount = cleaned.length;
+    if(topicInput && !(topicInput.value || '').trim()){
+      topicInput.value = sourceTopicLabel(media.sourceName);
+      try{ topicInput.dispatchEvent(new Event('input', { bubbles: true })); }catch{}
+    }
+    renderMediaSourceStatus();
+  }
+  function clearImportedSource({ announceChange = false } = {}){
+    S.media = { sourceText: '', sourceName: '', sourceKind: '', sourceSize: 0, sourceCharCount: 0 };
+    renderMediaSourceStatus();
+    markDirtyIfChanged();
+    if(announceChange){
+      setBuildStatus('idle', 'Imported source removed. Add a topic or study material, then create a quiz.');
+      setHint('Imported source removed.');
+      try{ announce('Imported source removed.', 'polite'); }catch{}
+    }
+  }
+  function generationOptions(payload, types){
+    const opts = { types, difficulty: payload.difficulty };
+    if(payload.sourceText){
+      opts.sourceText = payload.sourceText;
+      if(payload.sourceName) opts.sourceName = payload.sourceName;
+    }
+    return opts;
+  }
+  function cleanLocalSourceText(raw){
+    return cleanImportedSource(String(raw || '').replace(/^\uFEFF/, ''));
+  }
+  function decodeHtmlEntities(text){
+    return String(text || '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&#(\d+);/g, (_, n) => {
+        const code = parseInt(n, 10);
+        return Number.isFinite(code) && code >= 0 && code <= 0x10ffff ? String.fromCodePoint(code) : _;
+      })
+      .replace(/&amp;/gi, '&');
+  }
+  function stripHtml(raw){
+    return decodeHtmlEntities(String(raw || '')
+      .replace(/<script\b[^>]*>[\s\S]*?<\s*\/\s*script\b[^>]*>/gi, '\n')
+      .replace(/<style\b[^>]*>[\s\S]*?<\s*\/\s*style\b[^>]*>/gi, '\n')
+      .replace(/<\s*\/\s*(p|div|section|article|li|ul|ol|h[1-6]|tr|table|br)\s*>/gi, '\n')
+      .replace(/<[^>]+>/g, ' '));
+  }
+  function stripRtf(raw){
+    return String(raw || '')
+      .replace(/\\par[d]?/g, '\n')
+      .replace(/\\'[0-9a-fA-F]{2}/g, ' ')
+      .replace(/\\[a-zA-Z]+-?\d* ?/g, ' ')
+      .replace(/[{}]/g, ' ');
+  }
+  function decodeArrayBuffer(buffer){
+    const bytes = new Uint8Array(buffer || new ArrayBuffer(0));
+    if(bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+      return new TextDecoder('utf-16le').decode(bytes.slice(2));
+    }
+    if(bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+      const swapped = new Uint8Array(Math.max(0, bytes.length - 2));
+      for(let i = 2; i + 1 < bytes.length; i += 2){
+        swapped[i - 2] = bytes[i + 1];
+        swapped[i - 1] = bytes[i];
+      }
+      return new TextDecoder('utf-16le').decode(swapped);
+    }
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  function formatGenerationError(err){
+    const msg = String(err && err.message || err || 'Error');
+    if(err && err.name === 'GenerationTimeout') return msg;
+    try {
+      const parsed = JSON.parse(msg);
+      const status = parsed.status;
+      const body = parsed.body;
+      if(status === 429 || /quota|rate limit/i.test(JSON.stringify(body))) return 'Rate limit hit. Please wait ~30s and try again.';
+      if(status === 504) return 'Generation timed out. Try fewer questions, retry, or import a smaller source.';
+      if(typeof body === 'object' && body && body.error) return body.error;
+    } catch {}
+    if(/abort/i.test(msg)) return 'Generation timed out locally. Try fewer questions or retry.';
+    return msg;
+  }
+  function setBuildStatus(state, message){
+    if(!statusBox) return;
+    statusBox.setAttribute('data-build-state', state || 'idle');
+    statusBox.textContent = String(message || '').trim();
+  }
+  function withMediaSource(snapshot){
+    const media = ensureMediaState();
+    return {
+      ...snapshot,
+      sourceText: media.sourceText || '',
+      sourceName: media.sourceName || '',
+    };
+  }
   // Improve accessible label on import button
   try {
     if (importBtn) {
-      const improvedLabel = 'Attach PDF/Image to populate quiz editor (beta)';
+      const improvedLabel = 'Attach notes, documents, PDFs, or images';
       importBtn.setAttribute('title', improvedLabel);
       importBtn.setAttribute('aria-label', improvedLabel);
     }
@@ -330,6 +534,53 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       reader.readAsDataURL(file);
     });
   }
+  function toArrayBuffer(file, { signal } = {}){
+    return new Promise((resolve,reject)=>{
+      const reader = new FileReader();
+      let settled = false;
+      const cleanup = ()=>{
+        settled = true;
+        reader.onload = null;
+        reader.onerror = null;
+        if(signal){
+          try{ signal.removeEventListener('abort', abort); }catch{}
+        }
+      };
+      const abort = ()=>{
+        if(settled) return;
+        cleanup();
+        try{ reader.abort(); }catch{}
+        reject(new DOMException('Aborted','AbortError'));
+      };
+      if(signal){
+        if(signal.aborted){ return abort(); }
+        signal.addEventListener('abort', abort, { once: true });
+      }
+      reader.onload = ()=>{
+        if(settled) return;
+        cleanup();
+        resolve(reader.result || new ArrayBuffer(0));
+      };
+      reader.onerror = ()=>{
+        if(settled) return;
+        cleanup();
+        reject(reader.error||new Error('Read failed'));
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+  async function extractLocalSource(file, kind, { signal } = {}){
+    const readTarget = file && typeof file.slice === 'function'
+      ? file.slice(0, MAX_LOCAL_TEXT_READ_BYTES)
+      : file;
+    const buffer = await toArrayBuffer(readTarget, { signal });
+    let raw = decodeArrayBuffer(buffer);
+    if(kind === 'html') raw = stripHtml(raw);
+    else if(kind === 'rtf') raw = stripRtf(raw);
+    const text = cleanLocalSourceText(raw);
+    if(!text) throw new Error('No readable text found in that file.');
+    return text;
+  }
   async function handleImportFile(file){
     if(!file) return;
     const { token, signal } = importCtl.start();
@@ -341,7 +592,16 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         try { announce('Importing file…', 'polite'); } catch {}
       }
 
-      const sizeCheck = validateMediaImportSize(file);
+      const kind = await sniffFileKind(file);
+      if(!importCtl.isCurrent(token)) return;
+      if(!isSupportedImportKind(kind)){
+        if(importCtl.isCurrent(token)) {
+          setHint('Unsupported file. Choose text, Markdown, HTML, CSV, JSON, RTF, DOCX, PDF, or an image.');
+          try { announce('Import failed: Unsupported file.', 'assertive'); } catch {}
+        }
+        return;
+      }
+      const sizeCheck = validateMediaImportSize(file, { kind });
       if(!sizeCheck.ok){
         if(importCtl.isCurrent(token)) {
           setHint(sizeCheck.error);
@@ -349,21 +609,31 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         }
         return;
       }
-
-      const kind = await sniffFileKind(file);
-      if(!importCtl.isCurrent(token)) return;
-      if(!isSupportedImportKind(kind)){
+      if(hasImportMetadataMismatch(file, kind)){
         if(importCtl.isCurrent(token)) {
-          setHint('Unsupported file. Choose a PDF or image.');
-          try { announce('Import failed: Unsupported file.', 'assertive'); } catch {}
+          setHint('File type does not match its contents. Choose a real source file.');
+          try { announce('Import failed: File type does not match contents.', 'assertive'); } catch {}
         }
         return;
       }
-      if(hasImportMetadataMismatch(file, kind)){
-        if(importCtl.isCurrent(token)) {
-          setHint('File type does not match its contents. Choose a real PDF or image.');
-          try { announce('Import failed: File type does not match contents.', 'assertive'); } catch {}
-        }
+
+      if(LOCAL_TEXT_KINDS.has(kind)){
+        setBuildStatus('creating', 'Reading source text...');
+        setHint('Reading source text...');
+        const text = await extractLocalSource(file, kind, { signal });
+        if(!importCtl.isCurrent(token)) return;
+        setImportedSource({
+          text,
+          name: file.name || 'Imported source',
+          kind,
+          size: file.size || 0,
+          charCount: text.length,
+        });
+        setPrimaryAction();
+        updatePrimaryHint();
+        setBuildStatus('source-ready', `Study material ready: ${file.name || 'source text'}.`);
+        setHint(`Imported ${file.name || 'source text'}. Create a quiz from it.`);
+        try { announce('Imported source ready. Create a quiz from it.', 'polite'); } catch {}
         return;
       }
 
@@ -382,21 +652,23 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       if(resp && resp.ok && resp.data && resp.data.text){
         const text = String(resp.data.text||'');
         if(importCtl.isCurrent(token)){
-          setEditorText(text);
-          try{ setMirrorVisible(true); }catch{}
-          try{
-            runParseFlow(text, file.name||'Imported', '');
-            setHint('Imported text added to editor.');
-            try { announce('Imported text added to editor.', 'polite'); } catch {}
-          }catch(e){
-            setHint(`Parse error: ${e && e.message ? e.message : 'Unknown error'}`);
-            try { announce(`Import failed: ${e && e.message ? e.message : 'Unknown error'}`, 'assertive'); } catch {}
-          }
+          const metadata = resp.data.metadata || {};
+          setImportedSource({
+            text,
+            name: metadata.name || file.name || 'Imported media',
+            kind: metadata.kind || kind,
+            size: metadata.size || file.size || 0,
+            charCount: metadata.charCount || text.length,
+          });
+          setPrimaryAction();
+          updatePrimaryHint();
+          setBuildStatus('source-ready', `Study material ready: ${file.name || 'media'}.`);
+          setHint(`Imported ${file.name || 'media'}. Create a quiz from it.`);
+          try { announce('Imported source ready. Create a quiz from it.', 'polite'); } catch {}
         }
       } else if(importCtl.isCurrent(token)){
         if(resp && resp.status === 404){ setHint('Media import not enabled on this site.'); try { announce('Import failed: Not enabled.', 'assertive'); } catch {} }
-        else if(resp && resp.status === 501){ setHint('Media ingest is not enabled yet (beta stub).'); try { announce('Import failed: Not enabled yet.', 'assertive'); } catch {} }
-        else if(resp && resp.status === 403){ setHint('Media import is beta-only. Enable beta in Settings or visit /beta.'); try { announce('Import failed: Beta-only.', 'assertive'); } catch {} }
+        else if(resp && resp.status === 403){ setHint('Media import is unavailable right now.'); try { announce('Import failed: Unavailable.', 'assertive'); } catch {} }
         else if(resp && resp.data && resp.data.error){ const msg=String(resp.data.error); setHint(msg); try { announce(`Import failed: ${msg}`, 'assertive'); } catch {} }
         else { setHint('Media import unavailable.'); try { announce('Import failed: Unavailable.', 'assertive'); } catch {} }
       }
@@ -416,14 +688,15 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       }
     }
   }
-  importBtn?.addEventListener('click', ()=>{ if(!isBeta()) return; importFile?.click(); });
+  importBtn?.addEventListener('click', ()=>{ importFile?.click(); });
   importFile?.addEventListener('change', async ()=>{
-    if(!isBeta()) return;
     const f = importFile?.files && importFile.files[0];
     if(!f) return;
     await handleImportFile(f);
   });
-  // Drag-drop on toolbar (beta)
+  clearMediaSourceBtn?.addEventListener('click', () => clearImportedSource({ announceChange: true }));
+  renderMediaSourceStatus();
+  // Drag-drop on toolbar
   let __affixEscapeListener = null;
   const focusAffixExitTarget = ()=>{
     if(topicInput && typeof topicInput.focus === 'function'){
@@ -457,9 +730,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     try{ document.removeEventListener('keydown', __affixEscapeListener, { capture: true }); }catch{}
     __affixEscapeListener = null;
   };
-  const onDragOver = (e, el)=>{ if(!isBeta()) return; try{ e.preventDefault(); }catch{}; el.classList.add('drag-on'); el.classList.add('drag-active'); addAffixEscapeHandler(); };
+  const onDragOver = (e, el)=>{ try{ e.preventDefault(); }catch{}; el.classList.add('drag-on'); el.classList.add('drag-active'); addAffixEscapeHandler(); };
   const clearDrag = (el)=>{ el.classList.remove('drag-on'); el.classList.remove('drag-active'); removeAffixEscapeHandler(); };
-  const onDrop = (e, el)=>{ if(!isBeta()) return; try{ e.preventDefault(); }catch{}; el.classList.remove('drag-on'); const dt=e.dataTransfer; if(!dt||!dt.files||!dt.files.length) return; handleImportFile(dt.files[0]); };
+  const onDrop = (e, el)=>{ try{ e.preventDefault(); }catch{}; el.classList.remove('drag-on'); const dt=e.dataTransfer; if(!dt||!dt.files||!dt.files.length) return; handleImportFile(dt.files[0]); };
   // Use helper to attach listeners and ensure we can dispose on re-init
   try { __topicAffixDragHandle?.dispose?.(); } catch {}
   if (topicAffix) {
@@ -468,7 +741,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       onDragOver: (e) => onDragOver(e, topicAffix),
       onDragLeave: () => clearDrag(topicAffix),
       onDrop: (e) => { clearDrag(topicAffix); onDrop(e, topicAffix); },
-    }, { preventDefault: isBeta() });
+    }, { preventDefault: true });
   }
 
   function updateMirrorText(raw){
@@ -506,44 +779,31 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const qtMT = $('qtMT');
   const startBtn2 = startBtn;
 
-  // Primary action: Start | Generate | Regenerate
+  // Primary action: Create Quiz | Create Quiz from Material | Create New Quiz
   function snapshotChanged(last, curr){
     if(!last || !curr) return false;
-    return last.topic !== curr.topic || last.count !== curr.count || last.difficulty !== curr.difficulty;
+    return last.topic !== curr.topic || last.count !== curr.count || last.difficulty !== curr.difficulty || (last.sourceId || '') !== (curr.sourceId || '');
   }
   function __devDebug(){
     try{ return !!(localStorage.getItem('EZQ_DEBUG') || /localhost|127\.0\.0\.1/.test(location && location.hostname)); }catch{ return false; }
   }
   function computePrimaryMode(){
-    const hasLoaded = Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0;
-    const qeOpen = !!(optionsPanel && !optionsPanel.hidden && advBlock && !advBlock.hidden);
-    const editorHasText = !!(editor && (editor.value||'').trim());
-    const ui = (window.EZQ.ui = window.EZQ.ui || {});
-    const last = ui.lastGeneratedParams;
-    const curr = getParamsSnapshot();
-    const changed = snapshotChanged(last, curr);
-    if (hasLoaded) {
-      if (last && changed) return qeOpen ? 'regenerate' : 'start-new';
-      return 'start';
-    }
-    // No quiz loaded
-    if (editorHasText) return 'start';
-    return qeOpen ? 'generate' : 'start';
+    const ready = hasStartableQuiz();
+    if (ready) return 'new-quiz';
+    if (hasMediaSource()) return 'create-from-material';
+    return 'generate';
   }
   function setPrimaryAction(mode){
     const ui = (window.EZQ.ui = window.EZQ.ui || {});
     const m = mode || computePrimaryMode();
     ui.primaryMode = m;
-    const label = (m === 'regenerate') ? 'Regenerate'
-                : (m === 'start-new') ? 'Start New'
-                : (m === 'generate') ? 'Generate'
-                : 'Start';
-    const dataMode = (m === 'regenerate') ? 'generate'
-                   : (m === 'start-new') ? 'start-new'
-                   : (m === 'generate') ? 'generate'
-                   : 'start';
+    const label = (m === 'create-from-material') ? 'Create Quiz from Material'
+                : (m === 'new-quiz') ? 'Create New Quiz'
+                : 'Create Quiz';
+    const dataMode = 'generate';
     generateBtn?.setAttribute('data-mode', dataMode);
     if (generateBtn) generateBtn.textContent = label;
+    syncGeneratorActionHierarchy();
     if(__devDebug() && ui.__lastPrimaryLogged !== m){ try{ console.debug('[ezq:dev] primary-action', { mode: m }); }catch{} ui.__lastPrimaryLogged = m; }
   }
   function updatePrimaryHint(){
@@ -551,8 +811,6 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const hint=document.getElementById('regenHint'); if(!hint) return;
       const mode = computePrimaryMode();
       const hasLoaded = Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0;
-      const qeOpen = !!(optionsPanel && !optionsPanel.hidden && advBlock && !advBlock.hidden);
-      const editorHasText = !!(editor && (editor.value||'').trim());
       const ui = (window.EZQ.ui = window.EZQ.ui || {});
       const last = ui.lastGeneratedParams;
       const curr = getParamsSnapshot();
@@ -560,31 +818,21 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
       // No quiz cases
       if(!hasLoaded){
-        if(editorHasText){
-          hint.textContent = 'Start will parse your text and begin.';
+        if(hasMediaSource()){
+          hint.textContent = 'Study material ready. Create a quiz from it.';
           hint.hidden = false; return;
         }
-        if(qeOpen){
-          hint.textContent = 'Enter Topic, Difficulty, and Length, then click Generate to fill the editor.';
-          hint.hidden = false; return;
-        }
-        hint.textContent = 'Enter Topic, Difficulty, and Length. Start will generate and begin a new quiz.';
+        hint.textContent = 'Enter a topic, choose length and difficulty, then create a quiz.';
         hint.hidden = false; return;
       }
 
       // Quiz loaded
       if(last && changed){
-        if(mode === 'regenerate'){
-          hint.textContent = 'Changes detected. Regenerate updates the editor; press Start to begin.';
-          hint.hidden = false; return;
-        }
-        if(mode === 'start-new'){
-          hint.textContent = 'Changes detected. Start New will generate a new quiz and begin.';
-          hint.hidden = false; return;
-        }
+        hint.textContent = 'Inputs changed. Create New Quiz will replace the ready quiz only after a valid build succeeds.';
+        hint.hidden = false; return;
       }
       // Loaded, unchanged
-      hint.textContent = 'Quiz ready. Press Start to begin.';
+      hint.textContent = 'Quiz ready. Start Quiz begins the current quiz.';
       hint.hidden = false;
     }catch{}
   }
@@ -626,12 +874,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   // Track last generated params and "dirty since generation" state
   function getParamsSnapshot(){
     const form = readGeneratorForm();
-    const topic = form.topic || 'General knowledge';
-    return { topic, count: form.count, difficulty: form.difficulty };
+    const topic = form.topic || (hasMediaSource() ? sourceTopicLabel(ensureMediaState().sourceName) : 'General knowledge');
+    return { topic, count: form.count, difficulty: form.difficulty, sourceId: mediaSourceId() };
   }
   function setLastGen(params){
     const ui = (window.EZQ.ui = window.EZQ.ui || {});
-    ui.lastGeneratedParams = { topic: params.topic, count: clampCount(params.count), difficulty: params.difficulty };
+    ui.lastGeneratedParams = { topic: params.topic, count: clampCount(params.count), difficulty: params.difficulty, sourceId: mediaSourceId() };
     ui.genDirty = false;
     // Reset primary according to layout state when not dirty
     setPrimaryAction();
@@ -642,7 +890,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const last = ui.lastGeneratedParams;
     const curr = getParamsSnapshot();
     const changed = snapshotChanged(last, curr);
-    ui.genDirty = !!changed; // keep for potential future behavior
+    ui.genDirty = !!changed;
     updatePrimaryHint();
     setPrimaryAction();
   }
@@ -676,8 +924,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
   clearBtn?.addEventListener('click', ()=>{
     setEditorText('');
-    if(startBtn) startBtn.disabled = true;
-    statusBox && (statusBox.textContent = 'Cleared.');
+    clearImportedSource();
+    setStartButtonsDisabled(true);
+    setBuildStatus('idle', 'Cleared. Add a topic or study material, then create a quiz.');
     try{
       const ui = (window.EZQ.ui = window.EZQ.ui || {});
       ui.lastGeneratedParams = null;
@@ -691,79 +940,51 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   loadLastBtn?.addEventListener('click', ()=>{ try{ const last = localStorage.getItem('ezq.last')||''; if(!last){ statusBox && (statusBox.textContent='No previous quiz found.'); return; } setEditorText(last); try{ setMirrorVisible(true); }catch{}; runParseFlow(last, topicInput?.value||'Last', ''); statusBox && (statusBox.textContent = 'Loaded last quiz.'); }catch{} });
 
   generateBtn?.addEventListener('click', async ()=>{
-    const ui = (window.EZQ.ui = window.EZQ.ui || {});
-    const mode = generateBtn?.getAttribute('data-mode') || computePrimaryMode();
-    const editorText = (editor?.value || '').trim();
-    const topicTyped = (topicInput?.value || '').trim();
-    const isDirty = !!ui.genDirty;
-    // In Start mode, prefer existing editor content or run/generate+start
-    if(mode==='start' && editorText.length){
-      runParseFlow(editorText, topicTyped || 'Custom', '');
-      if(S.quiz.questions && S.quiz.questions.length){ syncSettingsFromUI(); beginQuiz(); }
-      return;
-    }
-    if(mode==='start' && !editorText.length){
-      if(Array.isArray(S.quiz?.questions) && S.quiz.questions.length){ syncSettingsFromUI(); beginQuiz(); return; }
-      // No quiz yet: Start should generate + start
-      const snap = getParamsSnapshot();
-      const topicRaw = (topicInput?.value || '').trim();
-      const topic = snap.topic; if(!topicRaw){ statusBox && (statusBox.textContent = 'Using default topic: General knowledge'); }
-      const types = [ qtMC?.checked ? 'MC':null, qtTF?.checked? 'TF':null, qtYN?.checked? 'YN':null, qtMT?.checked? 'MT':null ].filter(Boolean);
-      const difficulty = getDifficultyKey();
-      const payload = buildGeneratorPayload({ topic, difficulty, count: snap.count });
-      try{
-        statusBox && (statusBox.textContent = 'Generating via AI…');
-        generateBtn.disabled = true; showVeil(Math.floor(Math.random()*MESSAGES.length));
-        const out = await generateWithAI(payload.topic, payload.count, { types, difficulty: payload.difficulty });
-        const lines = out && out.lines || '';
-        if(!lines){ statusBox && (statusBox.textContent = 'AI did not return any lines. Try again or use the Prompt Builder.'); generateBtn.disabled = false; hideVeil('Nothing yet…'); return; }
-        setEditorText(lines); try{ setMirrorVisible(true); }catch{}
-        const title = (out && out.title) ? out.title : '';
-        runParseFlow(lines, payload.topic, title);
-        setLastGen(payload);
-        setPrimaryAction('start');
-        if (S.quiz.questions && S.quiz.questions.length){ syncSettingsFromUI(); beginQuiz(); }
-      }catch(err){
-        const msg = String(err && err.message || err || 'Error'); let pretty = msg;
-        try { const parsed = JSON.parse(msg); const status = parsed.status; const body = parsed.body; if(status === 429 || /quota|rate limit/i.test(JSON.stringify(body))){ pretty = 'Rate limit hit. Please wait ~30s and try again.'; } else if (typeof body === 'object' && body && body.error){ pretty = body.error; } } catch {}
-        statusBox && (statusBox.textContent = `Generation failed: ${pretty}`);
-      }finally{ generateBtn.disabled = false; hideVeil('Done'); }
-      return;
-    }
-    // In Generate/Regenerate/Start New, (re)generate fresh content first
-    if(mode==='generate' || mode==='start-new'){
-      setEditorText('');
-    }
+    // Create never starts the quiz. The previous valid quiz remains available until
+    // a new response validates successfully.
     const snap = getParamsSnapshot();
     const topicRaw = (topicInput?.value || '').trim();
-    const topic = snap.topic; if(!topicRaw){ statusBox && (statusBox.textContent = 'Using default topic: General knowledge'); }
+    const topic = snap.topic;
+    if(!topicRaw && !hasMediaSource()){
+      setBuildStatus('idle', 'Using default topic: General knowledge.');
+    }
     // Gather options
     const types = [ qtMC?.checked ? 'MC':null, qtTF?.checked? 'TF':null, qtYN?.checked? 'YN':null, qtMT?.checked? 'MT':null ].filter(Boolean);
     const difficulty = getDifficultyKey();
-    const payload = buildGeneratorPayload({ topic, difficulty, count: snap.count });
+    const payload = buildGeneratorPayload(withMediaSource({ topic, difficulty, count: snap.count }));
     try{
-      statusBox && (statusBox.textContent = 'Generating via AI…');
+      setBuildStatus('creating', payload.sourceText ? 'Creating quiz from study material...' : 'Creating quiz from topic...');
       generateBtn.disabled = true;
       showVeil(Math.floor(Math.random()*MESSAGES.length));
-      const out = await generateWithAI(payload.topic, payload.count, { types, difficulty: payload.difficulty });
+      const out = await generateWithAI(payload.topic, payload.count, generationOptions(payload, types));
       const lines = out && out.lines || '';
-      if(!lines){ statusBox && (statusBox.textContent = 'AI did not return any lines. Try again or use the Prompt Builder.'); generateBtn.disabled = false; hideVeil('Nothing yet…'); return; }
+      if(!lines){
+        setBuildStatus('failed', 'Could not create a valid quiz. Try fewer questions, a smaller source, or Demo Set.');
+        generateBtn.disabled = false;
+        hideVeil('Nothing yet...');
+        return;
+      }
+      setBuildStatus('validating', 'Checking the quiz before Start Quiz unlocks...');
+      const parsed = parseEditorInput(lines);
+      if(parsed.error || !parsed.questions.length){
+        const reason = parsed.error || 'No valid quiz questions were returned.';
+        setBuildStatus('failed', `Could not create a valid quiz: ${reason}`);
+        return;
+      }
       setEditorText(lines); /* mirror stays hidden by default */
       // Auto-show Mirror when content exists so it’s visible on mobile too
       try{ setMirrorVisible(true); }catch{}
       const title = (out && out.title) ? out.title : '';
       runParseFlow(lines, payload.topic, title);
       setLastGen(payload);
-      // After (re)generation completes
-      if(mode==='start-new'){
-        if (S.quiz.questions && S.quiz.questions.length){ syncSettingsFromUI(); beginQuiz(); }
-      }
-      setPrimaryAction('start');
+      setPrimaryAction();
     }catch(err){
-      const msg = String(err && err.message || err || 'Error'); let pretty = msg;
-      try { const parsed = JSON.parse(msg); const status = parsed.status; const body = parsed.body; if(status === 429 || /quota|rate limit/i.test(JSON.stringify(body))){ pretty = 'Rate limit hit. Please wait ~30s and try again.'; } else if (typeof body === 'object' && body && body.error){ pretty = body.error; } } catch {}
-      statusBox && (statusBox.textContent = `Generation failed: ${pretty}`);
-    }finally{ generateBtn.disabled = false; hideVeil('Done'); }
+      const pretty = formatGenerationError(err);
+      setBuildStatus('failed', `Could not create a valid quiz: ${pretty}`);
+    }finally{
+      generateBtn.disabled = false;
+      hideVeil('Done');
+    }
   });
 
   // Options drop-down toggle
@@ -805,6 +1026,24 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   advDisclosure?.addEventListener('click', ()=> toggleAdvanced());
   advDisclosure?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggleAdvanced(); } else if(e.key==='Escape'){ e.preventDefault(); closeOptions(); }});
   if(advBlock){ const mo = new MutationObserver(()=>{ setPrimaryAction(); updatePrimaryHint(); }); mo.observe(advBlock, { attributes:true, attributeFilter:['hidden','class','style'] }); }
+
+  byQSA('[data-focus-target]').forEach((btn)=>{
+    btn.addEventListener('click', ()=>{
+      const targetId = btn.getAttribute('data-focus-target') || '';
+      if(targetId === 'importBtn'){
+        importBtn?.click();
+        return;
+      }
+      if(targetId === 'editor'){
+        openOptions();
+        toggleAdvanced(true);
+        setEditorMode('manual');
+      }
+      const target = document.getElementById(targetId);
+      target?.focus?.();
+      try{ document.getElementById('generatorCard')?.scrollIntoView({ block: 'start', behavior: 'smooth' }); }catch{}
+    });
+  });
 
   // Focus trap for Options panel when open
   function trapFocusOptions(e){
@@ -873,7 +1112,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   startBtn2?.addEventListener('click', ()=>{ if(S.quiz?.questions?.length){ syncSettingsFromUI(); beginQuiz(); } });
   // Copy / Export actions in Quiz Editor
   function getMirrorText(){ return (mirror?.value || '').trim(); }
-  copyPromptsBtn?.addEventListener('click', ()=>{ const t=getMirrorText(); if(!t){ statusBox && (statusBox.textContent='Nothing to copy. Generate first.'); return; } navigator.clipboard.writeText(t).then(()=>{ statusBox && (statusBox.textContent='Copied prompts.'); }).catch(()=>{ statusBox && (statusBox.textContent='Copy failed.'); }); });
+  copyPromptsBtn?.addEventListener('click', ()=>{ const t=getMirrorText(); if(!t){ setBuildStatus('idle', 'Nothing to copy. Create a quiz first.'); return; } navigator.clipboard.writeText(t).then(()=>{ statusBox && (statusBox.textContent='Copied prompts.'); }).catch(()=>{ statusBox && (statusBox.textContent='Copy failed.'); }); });
   // Defaults storage (types, difficulty, count)
   function loadDefaults(){
     try{ const raw=localStorage.getItem(STORAGE_KEYS.defaults); if(!raw) return null; const obj=JSON.parse(raw); return obj && typeof obj==='object' ? obj : null; }catch{ return null; }
@@ -910,7 +1149,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   }
   // Apply on init
   applyDefaultsToUI();
-  exportTxtBtn?.addEventListener('click', ()=>{ const t=getMirrorText(); if(!t){ statusBox && (statusBox.textContent='Nothing to export. Generate first.'); return; } const blob=new Blob([t],{type:'text/plain'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='quiz-prompts.txt'; a.click(); URL.revokeObjectURL(url); statusBox && (statusBox.textContent='Exported quiz-prompts.txt'); });
+  exportTxtBtn?.addEventListener('click', ()=>{ const t=getMirrorText(); if(!t){ setBuildStatus('idle', 'Nothing to export. Create a quiz first.'); return; } const blob=new Blob([t],{type:'text/plain'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='quiz-prompts.txt'; a.click(); URL.revokeObjectURL(url); statusBox && (statusBox.textContent='Exported quiz-prompts.txt'); });
   // Enter triggers generate
   topicInput?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); generateBtn?.click(); } });
   countInput?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); generateBtn?.click(); } });
@@ -923,9 +1162,13 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
   function adjustCount(delta){
     if(!countInput) return;
-    const current = parseInt(countInput.value, 10);
-    const base = Number.isFinite(current) ? current + delta : delta;
-    const next = clampCount(base);
+    const choices = [5, 10, 15, 20].filter((value) => value <= getMaxQuestions());
+    const current = clampCount(countInput.value, { fallback: 10 });
+    const at = choices.indexOf(current);
+    const baseIndex = at >= 0 ? at : choices.findIndex((value) => value >= current);
+    const fallbackIndex = baseIndex >= 0 ? baseIndex : choices.length - 1;
+    const nextIndex = Math.max(0, Math.min(choices.length - 1, fallbackIndex + delta));
+    const next = choices[nextIndex] || clampCount(current + delta);
     countInput.value = String(next);
     updateCountHint();
     markDirtyIfChanged();

@@ -1,9 +1,9 @@
-# Agenda: UI Visual Refresh + Media Input (PDF/Images)
+# Agenda: UI Visual Refresh + Source Import
 
 ## Goals
 - Soften “outlined wrappers” across the app; move to lighter borders, subtle elevation, and cleaner spacing.
 - Refresh CSS tokens for radius, shadows, neutral surface, and brand accents (consistent across light/dark).
-- Introduce a new Media Input feature to import content from PDFs and images (e.g., syllabi snapshots) to seed quiz topics/questions.
+- Introduce a new source import feature to import content from text, document, PDF, and image files (e.g., notes, study guides, syllabi snapshots) to seed quiz topics/questions.
 - Keep changes incremental, reversible, and well‑tested (serverless safe; no new deps unless approved).
 
 ## Design Approach (Preview)
@@ -12,25 +12,23 @@
 - Button states: soften focus ring and hover shadow; keep accessible contrast.
 - Footer: keep current structure; ensure CTA stays centered with dynamic reserve (already done).
 
-## Media Input (Phase 1: UI Stub)
-- New card “Import” in the Options area with drag‑drop + file picker.
-- Accept types: `application/pdf`, `image/*`.
-- Client‑only preview: filename, size, and small thumbnail (for images) — no parsing yet.
-- Submit wires to placeholder function `/.netlify/functions/ingest-media` (to add later) with base64 payload (size‑capped) or URL.
-- If function unavailable, show friendly “Not enabled” status (no errors in console).
+## Media Input Implementation
+- The topic paperclip is production-facing and accepts text, Markdown, HTML, CSV, JSON, RTF, DOCX, PDF, and image files.
+- Client guardrails validate size, sniff file bytes, reject MIME/extension mismatches, and cancel stale overlapping imports.
+- `/.netlify/functions/ingest-media` extracts readable text from text/document files locally where practical and uses the configured provider for PDF/image extraction, then returns `{ text, metadata }`.
+- Imported text is treated as source material for quiz generation. It is not parsed as quiz-line syntax.
 
-## Serverless Plan (Phase 2, follow‑up)
-- Add `ingest-media` Netlify Function:
-  - Accept PDF/image (base64) or URL.
-  - Extract text (future: pdf.js in function, or provider‑based OCR; to be discussed).
-  - Return { text, metadata } that we’ll route to a “topic builder” step.
-- Guardrails: size cap (e.g., 2–5MB), rate limit + auth (bearer or beta), timebox extraction.
+## Serverless Guardrails
+- The function accepts base64 source-import payloads for the supported text, document, PDF, and image formats.
+- Guardrails: origin checks, direct-upload cap, extracted-text cap, DOCX XML expansion cap, per-IP rate limit, provider timeout, and typed error codes.
+- Gemini supports PDF/image extraction. OpenAI supports image extraction in this build. Text, Markdown, HTML, CSV, JSON, RTF, and DOCX extraction uses deterministic local parsing.
 
 ## Acceptance Criteria
 - Visual refresh: wrappers look lighter and more modern (consistent across states), no layout regressions on mobile.
-- Media Input stub:
+- Media Input:
   - Drag‑drop zone visible; accepts files; shows a readable preview status.
-  - If function is not deployed, UI surfaces “Not enabled” without breaking other flows.
+  - Successful import shows the file name, extracted character count, and a remove action.
+  - Generate sends the extracted source text to the quiz generator.
 - Tests: pass; iterate checks: pass.
 - No blocking console errors (CSP, SW, or network) in preview.
 
@@ -40,16 +38,13 @@
    - Migrate wrappers (toolbar card, editor card, quiz card) to soft outline + elevation.
    - Tests: CSS token presence; screenshot‑less DOM sanity.
 
-2) Media Input UI Stub
-   - Add Import card in Options (same skeleton as existing cards).
-   - File input + drag‑drop; show summary; wire disabled “Send” that posts to placeholder path.
-   - Tests: DOM ids present; accept attribute; graceful fallback.
+2) Media Input
+   - File input + drag‑drop.
+   - Show source summary and clear action.
+   - Post to `ingest-media` and route extracted text into grounded quiz generation.
+   - Tests: DOM ids present; accept attribute; size/type validation; overlapping imports; successful source generation.
 
-3) Function Placeholder (optional in preview PR)
-   - Add `ingest-media.js` returning 501 Not Implemented with JSON body and help link.
-   - Wire client to display the message as an info panel.
-
-4) Iterate & Polish
+3) Iterate & Polish
    - Run `ezq-head run iterate` and fix minor visual spacing regressions.
    - Add CSP allowances only if needed (no third‑party scripts).
 
@@ -64,5 +59,5 @@
 
 ## Timeline (suggested)
 - PR A: Tokens + wrapper refresh + tests.
-- PR B: Media Input UI stub + tests + placeholder function (optional).
-- PR C: Enable extraction backend (scope TBD) and end‑to‑end tests.
+- PR B: Media Input UI + extraction endpoint + tests.
+- PR C: Provider smoke tests and design polish.

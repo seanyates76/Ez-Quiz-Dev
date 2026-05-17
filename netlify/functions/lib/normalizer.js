@@ -456,5 +456,6 @@ function quizToLegacyLines(quiz, opts = {}){
 module.exports = {
   normalizeLegacyLines,
   normalizeQuizV2,
+  parseLegacyQuestion,
   quizToLegacyLines,
 };

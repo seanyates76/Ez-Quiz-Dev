@@ -6,18 +6,18 @@
   <title>EZ Quiz</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=1.5.28"></script>
-  <link rel="stylesheet" href="styles.css?v=1.5.28" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.28">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.28">
-  <script src="js/boot-beta.js?v=1.5.28"></script>
+  <script src="js/theme-preload.js?v=1.5.35"></script>
+  <link rel="stylesheet" href="styles.css?v=1.5.35" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.35">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.35">
+  <script src="js/boot-beta.js?v=1.5.35"></script>
 </head>
 <body>
   <header class="site-header" role="banner">
     <div class="site-header__row">
       <div class="brand">
         <a href="/" class="brand-link" aria-label="EZ Quiz Home">
-          <!-- Use a transparent placeholder at start; JS sets the theme-specific logo -->
+          <!-- Use a transparent pixel at start; JS sets the theme-specific logo -->
           <img id="brandTitle"
                src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=="
                alt="EZ Quiz"
@@ -34,6 +34,48 @@
   </header>
 
   <main class="container" id="app" role="main">
+    <section id="landingIntro" class="landing-intro" aria-labelledby="landingTitle">
+      <button id="landingIntroClose" class="preview-close landing-intro-close" type="button" aria-label="Close info panel">
+        <span aria-hidden="true">×</span>
+      </button>
+      <div class="landing-copy">
+        <p class="landing-kicker">Create, practice, review</p>
+        <h1 id="landingTitle">Welcome to EZ Quiz.</h1>
+        <p class="landing-dek">Create focused practice quizzes from a topic or study material.</p>
+      </div>
+      <div id="landingPreview" class="landing-preview" aria-label="Intro sections">
+        <div class="preview-tabs" role="tablist" aria-label="Intro sections">
+          <button id="landingTabNew" class="preview-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="landingPanelNew" data-preview-tab="0">What’s new</button>
+          <button id="landingTabSoon" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelSoon" data-preview-tab="1" tabindex="-1">Coming soon</button>
+          <button id="landingTabTips" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelTips" data-preview-tab="2" tabindex="-1">Tips</button>
+        </div>
+        <div id="landingPanelNew" class="preview-panel" role="tabpanel" aria-labelledby="landingTabNew" data-preview-panel="0">
+          <ul class="preview-list">
+            <li>Create from a topic or your study material.</li>
+            <li>Start when your quiz is ready.</li>
+            <li>Review missed answers with simple explanations.</li>
+          </ul>
+        </div>
+        <div id="landingPanelSoon" class="preview-panel" role="tabpanel" aria-labelledby="landingTabSoon" data-preview-panel="1" hidden>
+          <ul class="preview-list">
+            <li>Better support for larger quizzes.</li>
+            <li>Clearer progress for big imports.</li>
+            <li>Flashcards and review tools for missed concepts.</li>
+          </ul>
+        </div>
+        <div id="landingPanelTips" class="preview-panel" role="tabpanel" aria-labelledby="landingTabTips" data-preview-panel="2" hidden>
+          <ul class="preview-list">
+            <li>Use a short topic for quick practice.</li>
+            <li>Use study material for notes, documents, or pasted text.</li>
+            <li>If a build fails, try a smaller source or shorter quiz.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="landing-intro-footer">
+        <button id="landingIntroDontShow" class="preview-hide" type="button">Don’t show again</button>
+      </div>
+    </section>
+
     <!-- Generator Card -->
     <section id="generatorCard" class="card">
       <div id="updateBanner" class="update-banner hidden" hidden role="status" aria-live="polite">
@@ -42,20 +84,20 @@
         <button id="updateRefreshBtn" class="btn primary" type="button">Refresh</button>
       </div>
 
-      <!-- Top toolbar (simple generate form) -->
-      <div class="gen-toolbar" role="group" aria-label="Generate toolbar">
+      <!-- Top toolbar (simple create form) -->
+      <div class="gen-toolbar" role="group" aria-label="Create quiz toolbar">
         <div class="toolbar-left">
         <label class="toolbar-field">
           <span class="toolbar-label">Topic</span>
           <div class="input-affix topic-affix">
-            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="e.g. Animals" />
-            <button id="importBtn" class="affix-btn beta-only" type="button" title="Attach PDF/Image (beta)" aria-label="Attach PDF or Image (beta)">
-              <svg class="icon-clip icon-clip--beta" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
-                <!-- Material Symbols Rounded “attach_file” icon (beta only) -->
+            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="Short topic, e.g. Biology exam review" />
+            <button id="importBtn" class="affix-btn" type="button" title="Attach notes or documents" aria-label="Attach notes or documents">
+              <svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+                <!-- Material Symbols Rounded “attach_file” icon -->
                 <path fill="currentColor" d="M16.5 6.75v10.58c0 2.09-1.53 3.95-3.61 4.15-2.39.23-4.39-1.64-4.39-3.98V5.14c0-1.31.94-2.5 2.24-2.63 1.5-.15 2.76 1.02 2.76 2.49v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75v8.61c0 1.31.94 2.5 2.24 2.63 1.5.15 2.76-1.02 2.76-2.49V5.17c0-2.09-1.53-3.95-3.61-4.15C9.01.79 7 2.66 7 5v12.27c0 2.87 2.1 5.44 4.96 5.71 3.29.3 6.04-2.26 6.04-5.48V6.75c0-.41-.34-.75-.75-.75s-.75.34-.75.75z"/>
               </svg>
             </button>
-            <input id="importFile" type="file" accept="application/pdf,image/*" style="display:none" />
+            <input id="importFile" type="file" accept="application/pdf,image/*,text/plain,text/markdown,text/html,text/csv,application/json,application/rtf,.txt,.md,.markdown,.html,.htm,.csv,.json,.rtf,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" style="display:none" />
           </div>
         </label>
         <label class="toolbar-field toolbar-field--difficulty">
@@ -74,7 +116,12 @@
         <label class="toolbar-field narrow number-field">
           <span class="toolbar-label">Length</span>
           <div class="number-wrap">
-            <input id="countInput" type="number" class="toolbar-input" min="1" max="30" step="1" value="10" inputmode="numeric" />
+            <select id="countInput" class="toolbar-input" aria-describedby="genCountHint">
+              <option value="5">5</option>
+              <option value="10" selected>10</option>
+              <option value="15">15</option>
+              <option value="20">20</option>
+            </select>
             <div class="stepper-group" role="group" aria-label="Adjust length">
               <button type="button" class="stepper stepper-up" data-step="up" aria-label="Increase length">▲</button>
               <button type="button" class="stepper stepper-down" data-step="down" aria-label="Decrease length">▼</button>
@@ -83,14 +130,24 @@
         </label>
         </div>
         <div class="action-stack">
-          <button id="generateBtn" class="btn primary" type="button" aria-label="Primary action">Start</button>
+          <button id="generateBtn" class="btn primary" type="button">Create Quiz</button>
+          <button id="startToolbarBtn" class="btn" type="button" aria-describedby="startHelp" aria-disabled="true" data-start-disabled="true" tabindex="-1">Start Quiz</button>
           <button id="optionsBtn" class="btn btn-outline" aria-haspopup="true" aria-expanded="false" aria-controls="optionsPanel">Options ▾</button>
         </div>
     </div>
 
       <!-- Subtle hint when inputs change after generation -->
+      <div id="status" class="build-status" role="status" aria-live="polite" data-build-state="idle">
+        Add a topic or study material, then create a quiz.
+      </div>
+      <div id="genCountHint" class="sr-only">Public quiz limit is 20 questions.</div>
+      <div id="startHelp" class="sr-only">Start Quiz is enabled after a valid quiz is ready.</div>
       <div id="regenHint" class="regen-hint" role="status" aria-live="polite" hidden>
-        Updated inputs — press Regenerate
+        Updated inputs — create a new quiz when ready.
+      </div>
+      <div id="mediaSourceStatus" class="media-source-status" role="status" aria-live="polite" hidden>
+        <span id="mediaSourceLabel" class="media-source-label"></span>
+        <button id="clearMediaSourceBtn" class="btn btn-ghost btn-small" type="button">Remove</button>
       </div>
 
       <!-- Options Drop-Down (includes Quiz Editor tools) -->
@@ -158,7 +215,7 @@
               </div>
               <div class="adv-group run">
                 <button id="clearBtn" class="btn btn-ghost">Clear</button>
-                <button id="startBtn" class="btn" aria-describedby="startHelp" disabled>Start</button>
+                <button id="startBtn" class="btn" aria-describedby="startHelp" disabled>Start Quiz</button>
               </div>
             </div>
             <div class="advanced-actions">
@@ -167,7 +224,7 @@
             </div>
           </div>
           <details class="parser-ref" style="margin-top:8px">
-            <summary>Parser reference</summary>
+            <summary>Manual format reference</summary>
             <pre class="parser-block" aria-label="Example parser lines">MC|Question?|A) Opt1;B) Opt2|A
 TF|Statement.|T
 YN|Question?|Y
@@ -289,16 +346,16 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <h4>Getting Started</h4>
           <ul>
             <li>Enter a topic in the <em>Topic</em> field, set Length and Difficulty.</li>
-            <li>Click <strong>Start</strong> to generate and begin the quiz, or open <strong>Options</strong> for more controls.</li>
+            <li>Click <strong>Create Quiz</strong> to build the quiz. <strong>Start Quiz</strong> unlocks after a valid quiz is ready.</li>
           </ul>
         </section>
 
         <section>
-          <h4>Generate vs Start</h4>
+          <h4>Create vs Start</h4>
           <ul>
-            <li><strong>Start</strong> (default): generates → parses → starts the quiz.</li>
-            <li><strong>Generate</strong> (Options → Quiz Editor open): fills the <em>Editor</em> and <em>Mirror</em> only; the quiz starts when you click <strong>Start</strong>.</li>
-            <li>Re‑using <strong>Generate</strong> clears the editor and creates a fresh set.</li>
+            <li><strong>Create Quiz</strong>: builds a quiz from your topic or study material.</li>
+            <li><strong>Start Quiz</strong>: begins taking the ready quiz.</li>
+            <li>If a new build fails, the last valid quiz stays available.</li>
           </ul>
         </section>
 
@@ -306,7 +363,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <h4>Options &amp; Quiz Editor</h4>
           <ul>
             <li>Options: Timer, Theme, Question Types, and Defaults.</li>
-            <li><strong>Quiz Editor</strong>: <strong>Editor</strong> (paste or load .txt), <strong>Mirror</strong> (raw lines), <strong>Copy prompts</strong>, <strong>Export .txt</strong>.</li>
+            <li><strong>Advanced / Manual quiz import</strong>: paste or load EZ Quiz formatted lines, then use Start Quiz after the quiz is valid.</li>
             <li>Supported types: Multiple Choice (single/multiple), True/False, Yes/No, Matching.</li>
           </ul>
         </section>
@@ -323,7 +380,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <h4>Timer &amp; Settings</h4>
           <ul>
             <li>Stopwatch or Countdown (mm:ss) in Settings; preferences persist locally.</li>
-            <li>Optional: Require answer to advance; Auto‑start after generate (Start mode only).</li>
+            <li>Optional: Require answer to advance; Start Quiz is a separate step after Create Quiz succeeds.</li>
           </ul>
         </section>
 
@@ -346,17 +403,18 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         <section>
           <h4>AI Generation</h4>
           <ul>
-            <li>Generate sends Topic, Length, Difficulty, and selected types to the AI.</li>
-            <li>If nothing returns, try again shortly (rate limits), use Demo Set, or paste lines into the editor.</li>
+            <li>Create sends Topic or Study Material, Length, Difficulty, and selected types to the AI.</li>
+            <li>Public quiz lengths are 5, 10, 15, and 20 questions while larger builds remain a future reliability goal.</li>
+            <li>If nothing usable returns, try fewer questions, a smaller source, Demo Set, or manual import.</li>
           </ul>
         </section>
 
-        <!-- Stacked accordions at bottom: What's New, FAQ, Parser Reference -->
+        <!-- Stacked accordions at bottom: What's New, FAQ, Manual Format Reference -->
         <section>
           <details class="help-accordion">
             <summary>What's New</summary>
             <ul>
-              <li><strong>Start vs Generate:</strong> Start runs the quiz; Generate fills Editor + Mirror.</li>
+              <li><strong>Create vs Start:</strong> Create builds the quiz; Start begins a ready quiz.</li>
               <li><strong>Options panel:</strong> Timer, Theme, Types, and Quiz Editor tools in one place.</li>
               <li><strong>Quiz Editor:</strong> Editor, Mirror, Copy prompts, Export .txt.</li>
               <li><strong>Defaults:</strong> Save Count/Difficulty/Types; Reset defaults clears them.</li>
@@ -369,14 +427,14 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <details class="help-accordion">
             <summary>FAQ</summary>
             <dl class="faq-list">
-              <dt><strong>Q:</strong> What’s the difference between “Start” and “Generate”?</dt>
-              <dd><strong>A:</strong> Generate fills the Editor and Mirror so you can review or edit. Start actually begins a quiz run — think Generate as “draft mode,” Start as “play mode.”</dd>
+              <dt><strong>Q:</strong> What’s the difference between “Create Quiz” and “Start Quiz”?</dt>
+              <dd><strong>A:</strong> Create Quiz builds a valid quiz. Start Quiz begins taking the ready quiz.</dd>
 
               <dt><strong>Q:</strong> Why is the Mirror empty?</dt>
-              <dd><strong>A:</strong> The Mirror shows raw quiz lines (MC|, TF|, etc.). It stays blank until you Generate or paste lines into the Editor.</dd>
+              <dd><strong>A:</strong> The Mirror is an advanced view for EZ Quiz formatted lines. It stays blank until a quiz is created or manual lines are loaded.</dd>
 
               <dt><strong>Q:</strong> Can I edit the quiz before starting?</dt>
-              <dd><strong>A:</strong> Yes. Use the Editor to change or add your own questions. When you’re ready, click Start to run the version you’ve prepared.</dd>
+              <dd><strong>A:</strong> Yes. Use the Editor to change or add your own questions. When you’re ready, click Start Quiz to run the version you’ve prepared.</dd>
 
               <dt><strong>Q:</strong> What are the Retake options?</dt>
               <dd><strong>A:</strong> Retake All repeats the full quiz. The caret menu lets you retake only the questions you missed, or shuffle everything for a fresh run.</dd>
@@ -385,7 +443,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
               <dd><strong>A:</strong> Open the ⚙ Settings menu. You can adjust timer length, appearance theme, and reset to defaults at any time (except while a quiz is running).</dd>
 
               <dt><strong>Q:</strong> Where can I export or copy my quiz?</dt>
-              <dd><strong>A:</strong> In the Quiz Editor, you’ll find options to copy quiz lines for AI prompts or export them as a .txt file.</dd>
+              <dd><strong>A:</strong> In Advanced / Manual quiz import, you’ll find options to copy or export EZ Quiz formatted lines as a .txt file.</dd>
 
               <dt><strong>Q:</strong> What happens if the app updates mid‑quiz?</dt>
               <dd><strong>A:</strong> Nothing changes until you finish or exit. Updates only apply once you refresh or start a new quiz, so your current run is never interrupted.</dd>
@@ -398,7 +456,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
         <section>
           <details class="help-accordion parser-accordion">
-            <summary>Parser Reference</summary>
+            <summary>Manual Format Reference</summary>
             <pre class="parser-block" aria-label="Example parser lines">MC|Question?|A) Opt1;B) Opt2;C) Opt3;D) Opt4|A
 TF|Statement.|T
 YN|Question?|Y
@@ -453,11 +511,6 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         <div class="row">
           <button id="resetApp" class="btn danger">Reset App</button>
         </div>
-        <fieldset class="fieldgroup">
-          <legend>Beta Features</legend>
-          <label><input type="checkbox" id="betaEnabled" /> <span>Enable beta features</span></label>
-        </fieldset>
-
         <p class="muted small settings-version" data-version-copy>
           Version <a id="versionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" data-version-label>v3.4.0</a>
           <span aria-hidden="true">·</span>
@@ -482,8 +535,9 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         <section class="release-notes release-notes--production">
           <h4>v3.4.0</h4>
           <ul>
-            <li>Stable AI fallback loop now ships to everyone.</li>
-            <li>All recent UI polish and cache busts are part of the main app.</li>
+            <li>Create Quiz now builds first; Start Quiz unlocks only after a valid quiz is ready.</li>
+            <li>Public quiz lengths are 5, 10, 15, and 20 questions while larger 30/50-question builds stay on the reliability roadmap.</li>
+            <li>Study-material import and Results explanations are part of the production flow.</li>
           </ul>
         </section>
         <section>
@@ -500,7 +554,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
             <li><strong>Results:</strong> continuous score bar, mobile overflow fixes, subtle transitions.</li>
             <li><strong>Generator:</strong> mobile stack layout refined; increased vertical spacing; Difficulty given more width.</li>
             <li><strong>Primary button:</strong> Start by default; Generate when QE open; flips back to Start after generation.</li>
-            <li><strong>Explain (beta):</strong> centered ribbon teaser only; real explanations coming soon.</li>
+            <li><strong>Explain (beta):</strong> on-demand result explanations now load from the lazy explanation endpoint.</li>
           </ul>
         </section>
         <section>
@@ -640,10 +694,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=1.5.28"></script>
-  <script type="module" src="js/auto-refresh.js?v=1.5.28"></script>
-  <script type="module" src="js/patches.js?v=1.5.28"></script>
-  <script type="module" src="js/editor.gui.js?v=1.5.28"></script>
+  <script type="module" src="js/main.js?v=1.5.35"></script>
+  <script type="module" src="js/auto-refresh.js?v=1.5.35"></script>
+  <script type="module" src="js/patches.js?v=1.5.35"></script>
+  <script type="module" src="js/editor.gui.js?v=1.5.35"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">

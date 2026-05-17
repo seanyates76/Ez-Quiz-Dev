@@ -41,7 +41,7 @@ function wireStartHint(){
   const start = qs('startBtn'); if(!start) return;
   let hinted = false;
   const obs = new MutationObserver(()=>{
-    if(!hinted && !start.disabled){ hinted = true; announce('Ready — press Start to begin'); }
+    if(!hinted && !start.disabled){ hinted = true; announce('Ready — press Start Quiz to begin'); }
   });
   obs.observe(start, { attributes:true, attributeFilter:['disabled'] });
 }
@@ -155,8 +155,17 @@ document.addEventListener('DOMContentLoaded', ()=>{
     if(startTop && startMain){
       // Hide the Options-panel Start to avoid duplication
       try{ startMain.style.display = 'none'; startMain.setAttribute('aria-hidden','true'); }catch{}
-      const sync = ()=>{ startTop.disabled = !!startMain.disabled; };
-      startTop.addEventListener('click', (e)=>{ e.preventDefault(); if(!startTop.disabled) startMain.click(); });
+      const sync = ()=>{
+        const disabled = !!startMain.disabled;
+        startTop.disabled = false;
+        startTop.setAttribute('aria-disabled', disabled ? 'true' : 'false');
+        startTop.dataset.startDisabled = disabled ? 'true' : 'false';
+        startTop.tabIndex = disabled ? -1 : 0;
+      };
+      startTop.addEventListener('click', (e)=>{
+        e.preventDefault();
+        if(startTop.getAttribute('aria-disabled') !== 'true' && !startMain.disabled) startMain.click();
+      });
       const mo = new MutationObserver(sync);
       mo.observe(startMain, { attributes:true, attributeFilter:['disabled'] });
       sync();

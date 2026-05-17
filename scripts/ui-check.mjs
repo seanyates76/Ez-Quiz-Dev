@@ -408,7 +408,7 @@ async function run() {
         const scoreOK = !!scoreBar && scoreWidth >= 70 && scoreWidth <= Math.min(200, Math.round(width * 0.5));
         const rowStyle = headerRow ? getComputedStyle(headerRow) : null;
         const wrapOK = rowStyle ? (rowStyle.flexWrap === 'wrap') : false;
-        const hasExplain = !!document.querySelector('.explain-btn'); // should be false in non-beta
+        const hasExplain = !!document.querySelector('.explain-btn');
         return { docOverflow, bodyOverflow, headerOverflow, scoreWidth, scoreOK, wrapOK, hasExplain };
       });
     } catch (err) {
@@ -431,8 +431,8 @@ async function run() {
       if (!rmetrics.wrapOK) {
         failures.push({ viewport: vp.name, reason: 'results-header-wrap', details: rmetrics });
       }
-      if (rmetrics.hasExplain) {
-        failures.push({ viewport: vp.name, reason: 'results-explain-gating', details: rmetrics });
+      if (!rmetrics.hasExplain) {
+        failures.push({ viewport: vp.name, reason: 'results-explain-missing', details: rmetrics });
       }
     }
 

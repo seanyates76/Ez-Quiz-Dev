@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EZ Quiz Release Prep Source of Truth</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #141b24;
+      --panel-2: #192331;
+      --panel-3: #101720;
+      --text: #f4f7fb;
+      --muted: #aeb9c8;
+      --soft: #dce6f4;
+      --line: #314052;
+      --brand: #8ab9ff;
+      --accent: #c9794d;
+      --good: #62d48f;
+      --warn: #f4c45e;
+      --risk: #ff7b8a;
+      --shadow: 0 18px 44px rgba(0, 0, 0, .26);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.48;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 86% 0, rgba(201, 121, 77, .16), transparent 32%),
+        linear-gradient(180deg, rgba(138, 185, 255, .10), transparent 360px),
+        var(--bg);
+    }
+
+    main {
+      width: min(1160px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 34px 0 56px;
+    }
+
+    header {
+      display: grid;
+      gap: 18px;
+      padding: 28px;
+      border: 1px solid rgba(255, 255, 255, .10);
+      border-radius: 16px;
+      background:
+        linear-gradient(135deg, rgba(25, 35, 49, .94), rgba(16, 23, 32, .96)),
+        var(--panel);
+      box-shadow: var(--shadow);
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+      font-size: clamp(2rem, 4vw, 3.3rem);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 10px;
+      font-size: 1rem;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: .95rem;
+      color: var(--soft);
+    }
+
+    p {
+      margin-bottom: 10px;
+      color: var(--muted);
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 19px;
+      color: var(--muted);
+    }
+
+    li {
+      margin: 5px 0;
+    }
+
+    strong {
+      color: var(--text);
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      color: #dce9ff;
+      background: rgba(255, 255, 255, .07);
+    }
+
+    .dek {
+      max-width: 860px;
+      margin-bottom: 0;
+      font-size: 1.05rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 4px 10px;
+      border: 1px solid rgba(255, 255, 255, .12);
+      border-radius: 999px;
+      color: var(--soft);
+      background: rgba(255, 255, 255, .06);
+      font-size: .84rem;
+      font-weight: 700;
+    }
+
+    .pill.good {
+      border-color: rgba(98, 212, 143, .42);
+      color: var(--good);
+    }
+
+    .pill.warn {
+      border-color: rgba(244, 196, 94, .42);
+      color: var(--warn);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .card {
+      grid-column: span 4;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, .10);
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(25, 35, 49, .92), rgba(16, 23, 32, .96));
+      box-shadow: 0 10px 28px rgba(0, 0, 0, .16);
+    }
+
+    .card.wide {
+      grid-column: span 8;
+    }
+
+    .card.full {
+      grid-column: 1 / -1;
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .status {
+      min-height: 86px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, .10);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .045);
+    }
+
+    .status b {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-size: .9rem;
+    }
+
+    .status span {
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 92px;
+      padding: 13px;
+      border: 1px solid rgba(138, 185, 255, .22);
+      border-radius: 12px;
+      background: rgba(138, 185, 255, .07);
+    }
+
+    .flow-step::after {
+      content: ">";
+      position: absolute;
+      top: 50%;
+      right: -9px;
+      transform: translateY(-50%);
+      color: var(--brand);
+      font-weight: 800;
+    }
+
+    .flow-step:last-child::after {
+      content: "";
+    }
+
+    .flow-step b {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text);
+    }
+
+    .flow-step span {
+      color: var(--muted);
+      font-size: .9rem;
+    }
+
+    .callout {
+      margin-top: 12px;
+      padding: 13px 14px;
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      color: var(--soft);
+      background: rgba(201, 121, 77, .10);
+    }
+
+    .checklist {
+      columns: 2;
+      column-gap: 28px;
+    }
+
+    .checklist li {
+      break-inside: avoid;
+    }
+
+    @media (max-width: 900px) {
+      .card,
+      .card.wide {
+        grid-column: 1 / -1;
+      }
+
+      .flow,
+      .status-row {
+        grid-template-columns: 1fr;
+      }
+
+      .flow-step::after {
+        display: none;
+      }
+
+      .checklist {
+        columns: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>EZ Quiz Release Prep Source of Truth</h1>
+        <p class="dek">Current-state handoff for the reliability-informed EZ Quiz update. Use this to orient repo prep, documentation, final testing, and push work.</p>
+      </div>
+      <div class="meta" aria-label="Current release-prep status">
+        <span class="pill good">Flow stabilized</span>
+        <span class="pill good">Gemini 5/10/20 passed</span>
+        <span class="pill good">Explainers working</span>
+        <span class="pill good">Media ingest working</span>
+        <span class="pill warn">30/50 deferred</span>
+      </div>
+    </header>
+
+    <section class="grid" aria-label="Release-prep dashboard">
+      <article class="card wide">
+        <h2>Current Product Framing</h2>
+        <p><strong>EZ Quiz is now framed around reliable study practice:</strong> provide a topic or focused study material, create a valid quiz, start when ready, then review results with explanations.</p>
+        <p>This version is meaningfully better than the current live site because it separates building from taking, avoids over-promising large generation, and presents the first-use intro cleanly.</p>
+        <div class="callout">Core promise: <strong>Create builds. Start begins. Results explain.</strong></div>
+      </article>
+
+      <article class="card">
+        <h2>Public Quiz Limits</h2>
+        <ul>
+          <li>Public quiz length is capped at <strong>20 questions</strong>.</li>
+          <li>Visible options are <strong>5, 10, 15, and 20</strong>.</li>
+          <li>Do not advertise 30/50 as available public options yet.</li>
+          <li>30/50 remains a future reliability goal tied to staged/async generation.</li>
+        </ul>
+      </article>
+
+      <article class="card full">
+        <h2>Current Stable App Flow</h2>
+        <div class="flow" aria-label="Stable flow">
+          <div class="flow-step">
+            <b>Create Quiz</b>
+            <span>Topic or study material starts the build.</span>
+          </div>
+          <div class="flow-step">
+            <b>Status</b>
+            <span>Build state explains readiness or failure.</span>
+          </div>
+          <div class="flow-step">
+            <b>Start Quiz</b>
+            <span>Enabled only after a valid quiz exists.</span>
+          </div>
+          <div class="flow-step">
+            <b>Results</b>
+            <span>Completed quiz moves into review mode.</span>
+          </div>
+          <div class="flow-step">
+            <b>Explanations</b>
+            <span>Missed concepts can be reviewed on demand.</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>What Works Now</h2>
+        <ul>
+          <li>Create Quiz and Start Quiz are separate.</li>
+          <li>Start Quiz stays disabled until a valid quiz exists.</li>
+          <li>Failed creation does not erase the last valid quiz.</li>
+          <li>Live Gemini generation passed for 5, 10, and 20 questions after increasing provider output budget.</li>
+          <li>Explainers work.</li>
+          <li>Media ingest works.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Intro Panel State</h2>
+        <ul>
+          <li>Landing/top intro panel is polished.</li>
+          <li>The soft gradient looks good.</li>
+          <li>The panel disappears cleanly when dismissed or when quiz-taking starts.</li>
+          <li>No filler content replaces it; the create/editor area carries the page.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Known User Guidance</h2>
+        <p>Use concise, trust-preserving copy around generation reliability.</p>
+        <div class="callout">For best results, paste a focused section of notes, a lesson, or a short study guide. Full course notes may work better when split into smaller chunks.</div>
+      </article>
+
+      <article class="card wide">
+        <h2>Pre-Push Priorities</h2>
+        <div class="status-row">
+          <div class="status">
+            <b>Repo Prep</b>
+            <span>Review diff scope, remove accidental churn, confirm cache-buster/service worker state.</span>
+          </div>
+          <div class="status">
+            <b>Documentation</b>
+            <span>Update public-facing notes and any repo docs affected by the Create to Start model.</span>
+          </div>
+          <div class="status">
+            <b>Final Testing</b>
+            <span>Run local UI, generation, media ingest, and explanation smoke checks.</span>
+          </div>
+          <div class="status">
+            <b>Preview Branch</b>
+            <span>Push the prepared branch when verification is done, then confirm the preview opens cleanly.</span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card">
+        <h2>Still Needs Testing</h2>
+        <ul>
+          <li>Fresh browser session with no localStorage.</li>
+          <li>Returning browser session after intro dismissal.</li>
+          <li>Create from topic at 5, 10, 15, and 20.</li>
+          <li>Create from focused study material.</li>
+          <li>Failure messaging with last valid quiz preserved.</li>
+          <li>Service worker/cache update behavior after version bump.</li>
+        </ul>
+      </article>
+
+      <article class="card full">
+        <h2>Final Testing Checklist</h2>
+        <ul class="checklist">
+          <li>Run `npm test`.</li>
+          <li>Run `npm run ui:check`.</li>
+          <li>Smoke topic generation for 5 questions.</li>
+          <li>Smoke topic generation for 10 questions.</li>
+          <li>Smoke topic generation for 15 questions.</li>
+          <li>Smoke topic generation for 20 questions.</li>
+          <li>Confirm Start Quiz unlocks only after valid creation.</li>
+          <li>Confirm failed creation shows useful error and preserves last valid quiz.</li>
+          <li>Confirm results render correctly after quiz completion.</li>
+          <li>Confirm explanations work from Results.</li>
+          <li>Confirm media ingest works with a representative file.</li>
+          <li>Confirm study-material guidance appears where expected.</li>
+          <li>Confirm top intro dismissal and localStorage behavior.</li>
+          <li>Confirm no 30/50 public option is exposed.</li>
+          <li>Confirm service worker cache name and asset versions are intentional.</li>
+        </ul>
+      </article>
+
+      <article class="card full">
+        <h2>Future Roadmap Items</h2>
+        <ul>
+          <li>30/50-question generation after reliability hardening.</li>
+          <li>Async or job-style generation backed by durable state.</li>
+          <li>Staged progress: source ingest, coverage plan, smaller batches, dedupe, validation, repair, final quiz.</li>
+          <li>More reliable large imports and clearer progress for big source material.</li>
+          <li>Source summaries after import.</li>
+          <li>Quiz readiness summaries.</li>
+          <li>Flashcards and review tools for missed concepts.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

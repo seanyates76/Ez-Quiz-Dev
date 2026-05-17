@@ -60,8 +60,16 @@ describe('clampCount', () => {
     expect(clampCount(9)).toBe(9);
   });
 
-  test('getMaxQuestions falls back to default when window absent', () => {
-    delete global.window;
-    expect(getMaxQuestions()).toBe(30);
+  test('getMaxQuestions falls back to public quiz default when window absent', () => {
+    const savedWindow = global.window;
+    const savedGlobalEzq = global.__EZQ__;
+    global.window = undefined;
+    global.__EZQ__ = undefined;
+    try {
+      expect(getMaxQuestions()).toBe(20);
+    } finally {
+      global.window = savedWindow;
+      global.__EZQ__ = savedGlobalEzq;
+    }
   });
 });

@@ -1,14 +1,20 @@
 'use strict';
 
 describe('beta gating helper', () => {
+  const originalDocument = global.document;
+
   afterEach(() => {
-    if (typeof document !== 'undefined' && document?.body) {
-      document.body.removeAttribute?.('data-beta');
-      if (document.body.dataset) {
-        delete document.body.dataset.beta;
+    if (originalDocument === undefined) {
+      delete global.document;
+    } else {
+      global.document = originalDocument;
+      if (global.document?.body) {
+        global.document.body.removeAttribute?.('data-beta');
+        if (global.document.body.dataset) {
+          delete global.document.body.dataset.beta;
+        }
       }
     }
-    delete global.document;
   });
 
   test('returns true when settings flag is enabled', async () => {

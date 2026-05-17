@@ -1,0 +1,705 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>EZ Quiz Quality-First UX Understandability Pass</title>
+  <style>
+    :root {
+      --bg: #0f141b;
+      --panel: #171f2a;
+      --panel-2: #202a37;
+      --panel-3: #111821;
+      --text: #f3f6fb;
+      --muted: #adbacb;
+      --line: #344154;
+      --brand: #8bbcff;
+      --accent: #ffb454;
+      --good: #59d190;
+      --warn: #ffd166;
+      --risk: #ff7583;
+      --shadow: 0 18px 44px rgba(0, 0, 0, .26);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      color: var(--text);
+      background:
+        linear-gradient(180deg, rgba(139,188,255,.1), transparent 320px),
+        radial-gradient(circle at 78% 0%, rgba(255,180,84,.08), transparent 330px),
+        var(--bg);
+    }
+
+    main {
+      width: min(1140px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 38px 0 60px;
+    }
+
+    header {
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 24px;
+    }
+
+    h1,
+    h2,
+    h3,
+    p {
+      margin-top: 0;
+    }
+
+    h1 {
+      margin-bottom: 12px;
+      font-size: clamp(2rem, 4vw, 3.45rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 12px;
+      font-size: 1.35rem;
+    }
+
+    h3 {
+      margin-bottom: 8px;
+      font-size: 1rem;
+    }
+
+    p {
+      margin-bottom: 12px;
+      color: var(--muted);
+    }
+
+    strong {
+      color: var(--text);
+    }
+
+    code {
+      color: #d9e7ff;
+      background: rgba(255,255,255,.07);
+      padding: 1px 5px;
+      border-radius: 5px;
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    section {
+      margin-top: 24px;
+    }
+
+    .dek {
+      max-width: 900px;
+      font-size: 1.06rem;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 5px 10px;
+      color: var(--muted);
+      background: rgba(255,255,255,.04);
+      font-size: .9rem;
+      white-space: nowrap;
+    }
+
+    .pill.good {
+      color: #cdf8df;
+      border-color: rgba(89,209,144,.55);
+      background: rgba(89,209,144,.12);
+    }
+
+    .pill.warn {
+      color: #fff0bf;
+      border-color: rgba(255,209,102,.55);
+      background: rgba(255,209,102,.12);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 14px;
+    }
+
+    .card {
+      grid-column: span 6;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(23,31,42,.96);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .card.third {
+      grid-column: span 4;
+    }
+
+    .card.wide {
+      grid-column: 1 / -1;
+    }
+
+    .card.compact {
+      box-shadow: none;
+      background: rgba(32,42,55,.72);
+    }
+
+    .callout {
+      border-left: 4px solid var(--brand);
+      background: rgba(139,188,255,.1);
+      padding: 14px 16px;
+      border-radius: 8px;
+    }
+
+    .callout strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .flow-step {
+      position: relative;
+      min-height: 112px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .flow-step:not(:last-child)::after {
+      content: ">";
+      position: absolute;
+      right: -9px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: var(--panel-2);
+      color: var(--brand);
+      font-weight: 800;
+      z-index: 1;
+    }
+
+    .flow-kicker {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--brand);
+      font-size: .76rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .flow-title {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .flow-step p {
+      margin-bottom: 0;
+      font-size: .92rem;
+    }
+
+    .split-path {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .path-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-3);
+      padding: 14px;
+    }
+
+    .path-card.is-primary {
+      border-color: rgba(139,188,255,.7);
+      background: rgba(139,188,255,.1);
+    }
+
+    .tag {
+      display: inline-flex;
+      margin-bottom: 10px;
+      border-radius: 999px;
+      padding: 3px 9px;
+      color: #0f141b;
+      background: var(--accent);
+      font-size: .78rem;
+      font-weight: 800;
+    }
+
+    .priority {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .priority h3 {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .priority h3::before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--brand);
+    }
+
+    .priority .now h3::before {
+      background: var(--good);
+    }
+
+    .priority .next h3::before {
+      background: var(--warn);
+    }
+
+    .priority .later h3::before {
+      background: var(--muted);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th,
+    td {
+      text-align: left;
+      vertical-align: top;
+      border-top: 1px solid var(--line);
+      padding: 10px;
+      color: var(--muted);
+    }
+
+    th {
+      color: var(--text);
+      font-weight: 700;
+    }
+
+    td:first-child {
+      color: #d8e1ee;
+    }
+
+    .small {
+      font-size: .9rem;
+    }
+
+    .roadmap {
+      counter-reset: step;
+      display: grid;
+      gap: 12px;
+    }
+
+    .step {
+      position: relative;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 15px 16px 15px 56px;
+    }
+
+    .step::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 16px;
+      top: 16px;
+      width: 26px;
+      height: 26px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--accent);
+      color: #17110a;
+      font-weight: 850;
+    }
+
+    .step p {
+      margin-bottom: 0;
+    }
+
+    @media (max-width: 940px) {
+      .flow {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .flow-step:not(:last-child)::after {
+        display: none;
+      }
+    }
+
+    @media (max-width: 760px) {
+      main {
+        width: min(100vw - 20px, 1140px);
+        padding-top: 24px;
+      }
+
+      .card,
+      .card.third {
+        grid-column: 1 / -1;
+      }
+
+      .split-path,
+      .priority {
+        grid-template-columns: 1fr;
+      }
+
+      .flow {
+        grid-template-columns: 1fr;
+      }
+
+      th,
+      td {
+        display: block;
+        padding: 8px 0;
+      }
+
+      tr {
+        display: block;
+        border-top: 1px solid var(--line);
+        padding: 8px 0;
+      }
+
+      th,
+      td {
+        border: 0;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>EZ Quiz Quality-First UX Understandability Pass</h1>
+      <p class="dek">Internal planning brief for moving the first-use experience toward a simple study flow: topic or study material in, high-quality quiz out, take quiz, review missed answers with explanations.</p>
+      <div class="meta" aria-label="Brief metadata">
+        <span class="pill">Created May 15, 2026</span>
+        <span class="pill good">Scope: understandability</span>
+        <span class="pill warn">Keep parser support advanced</span>
+      </div>
+    </header>
+
+    <section class="grid" aria-labelledby="goalTitle">
+      <article class="card wide">
+        <h2 id="goalTitle">Product Goal</h2>
+        <div class="callout">
+          <strong>A stranger should understand what to do in a few seconds.</strong>
+          <p>EZ Quiz should present two beginner-friendly starting points: a short topic, or study material such as pasted notes and imported files. Manual formatted quiz lines should remain available, but they should not define the product for new users.</p>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid" aria-labelledby="stateTitle">
+      <article class="card">
+        <h2 id="stateTitle">Current Friction Points</h2>
+        <ul>
+          <li>Topic input, file import, pasted notes, and formatted quiz lines compete for attention.</li>
+          <li>The landing page gives "Paste quiz lines" equal weight with topic and import actions.</li>
+          <li>"Topic or title" does not clearly mean "short topic only."</li>
+          <li>Study-material import is powerful, but the first screen does not explain when to use it.</li>
+          <li>Manual format help introduces MC/TF/YN/MT syntax too early.</li>
+          <li>Some main-page copy uses implementation terms like "batch-backed" and "Lazy."</li>
+          <li>Help content spends too much early space on Editor, Mirror, and raw-line behavior.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>What Already Works</h2>
+        <ul>
+          <li>The app already supports the desired learning loop: generate, take quiz, review results.</li>
+          <li>Imported source text is already kept separate from the topic label in the generation payload.</li>
+          <li>Supported import types now cover common study-material formats.</li>
+          <li>Advanced editor/manual parsing is already collapsible under Options.</li>
+          <li>Results explanations are user-facing as simple "Explanation" blocks, which fits review mode.</li>
+          <li>The current visual direction is restrained and practical enough to keep.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section aria-labelledby="feelTitle">
+      <h2 id="feelTitle">First-Use Experience Target</h2>
+      <div class="flow" aria-label="Simple first-use roadmap">
+        <div class="flow-step">
+          <span class="flow-kicker">Start</span>
+          <span class="flow-title">Landing page</span>
+          <p>Open with a clear promise and one question: what are you starting with?</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">Choose</span>
+          <span class="flow-title">Topic or material</span>
+          <p>Let users pick a short topic or study material without seeing manual syntax.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">Provide</span>
+          <span class="flow-title">Input</span>
+          <p>Show an input panel that clearly matches the chosen path.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">Create</span>
+          <span class="flow-title">Generate quiz</span>
+          <p>Generate a quiz with count, difficulty, and type controls kept secondary.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">Practice</span>
+          <span class="flow-title">Take quiz</span>
+          <p>Run the quiz without exposing raw quiz-line internals.</p>
+        </div>
+        <div class="flow-step">
+          <span class="flow-kicker">Review</span>
+          <span class="flow-title">Results</span>
+          <p>Review missed answers with simple explanations and retake options.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="grid" aria-labelledby="todayTitle">
+      <article class="card wide">
+        <h2 id="todayTitle">Recommended Improvements For Today</h2>
+        <div class="split-path">
+          <div class="path-card is-primary">
+            <span class="tag">Primary</span>
+            <h3>Make the first choice explicit</h3>
+            <p>Replace equal hero actions with a clear "What are you starting with?" choice. The two beginner paths should be <strong>A topic</strong> and <strong>Study material</strong>.</p>
+          </div>
+          <div class="path-card is-primary">
+            <span class="tag">Primary</span>
+            <h3>Match the panel to the path</h3>
+            <p>Topic mode should show a short one-line input. Study-material mode should support pasted notes and an attach/import action with plain-language helper text.</p>
+          </div>
+          <div class="path-card">
+            <h3>Demote manual formatted lines</h3>
+            <p>Move "Paste EZ Quiz formatted lines" to Advanced / Manual import. It should be discoverable for returning users, not centered for beginners.</p>
+          </div>
+          <div class="path-card">
+            <h3>Remove implementation language</h3>
+            <p>Replace wording such as "Lazy," "batch-backed," "parser," "schema," and "raw lines" from main first-use copy.</p>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <section class="grid" aria-labelledby="manualTitle">
+      <article class="card">
+        <h2 id="manualTitle">Advanced / Manual Functionality</h2>
+        <p><strong>Where it should live:</strong> under Options, inside a renamed disclosure such as <code>Advanced / Manual import</code> or <code>Manual quiz import</code>.</p>
+        <p><strong>How to describe it:</strong> "Already have EZ Quiz formatted lines? Paste them here to start or edit a quiz."</p>
+        <ul>
+          <li>Keep the exact format reference inside this advanced area.</li>
+          <li>Keep parser support and import of saved quiz text.</li>
+          <li>Do not use parser syntax in hero copy, primary cards, or beginner help.</li>
+          <li>Use "manual format" or "formatted lines" in advanced UI; avoid "parser" for users.</li>
+        </ul>
+      </article>
+
+      <article class="card">
+        <h2>Later / Future Improvements</h2>
+        <ul>
+          <li>Async generation jobs for reliable large quizzes.</li>
+          <li>Progress UI for multi-step generation, validation, and repair.</li>
+          <li>Larger binary import via blob-backed or resumable upload flow.</li>
+          <li>Better source state management when starting a new quiz.</li>
+          <li>Preference-backed "do not show again" behavior for any informational panels.</li>
+          <li>Full editor IA cleanup after the first-use path is clear.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section aria-labelledby="qualityTitle">
+      <h2 id="qualityTitle">Quality-Generation Roadmap</h2>
+      <div class="roadmap">
+        <article class="step">
+          <h3>Blueprint</h3>
+          <p>Build a coverage plan from the topic or source material before writing questions.</p>
+        </article>
+        <article class="step">
+          <h3>Smaller Batches</h3>
+          <p>Generate focused groups of questions instead of asking for all 30 to 50 questions at once.</p>
+        </article>
+        <article class="step">
+          <h3>Concept Tracking</h3>
+          <p>Track what concepts have already been covered so later batches fill gaps instead of repeating.</p>
+        </article>
+        <article class="step">
+          <h3>Dedupe And Validation</h3>
+          <p>Check for repeated stems, invalid answers, weak options, missing matches, and unsupported formats.</p>
+        </article>
+        <article class="step">
+          <h3>Repair Weak Questions</h3>
+          <p>Repair or replace questions that are repetitive, too vague, too easy for the requested difficulty, or not grounded in the source.</p>
+        </article>
+        <article class="step">
+          <h3>Final Assembled Quiz</h3>
+          <p>Assemble the final set only after coverage, quality, count, and answer validity are confirmed.</p>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="copyTitle">
+      <h2 id="copyTitle">Copy Table</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Current wording</th>
+            <th>Improved wording</th>
+            <th>Reason for change</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Generate, import, explain</td>
+            <td>What are you studying?</td>
+            <td>Starts with the user's intent instead of feature inventory.</td>
+          </tr>
+          <tr>
+            <td>Create quizzes from a short topic, pasted quiz lines, or imported notes and documents.</td>
+            <td>Create a quiz from a topic or your study material.</td>
+            <td>Removes manual syntax from the beginner path.</td>
+          </tr>
+          <tr>
+            <td>Generate from topic</td>
+            <td>Use a topic</td>
+            <td>Works better as a path choice before generation.</td>
+          </tr>
+          <tr>
+            <td>Import notes</td>
+            <td>Use study material</td>
+            <td>Covers pasted notes and files, not just import.</td>
+          </tr>
+          <tr>
+            <td>Paste quiz lines</td>
+            <td>Paste EZ Quiz formatted lines</td>
+            <td>Makes the advanced/manual requirement explicit.</td>
+          </tr>
+          <tr>
+            <td>Topic or title</td>
+            <td>Topic</td>
+            <td>Reduces ambiguity and discourages pasting full notes into a one-line field.</td>
+          </tr>
+          <tr>
+            <td>Short topic, e.g. Biology exam review</td>
+            <td>Short topic, e.g. Biology exam review</td>
+            <td>This placeholder is already clear; keep it in topic mode.</td>
+          </tr>
+          <tr>
+            <td>Batch-backed output with explicit count checks.</td>
+            <td>Choose short practice or longer review sets.</td>
+            <td>Removes implementation language from landing-page copy.</td>
+          </tr>
+          <tr>
+            <td>Lazy, per-question study rationale on demand.</td>
+            <td>Understand missed answers with simple review explanations.</td>
+            <td>Uses student-facing language and removes an internal implementation term.</td>
+          </tr>
+          <tr>
+            <td>Imported source ready. Press Generate to build quiz lines from it.</td>
+            <td>Study material ready. Generate a quiz from it.</td>
+            <td>Keeps raw quiz-line internals out of the main flow.</td>
+          </tr>
+          <tr>
+            <td>Start will parse your text and begin.</td>
+            <td>Start will open your formatted quiz.</td>
+            <td>Better for advanced users without exposing parser terminology.</td>
+          </tr>
+          <tr>
+            <td>Parser Reference</td>
+            <td>Manual format reference</td>
+            <td>Still precise, but less technical.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section aria-labelledby="priorityTitle">
+      <h2 id="priorityTitle">Priority Groupings</h2>
+      <div class="priority">
+        <article class="card compact now">
+          <h3>Now</h3>
+          <ul>
+            <li>Rewrite first-screen copy.</li>
+            <li>Show topic and study-material paths clearly.</li>
+            <li>Add pasted study-material input if feasible without backend refactor.</li>
+            <li>Move formatted-line paste behind Advanced / Manual import.</li>
+            <li>Remove "Lazy" and other implementation terms from visible beginner copy.</li>
+            <li>Update help so the main path is understandable without FAQ digging.</li>
+          </ul>
+        </article>
+
+        <article class="card compact next">
+          <h3>Next</h3>
+          <ul>
+            <li>Improve source state clarity after import and after New Quiz.</li>
+            <li>Review mobile layout for the two-path selector and input panel.</li>
+            <li>Clarify 30 to 50 question expectations without overpromising reliability.</li>
+            <li>Make manual import affordances easier to find for returning users.</li>
+          </ul>
+        </article>
+
+        <article class="card compact later">
+          <h3>Later</h3>
+          <ul>
+            <li>Async quality pipeline for large quizzes.</li>
+            <li>Structured coverage blueprint generation.</li>
+            <li>Automated dedupe, validation, and repair pass.</li>
+            <li>Resumable large-file import architecture.</li>
+            <li>Broader editor information architecture pass.</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="grid" aria-labelledby="decisionTitle">
+      <article class="card wide">
+        <h2 id="decisionTitle">Implementation Guardrails</h2>
+        <ul>
+          <li>Preserve the current visual direction and avoid a full redesign.</li>
+          <li>Do not remove parser functionality.</li>
+          <li>Keep backend changes out of this pass unless a tiny visible-UX fix requires one.</li>
+          <li>Prefer plain student-facing copy over implementation explanations.</li>
+          <li>Make the page easier, not busier.</li>
+        </ul>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
