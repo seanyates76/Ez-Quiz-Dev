@@ -71,6 +71,21 @@ describe('generate-quiz count guarantees', () => {
     expect(body.source).toEqual({ name: 'lecture.pdf', charCount: 'Alpha fact.\nBeta fact.'.length });
   });
 
+  test('reports the shared source material cap after server cleanup', async () => {
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({
+      topic: 'Long Notes',
+      count: 1,
+      provider: 'echo',
+      sourceName: 'long.txt',
+      sourceText: 'A'.repeat(30010),
+    }));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.source).toEqual({ name: 'long.txt', charCount: 30000 });
+  });
+
   test('fails explicitly when generation cannot fill the requested count', async () => {
     jest.doMock('../lib/providers.js', () => ({
       generateLines: jest.fn(async () => ({

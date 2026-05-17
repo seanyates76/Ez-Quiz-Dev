@@ -14,6 +14,14 @@ function loadHandler() {
   return require('../explain-answers-lazy.js').handler;
 }
 
+function loadModule() {
+  jest.resetModules();
+  jest.doMock('../lib/providers.explain.js', () => ({
+    explainQuestions: mockExplainQuestions,
+  }));
+  return require('../explain-answers-lazy.js');
+}
+
 function event(overrides = {}) {
   return {
     httpMethod: 'POST',
@@ -129,5 +137,21 @@ describe('explain-answers-lazy endpoint', () => {
     const res = await handler(event({ httpMethod: 'OPTIONS', body: '' }));
     expect(res.statusCode).toBe(204);
     expect(res.headers['Access-Control-Allow-Headers']).toContain('x-ezq-beta');
+  });
+
+  test('prunes expired rate-limit entries under IP churn', async () => {
+    process.env.EXPLAIN_WINDOW_MS = '1';
+    const mod = loadModule();
+    const { rateLimited, rateLimitSize, clearRateLimit } = mod._internals;
+    clearRateLimit();
+
+    for (let i = 0; i < 505; i += 1) {
+      expect(rateLimited({ headers: { 'x-forwarded-for': `10.0.0.${i}` } })).toBe(false);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 2));
+    expect(rateLimited({ headers: { 'x-forwarded-for': '10.0.1.1' } })).toBe(false);
+
+    expect(rateLimitSize()).toBeLessThan(505);
+    clearRateLimit();
   });
 });

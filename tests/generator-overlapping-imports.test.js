@@ -253,6 +253,31 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('mediaSourceLabel').textContent).toContain('TXT ready: notes.txt');
   });
 
+  test('reads only a bounded slice for large local text imports', async () => {
+    const importInput = document.getElementById('importFile');
+    const textFile = new File(['A'.repeat(200000)], 'large-notes.txt', { type: 'text/plain' });
+
+    sniffFileKind.mockResolvedValueOnce('txt');
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [textFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(readers).toHaveLength(1);
+    expect(readers[0].file.size).toBe(128 * 1024);
+
+    readers[0].result = new TextEncoder().encode('B'.repeat(50000)).buffer;
+    readers[0].onload();
+    await flush();
+    await flush();
+
+    expect(fetchCalls).toHaveLength(0);
+    expect(state.media.sourceText).toHaveLength(30000);
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('30,000 chars extracted');
+  });
+
   test('creates a topic quiz without auto-starting and sends the expected payload', async () => {
     document.getElementById('topicInput').value = 'ccna 2025';
     document.getElementById('countInput').value = '5';

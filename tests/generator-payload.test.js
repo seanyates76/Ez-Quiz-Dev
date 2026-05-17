@@ -48,4 +48,15 @@ describe('buildGeneratorPayload', () => {
       sourceText: 'Heading\nFirst fact.\nSecond fact.',
     });
   });
+
+  test('caps cleaned source material at the shared generation limit', () => {
+    const result = buildGeneratorPayload({
+      topic: 'Long Notes',
+      difficulty: 'medium',
+      count: 5,
+      sourceText: 'A'.repeat(30010),
+    });
+
+    expect(result.sourceText).toHaveLength(30000);
+  });
 });

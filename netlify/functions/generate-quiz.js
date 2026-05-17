@@ -11,8 +11,7 @@
 
 const { generateLines, generateInBatches, callProvider, buildStructuredPrompt } = require('./lib/providers.js');
 const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
-
-const MAX_SOURCE_TEXT_CHARS = 24000;
+const { cleanSourceText } = require('./lib/sourceMaterial.js');
 
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
@@ -111,16 +110,6 @@ function underCountError(actual, expected) {
   err.actual = actual;
   err.expected = expected;
   return err;
-}
-
-function cleanSourceText(raw) {
-  return String(raw || '')
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((line) => line.trim().replace(/\s+/g, ' '))
-    .filter(Boolean)
-    .join('\n')
-    .slice(0, MAX_SOURCE_TEXT_CHARS);
 }
 
 exports.handler = async (event) => {

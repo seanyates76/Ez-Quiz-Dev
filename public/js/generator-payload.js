@@ -1,6 +1,6 @@
 import { clampCount } from './utils.js';
 
-const MAX_SOURCE_TEXT_CHARS = 24000;
+const MAX_SOURCE_TEXT_CHARS = 30000;
 
 function cleanSourceText(raw) {
   return String(raw || '')

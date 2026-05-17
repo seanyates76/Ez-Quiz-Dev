@@ -138,6 +138,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   };
   const LOCAL_TEXT_KINDS = new Set(['txt', 'md', 'html', 'csv', 'json', 'rtf']);
   const MAX_IMPORTED_SOURCE_CHARS = 30000;
+  const MAX_LOCAL_TEXT_READ_BYTES = 128 * 1024;
   const toolbar = document.querySelector('.gen-toolbar');
   const topicAffix = document.querySelector('.topic-affix');
   const editor = $('editor');
@@ -330,7 +331,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       .split('\n')
       .map((line) => line.trim().replace(/\s+/g, ' '))
       .filter(Boolean)
-      .join('\n');
+      .join('\n')
+      .slice(0, MAX_IMPORTED_SOURCE_CHARS);
   }
   function mediaSourceId(){
     const media = ensureMediaState();
@@ -368,7 +370,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     media.sourceName = String(name || '').trim();
     media.sourceKind = String(kind || '').trim();
     media.sourceSize = Number(size || 0);
-    media.sourceCharCount = Number(charCount || cleaned.length);
+    media.sourceCharCount = cleaned.length;
     if(topicInput && !(topicInput.value || '').trim()){
       topicInput.value = sourceTopicLabel(media.sourceName);
       try{ topicInput.dispatchEvent(new Event('input', { bubbles: true })); }catch{}
@@ -394,14 +396,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     return opts;
   }
   function cleanLocalSourceText(raw){
-    return String(raw || '')
-      .replace(/^\uFEFF/, '')
-      .replace(/\r\n?/g, '\n')
-      .split('\n')
-      .map((line) => line.trim().replace(/\s+/g, ' '))
-      .filter(Boolean)
-      .join('\n')
-      .slice(0, MAX_IMPORTED_SOURCE_CHARS);
+    return cleanImportedSource(String(raw || '').replace(/^\uFEFF/, ''));
   }
   function decodeHtmlEntities(text){
     return String(text || '')
@@ -575,7 +570,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     });
   }
   async function extractLocalSource(file, kind, { signal } = {}){
-    const buffer = await toArrayBuffer(file, { signal });
+    const readTarget = file && typeof file.slice === 'function'
+      ? file.slice(0, MAX_LOCAL_TEXT_READ_BYTES)
+      : file;
+    const buffer = await toArrayBuffer(readTarget, { signal });
     let raw = decodeArrayBuffer(buffer);
     if(kind === 'html') raw = stripHtml(raw);
     else if(kind === 'rtf') raw = stripRtf(raw);

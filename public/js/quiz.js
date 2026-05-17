@@ -232,7 +232,7 @@ export function renderResults(){
     const userDetail = buildUserAnswerDetail(q,a);
     const correctDetail = buildCorrectAnswerDetail(q);
     const statusBadge = `<span class="result-status ${item.isCorrect ? 'is-correct' : 'is-wrong'}">${item.isCorrect ? 'Correct' : 'Incorrect'}</span>`;
-    const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)} <button type=\"button\" class=\"chip-btn explain-btn\" data-explain=\"${origIdx}\">Explain</button></div>`;
+    const header = `<div class="res-head"><strong>${item.idx}.</strong> ${escapeHTML(item.text)} ${renderExplainButton(origIdx)}</div>`;
     const explainer = renderExplanationSlot(origIdx);
     if (item.isCorrect) {
       const line = `<div class="user-ans ans-correct"><strong>Answer:</strong> ${userDetail}</div>`;
@@ -243,6 +243,7 @@ export function renderResults(){
       return `<div class="missed-item is-wrong" data-orig="${origIdx}">` + statusBadge + header + yours + corr + explainer + `</div>`;
     }
   }).join('');
+  try{ syncExplainButtonDisclosure(missedList); }catch{}
   try{ hydrateExplanationSlots(); }catch{}
   // Sync retake controls UI when results are shown/updated
   try{ updateRetakeUI(); }catch{}
@@ -266,6 +267,7 @@ export function syncExplainButtonsVisibility(root = document){
 
 function wireExplainDelegation(){
   const host = document.getElementById('missedList'); if(!host) return;
+  try{ syncExplainButtonDisclosure(host); }catch{}
   if(host.__explBound) return; host.__explBound = true;
   host.addEventListener('click', async (e)=>{
     const btn = e.target && (e.target.closest ? e.target.closest('.explain-btn') : null);
@@ -322,7 +324,36 @@ function getExplanationCache(){
 }
 
 function renderExplanationSlot(origIdx){
-  return `<div class="explain-panel is-hidden" data-explain-slot="${origIdx}" role="status" aria-live="polite"></div>`;
+  return `<div id="${explanationSlotId(origIdx)}" class="explain-panel is-hidden" data-explain-slot="${origIdx}" role="status" aria-live="polite"></div>`;
+}
+
+function explanationSlotId(origIdx){
+  return `explain-panel-${origIdx}`;
+}
+
+function renderExplainButton(origIdx){
+  return `<button type="button" class="chip-btn explain-btn" data-explain="${origIdx}" aria-expanded="false" aria-controls="${explanationSlotId(origIdx)}">Explain</button>`;
+}
+
+function syncExplainButtonDisclosure(root = document){
+  const buttons = typeof byQSA === 'function' ? byQSA('.explain-btn[data-explain]', root) : Array.from(root.querySelectorAll?.('.explain-btn[data-explain]') || []);
+  buttons.forEach((btn)=>{
+    const origIdx = parseInt(btn.getAttribute('data-explain'), 10);
+    if(!Number.isInteger(origIdx) || origIdx < 0) return;
+    const panelId = explanationSlotId(origIdx);
+    const panel = document.getElementById(panelId);
+    btn.setAttribute('aria-controls', panelId);
+    btn.setAttribute('aria-expanded', panel && !panel.classList.contains('is-hidden') ? 'true' : 'false');
+  });
+}
+
+function syncExplainButtonState(origIdx, expanded){
+  const state = expanded ? 'true' : 'false';
+  const buttons = typeof byQSA === 'function' ? byQSA(`.explain-btn[data-explain="${origIdx}"]`) : Array.from(document.querySelectorAll?.(`.explain-btn[data-explain="${origIdx}"]`) || []);
+  buttons.forEach((btn)=>{
+    btn.setAttribute('aria-controls', explanationSlotId(origIdx));
+    btn.setAttribute('aria-expanded', state);
+  });
 }
 
 function hydrateExplanationSlots(){
@@ -336,10 +367,12 @@ function hydrateExplanationSlots(){
 function renderExplanationPanel(origIdx, entry){
   const panel = document.querySelector(`[data-explain-slot="${origIdx}"]`);
   if(!panel || !entry) return;
+  if(!panel.id) panel.id = explanationSlotId(origIdx);
   panel.textContent = '';
   panel.classList.remove('is-hidden', 'is-loading', 'is-error');
   panel.classList.toggle('is-loading', entry.state === 'loading');
   panel.classList.toggle('is-error', entry.state === 'error');
+  syncExplainButtonState(origIdx, true);
 
   const title = document.createElement('strong');
   title.textContent = entry.state === 'error' ? 'Explanation unavailable' : 'Explanation';
@@ -494,7 +527,7 @@ function renderMTResult(origIdx, q, a){
       </div>`;
   }).join('');
   const okAll = Array.isArray(a) && a.length === correctMap.length && a.every((ri,li)=>ri===correctMap[li]);
-  const explainBtn = ` <button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>`;
+  const explainBtn = ` ${renderExplainButton(origIdx)}`;
   const statusBadge = `<span class="result-status ${okAll?'is-correct':'is-wrong'}">${okAll?'Correct':'Incorrect'}</span>`;
   return `<div class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
     ${statusBadge}

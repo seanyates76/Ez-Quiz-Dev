@@ -28,6 +28,12 @@ describe('providers helpers', () => {
     expect(out).toMatch(/EXACTLY 4 quiz lines/);
   });
 
+  test('source material cleanup uses the shared generation cap', () => {
+    const out = buildPrompt('Long Notes', 4, ['MC'], 'medium', [], 'A'.repeat(30010));
+    const source = out.match(/SOURCE MATERIAL START\n([\s\S]+)\nSOURCE MATERIAL END/)[1];
+    expect(source).toHaveLength(30000);
+  });
+
   test('callProvider echo returns deterministic text', async () => {
     const { text, provider, model } = await callProvider({ provider: 'echo', topic: 'Biology', count: 3, env: {} });
     expect(provider).toBe('echo');

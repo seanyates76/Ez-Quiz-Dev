@@ -1,16 +1,7 @@
 'use strict';
 
 const { normalizeLegacyLines } = require('./normalizer.js');
-
-function cleanSourceMaterial(sourceText){
-  return String(sourceText || '')
-    .replace(/\r\n?/g, '\n')
-    .split('\n')
-    .map((line) => line.trim().replace(/\s+/g, ' '))
-    .filter(Boolean)
-    .join('\n')
-    .slice(0, 24000);
-}
+const { cleanSourceText: cleanSourceMaterial } = require('./sourceMaterial.js');
 
 // Utility: build strict prompt compatible with front-end parser
 function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){

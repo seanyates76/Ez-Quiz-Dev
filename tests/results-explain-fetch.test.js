@@ -105,6 +105,10 @@ describe('results explanation UI', () => {
     expect(item.classList.contains('is-correct')).toBe(false);
     expect(document.querySelector('.result-status').textContent).toBe('Incorrect');
     expect(document.querySelector('.mt-correct')).not.toBeNull();
+    const button = document.querySelector('.explain-btn');
+    const panel = document.querySelector('[data-explain-slot="0"]');
+    expect(button.getAttribute('aria-expanded')).toBe('false');
+    expect(button.getAttribute('aria-controls')).toBe(panel.id);
   });
 
   test('builds an explanation request from original questions without answers', () => {
@@ -160,6 +164,8 @@ describe('results explanation UI', () => {
     `;
 
     wireExplainDelegation();
+    expect(document.querySelector('.explain-btn').getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('.explain-btn').getAttribute('aria-controls')).toBe('explain-panel-0');
     document.querySelector('.explain-btn').click();
     await flush();
     await flush();
@@ -173,6 +179,8 @@ describe('results explanation UI', () => {
     expect(panel.textContent).toContain('Answer: A) Alpha.');
     expect(panel.textContent).toContain('<img src=x onerror=alert(1)> stays text.');
     expect(panel.querySelector('img')).toBeNull();
+    expect(panel.id).toBe('explain-panel-0');
+    expect(document.querySelector('.explain-btn').getAttribute('aria-expanded')).toBe('true');
     expect(S.quiz.explanations[0]).toMatchObject({ state: 'loaded' });
   });
 });

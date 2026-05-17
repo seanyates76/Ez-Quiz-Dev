@@ -109,6 +109,7 @@ function toPositiveInt(value, fallback) {
 }
 const LIMIT = toPositiveInt(process.env.EXPLAIN_LIMIT, DEFAULT_LIMIT);
 const WINDOW_MS = toPositiveInt(process.env.EXPLAIN_WINDOW_MS, DEFAULT_WINDOW_MS);
+const MAX_RATE_LIMIT_KEYS = 500;
 
 function clientIp(event) {
   const h = event.headers || {};
@@ -123,6 +124,12 @@ function rateLimited(event) {
   if (recent.length >= LIMIT) return true;
   recent.push(now);
   RL.set(ip, recent);
+  if (RL.size > MAX_RATE_LIMIT_KEYS) {
+    for (const [key, list] of RL.entries()) {
+      const keep = list.filter((ts) => now - ts < WINDOW_MS);
+      if (keep.length) RL.set(key, keep); else RL.delete(key);
+    }
+  }
   return false;
 }
 
@@ -212,4 +219,10 @@ exports.handler = async (event) => {
     }
     return reply(500, { error: 'Internal server error', code: 'EXPLAIN_INTERNAL_ERROR' }, responseOrigin);
   }
+};
+
+module.exports._internals = {
+  rateLimited,
+  rateLimitSize: () => RL.size,
+  clearRateLimit: () => RL.clear(),
 };
