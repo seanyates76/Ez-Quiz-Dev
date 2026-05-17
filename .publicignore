@@ -6,6 +6,9 @@
 .github/workflows/
 .gitignore
 .publicpreserve
+.publicworkflows
+AGENTS.md
+ENV.md
 
 # Local artifacts
 node_modules/
@@ -21,6 +24,7 @@ issues/
 tests/
 scripts/
 agents.md
+netlify/functions/__tests__/
 
 # Tests and internal tooling (uncomment if desired)
 # tests/
