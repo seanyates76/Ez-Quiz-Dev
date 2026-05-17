@@ -148,6 +148,12 @@ function kindFromName(name) {
 
 function hasTextSignature(buf) {
   if (!Buffer.isBuffer(buf) || !buf.length) return false;
+  if (
+    buf.length >= 2
+    && ((buf[0] === 0xff && buf[1] === 0xfe) || (buf[0] === 0xfe && buf[1] === 0xff))
+  ) {
+    return true;
+  }
   const sample = buf.subarray(0, Math.min(buf.length, 4096));
   let suspicious = 0;
   for (const byte of sample) {

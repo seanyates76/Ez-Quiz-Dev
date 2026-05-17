@@ -108,6 +108,28 @@ describe('ingest-media endpoint', () => {
     });
   });
 
+  test('accepts UTF-16 BOM text for deterministic extraction', async () => {
+    const { handler } = require('../ingest-media.js');
+    const buf = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from('Heading\n\n First   fact.\nSecond fact.', 'utf16le'),
+    ]);
+    const res = await handler(event(mediaPayload(buf, {
+      name: 'notes.txt',
+      type: 'text/plain',
+      kind: 'txt',
+    })));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.text).toBe('Heading\nFirst fact.\nSecond fact.');
+    expect(body.metadata).toMatchObject({
+      kind: 'txt',
+      provider: 'deterministic',
+      model: 'txt',
+    });
+  });
+
   test('extracts html deterministically as readable text', async () => {
     const { handler } = require('../ingest-media.js');
     const buf = Buffer.from('<h1>Cell Biology</h1><p>Mitochondria make ATP &amp; support cells.</p>');
