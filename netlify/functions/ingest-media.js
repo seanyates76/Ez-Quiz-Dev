@@ -475,11 +475,18 @@ async function extractText(file, env) {
   throw makeMediaError(`Unsupported media import provider: ${provider}`, 'MEDIA_PROVIDER_UNSUPPORTED', 400);
 }
 
-function withTimeout(promise, ms) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => { setTimeout(() => reject(makeMediaError('Media extraction timed out', 'MEDIA_TIMEOUT', 504)), ms); }),
-  ]);
+async function withTimeout(promise, ms) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(makeMediaError('Media extraction timed out', 'MEDIA_TIMEOUT', 504)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 exports.handler = async (event) => {
