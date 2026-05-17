@@ -49,7 +49,7 @@ function loadQuizExplainHarness(overrides = {}) {
 
   const names = Object.keys(deps);
   const values = Object.values(deps);
-  const factory = new Function(...names, `${source}\nreturn { questionToLegacyLine, buildExplanationRequest, wireExplainDelegation };\n//# sourceURL=public/js/quiz.js`);
+  const factory = new Function(...names, `${source}\nreturn { questionToLegacyLine, buildExplanationRequest, wireExplainDelegation, buildUserAnswerDetail, buildCorrectAnswerDetail };\n//# sourceURL=public/js/quiz.js`);
   return { S, ...deps, ...factory(...values) };
 }
 
@@ -78,6 +78,14 @@ describe('results explanation UI', () => {
       right: ['80', '443'],
       pairs: [[0, 0], [1, 1]],
     })).toBe('MT|Match ports.|1) HTTP;2) HTTPS|A) 80;B) 443|1-A,2-B');
+  });
+
+  test('formats multiple-choice result answers with readable letter prefixes', () => {
+    const { buildUserAnswerDetail, buildCorrectAnswerDetail } = loadQuizExplainHarness();
+    const question = { type: 'MC', text: 'Pick a number?', options: ['1', '2', '3'], correct: [1] };
+
+    expect(buildUserAnswerDetail(question, [1])).toBe('B) <span class="ans-text">2</span>');
+    expect(buildCorrectAnswerDetail(question)).toBe('B) <span class="ans-text">2</span>');
   });
 
   test('builds an explanation request from original questions and answers', () => {

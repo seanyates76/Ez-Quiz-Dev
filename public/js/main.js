@@ -4,7 +4,7 @@ import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSetting
 import { wireModals } from './modals.js';
 import { wireGenerator } from './generator.js?v=1.5.34';
 import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=1.5.34';
-import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js';
+import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=1.5.35';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
 function debugLog(message){

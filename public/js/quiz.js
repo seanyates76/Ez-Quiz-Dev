@@ -436,7 +436,7 @@ function buildUserAnswerDetail(q,a){
     return arr.map(idx => {
       const letter = String.fromCharCode(65+idx);
       const text = q.options && q.options[idx] ? q.options[idx] : '';
-      return `${letter} — <span class="ans-text">${escapeHTML(text)}</span>`;
+      return `${letter}) <span class="ans-text">${escapeHTML(text)}</span>`;
     }).join(', ');
   }
   if(q.type==='TF'){
@@ -468,7 +468,7 @@ function buildCorrectAnswerDetail(q){
     return arr.map(idx => {
       const letter = String.fromCharCode(65+idx);
       const text = q.options && q.options[idx] ? q.options[idx] : '';
-      return `${letter} — <span class="ans-text">${escapeHTML(text)}</span>`;
+      return `${letter}) <span class="ans-text">${escapeHTML(text)}</span>`;
     }).join(', ');
   }
   if(q.type==='TF'){
