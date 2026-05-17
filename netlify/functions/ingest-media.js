@@ -317,11 +317,47 @@ function unzipEntry(buffer, wantedPath) {
       if (openErr) return reject(openErr);
       zipfile.readEntry();
       zipfile.on('entry', (entry) => {
-        if (entry.fileName !== wantedPath) {
-          zipfile.readEntry();
-          return;
-        }
-        zipfile.openReadStream(entry, (streamErr, stream) => {
+        const MAX_DOCX_XML_BYTES = 8 * 1024 * 1024;
+
+function readDocxXmlStream(stream, zipfile) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let total = 0;
+    let settled = false;
+
+    function finishError(error) {
+      if (settled) return;
+      settled = true;
+      try { stream.destroy(); } catch {}
+      try { zipfile.close(); } catch {}
+      reject(error);
+    }
+
+    stream.on('data', (chunk) => {
+      total += chunk.length;
+
+      if (total > MAX_DOCX_XML_BYTES) {
+        finishError(makeMediaError(
+          'Unsupported file. That DOCX document is too large to process.',
+          'MEDIA_FILE_TOO_LARGE',
+          413
+        ));
+        return;
+      }
+
+      chunks.push(chunk);
+    });
+
+    stream.on('error', finishError);
+
+    stream.on('end', () => {
+      if (settled) return;
+      settled = true;
+      try { zipfile.close(); } catch {}
+      resolve(Buffer.concat(chunks, total).toString('utf8'));
+    });
+  });
+}
           if (streamErr) return reject(streamErr);
           const chunks = [];
           stream.on('data', (chunk) => chunks.push(chunk));
