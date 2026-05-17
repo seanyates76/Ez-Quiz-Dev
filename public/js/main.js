@@ -72,7 +72,7 @@ function init(){
   wireResultsControls();
 
   (function hydrateVersionDetails(){
-    const PRODUCTION_VERSION = 'v3.4.0';
+    const PRODUCTION_VERSION = 'v3.5.0';
     const versionCopy = document.querySelector('[data-version-copy]');
     const modeLabel = versionCopy?.querySelector('[data-version-mode]') || null;
     const versionLabel = versionCopy?.querySelector('[data-version-label]') || null;
