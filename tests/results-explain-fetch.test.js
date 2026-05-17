@@ -49,7 +49,7 @@ function loadQuizExplainHarness(overrides = {}) {
 
   const names = Object.keys(deps);
   const values = Object.values(deps);
-  const factory = new Function(...names, `${source}\nreturn { questionToLegacyLine, buildExplanationRequest, wireExplainDelegation, buildUserAnswerDetail, buildCorrectAnswerDetail };\n//# sourceURL=public/js/quiz.js`);
+  const factory = new Function(...names, `${source}\nreturn { questionToLegacyLine, buildExplanationRequest, wireExplainDelegation, buildUserAnswerDetail, buildCorrectAnswerDetail, renderMTResult };\n//# sourceURL=public/js/quiz.js`);
   return { S, ...deps, ...factory(...values) };
 }
 
@@ -86,6 +86,25 @@ describe('results explanation UI', () => {
 
     expect(buildUserAnswerDetail(question, [1])).toBe('B) <span class="ans-text">2</span>');
     expect(buildCorrectAnswerDetail(question)).toBe('B) <span class="ans-text">2</span>');
+  });
+
+  test('renders partial matching answers as incorrect', () => {
+    const { renderMTResult } = loadQuizExplainHarness();
+    const question = {
+      type: 'MT',
+      text: 'Match ports.',
+      left: ['HTTP', 'HTTPS'],
+      right: ['80', '443'],
+      pairs: [[0, 0], [1, 1]],
+    };
+
+    document.body.innerHTML = renderMTResult(0, question, [0]);
+
+    const item = document.querySelector('.missed-item');
+    expect(item.classList.contains('is-wrong')).toBe(true);
+    expect(item.classList.contains('is-correct')).toBe(false);
+    expect(document.querySelector('.result-status').textContent).toBe('Incorrect');
+    expect(document.querySelector('.mt-correct')).not.toBeNull();
   });
 
   test('builds an explanation request from original questions and answers', () => {

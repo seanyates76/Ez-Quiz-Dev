@@ -512,7 +512,7 @@ function renderMTResult(origIdx, q, a){
         ${corrLine}
       </div>`;
   }).join('');
-  const okAll = Array.isArray(a)&&a.length&&a.every((ri,li)=>ri===correctMap[li]);
+  const okAll = Array.isArray(a) && a.length === correctMap.length && a.every((ri,li)=>ri===correctMap[li]);
   const explainBtn = ` <button type="button" class="chip-btn explain-btn" data-explain="${origIdx}">Explain</button>`;
   const statusBadge = `<span class="result-status ${okAll?'is-correct':'is-wrong'}">${okAll?'Correct':'Incorrect'}</span>`;
   return `<div class="missed-item ${okAll?'is-correct':'is-wrong'}" data-orig="${origIdx}">
