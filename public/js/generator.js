@@ -418,8 +418,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   }
   function stripHtml(raw){
     return decodeHtmlEntities(String(raw || '')
-      .replace(/<script\b[\s\S]*?<\s*\/\s*script\s*>/gi, '\n')
-      .replace(/<style\b[\s\S]*?<\s*\/\s*style\s*>/gi, '\n')
+      .replace(/<script\b[^>]*>[\s\S]*?<\s*\/\s*script\b[^>]*>/gi, '\n')
+      .replace(/<style\b[^>]*>[\s\S]*?<\s*\/\s*style\b[^>]*>/gi, '\n')
       .replace(/<\s*\/\s*(p|div|section|article|li|ul|ol|h[1-6]|tr|table|br)\s*>/gi, '\n')
       .replace(/<[^>]+>/g, ' '));
   }
