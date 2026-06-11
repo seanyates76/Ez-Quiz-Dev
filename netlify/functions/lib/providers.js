@@ -114,6 +114,14 @@ function stemKeyFromLine(line){
     .toLowerCase();
 }
 
+function stemFromLine(line){
+  if(!line) return '';
+  const raw = String(line).trim();
+  if(!raw) return '';
+  const parts = raw.split('|');
+  return (parts.length > 1 ? parts[1] : raw).trim();
+}
+
 function outputTokenBudget(count, kind = 'legacy'){
   const n = Math.max(1, Math.min(50, parseInt(count || 10, 10) || 10));
   const perQuestion = kind === 'structured' ? 220 : 260;
@@ -219,7 +227,7 @@ function echoGenerate({ topic, count, types, kind, avoidStems }){
 async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems }){
   const selected = (provider || (env.AI_PROVIDER || 'gemini')).toLowerCase();
   const normalizedCount = Math.max(1, Math.min(50, parseInt(count || 10, 10)));
-  const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty, undefined, sourceText);
+  const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText);
   // [quiz-v2: hook] provider call surface — swap prompt/response handling when structured default graduates.
 
   try {
@@ -254,7 +262,7 @@ async function generateLines({ provider, model, topic, count, types, difficulty,
   return { provider: usedProvider, model: usedModel, title, lines };
 }
 
-async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText }){
+async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems }){
   const targetRaw = count == null ? 10 : count;
   let target = parseInt(targetRaw, 10);
   if(!Number.isFinite(target)) target = 10;
@@ -276,6 +284,16 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   passes = Math.max(2, Math.min(12, passes));
 
   const seen = new Set();
+  const avoidList = [];
+  if(Array.isArray(avoidStems)){
+    for(const stem of avoidStems){
+      const rawStem = String(stem || '').trim();
+      const key = stemKeyFromLine(rawStem);
+      if(!rawStem || !key || seen.has(key)) continue;
+      seen.add(key);
+      avoidList.push(rawStem);
+    }
+  }
   const collected = [];
   let resolvedTitle = '';
   let resolvedProvider = '';
@@ -284,7 +302,7 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   for(let attempt = 0; attempt < passes && collected.length < target; attempt++){
     const remaining = target - collected.length;
     const ask = Math.min(batch, remaining);
-    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: Array.from(seen), sourceText });
+    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText });
 
     if(!resolvedTitle && title) resolvedTitle = title;
     if(usedProvider) resolvedProvider = usedProvider;
@@ -295,6 +313,8 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
       const key = stemKeyFromLine(line);
       if(!key || seen.has(key)) continue;
       seen.add(key);
+      const stem = stemFromLine(line);
+      if(stem) avoidList.push(stem);
       collected.push(line);
       if(collected.length >= target) break;
     }

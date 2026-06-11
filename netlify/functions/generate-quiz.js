@@ -58,6 +58,26 @@ const CONFIGURED_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENER
 const MAX_COUNT = Math.min(CLIENT_MAX, CONFIGURED_MAX);
 const BEARER_TOKEN = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
 
+function sanitizeAvoidStems(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const entry of raw) {
+    const cleaned = String(entry == null ? '' : entry)
+      .replace(/[\r\n|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 180);
+    if (!cleaned) continue;
+    const key = cleaned.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(cleaned);
+    if (out.length >= 60) break;
+  }
+  return out;
+}
+
 function clientIp(event) {
   const h = event.headers || {};
   const xf = h['x-forwarded-for'] || h['X-Forwarded-For'] || '';
@@ -175,6 +195,7 @@ exports.handler = async (event) => {
   const difficulty = (payload.difficulty && String(payload.difficulty).toLowerCase()) || undefined;
   const provider = String(payload.provider || process.env.AI_PROVIDER || 'gemini');
   const model = String(payload.model || '');
+  const avoidStems = sanitizeAvoidStems(payload.avoidStems);
 
   const responseMode = String(process.env.QUIZ_RESPONSE || '').toLowerCase();
   const useV2 = responseMode === 'v2';
@@ -252,7 +273,7 @@ exports.handler = async (event) => {
       };
     }
 
-    const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, env: process.env });
+    const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -308,7 +329,7 @@ exports.handler = async (event) => {
 
       // Structured path failed entirely; fall back to legacy generator so the UI still renders a quiz.
       try {
-        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, env: process.env });
+        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
         console.warn('[quiz-v2]', { reason: 'structured-fallback-legacy' });
         return {
           statusCode: 200,
@@ -327,7 +348,7 @@ exports.handler = async (event) => {
 
     if (canFallbackToGemini && !isTimeout) {
       try {
-        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, env: process.env });
+        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

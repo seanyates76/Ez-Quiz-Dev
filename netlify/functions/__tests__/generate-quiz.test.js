@@ -86,6 +86,35 @@ describe('generate-quiz count guarantees', () => {
     expect(body.source).toEqual({ name: 'long.txt', charCount: 30000 });
   });
 
+  test('sanitizes request avoidStems and passes them to the provider path', async () => {
+    const generateLines = jest.fn(async (args) => ({
+      title: 'Avoided Quiz',
+      lines: Array.from({ length: args.count }, (_, idx) => `TF|Avoided ${idx + 1}.|T`).join('\n'),
+      provider: 'mock',
+      model: 'mock',
+    }));
+    jest.doMock('../lib/providers.js', () => ({
+      generateLines,
+      generateInBatches: jest.fn(),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({
+      topic: 'Ports',
+      count: 2,
+      provider: 'mock',
+      avoidStems: [' Alpha stem? ', '', 'Alpha stem?', 'Beta|stem\nagain', null],
+    }));
+
+    expect(res.statusCode).toBe(200);
+    expect(generateLines).toHaveBeenCalledTimes(1);
+    expect(generateLines.mock.calls[0][0].avoidStems).toEqual([
+      'Alpha stem?',
+      'Beta stem again',
+    ]);
+  });
+
   test('fails explicitly when generation cannot fill the requested count', async () => {
     jest.doMock('../lib/providers.js', () => ({
       generateLines: jest.fn(async () => ({
