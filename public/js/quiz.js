@@ -1,6 +1,6 @@
 import { S } from './state.js';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=1.5.35';
+import { requestLazyExplanation } from './explain-api.js?v=1.5.37';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';

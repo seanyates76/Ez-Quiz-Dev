@@ -47,12 +47,20 @@ describe('generator media import overlap regression', () => {
   let consoleDebugSpy;
   let validateMediaImportSize;
   let generateWithAI;
+  let analyzeSourceText;
+  let formatSourceSectionSummary;
+  let summarizeSourceReport;
   let state;
   let beginQuiz;
   let syncSettingsFromUI;
 
   beforeAll(() => {
     ({ ImportController } = loadBrowserModule('public/js/import-controller.js', ['ImportController']));
+    ({ analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } = loadBrowserModule('public/js/source-sections.js', [
+      'analyzeSourceText',
+      'formatSourceSectionSummary',
+      'summarizeSourceReport',
+    ]));
   });
 
   beforeEach(() => {
@@ -145,6 +153,9 @@ describe('generator media import overlap regression', () => {
       validateMediaImportSize,
       attachDragDrop: () => ({ dispose() {} }),
       announce,
+      analyzeSourceText,
+      formatSourceSectionSummary,
+      summarizeSourceReport,
       buildGeneratorPayload: ({ topic, difficulty, count, sourceText, sourceName }) => {
         const payload = { topic, difficulty, count };
         if (sourceText) {
@@ -224,6 +235,8 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('mediaSourceStatus').hidden).toBe(false);
     expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: good.pdf');
     expect(state.media.sourceText).toBe('GOOD IMPORT TEXT');
+    expect(state.media.sourceReport.sectionCount).toBe(1);
+    expect(document.getElementById('mediaSourceStatus').dataset.sectionCount).toBe('1');
     expect(parseEditorInput).not.toHaveBeenCalled();
     expect(validateMediaImportSize).toHaveBeenCalledTimes(2);
   });
@@ -250,6 +263,7 @@ describe('generator media import overlap regression', () => {
     expect(fetchCalls).toHaveLength(0);
     expect(hint.textContent).toBe('Imported notes.txt. Create a quiz from it.');
     expect(state.media.sourceText).toBe('Photosynthesis\nPlants use light.');
+    expect(state.media.sourceReport.sectionCount).toBe(1);
     expect(document.getElementById('mediaSourceLabel').textContent).toContain('TXT ready: notes.txt');
   });
 

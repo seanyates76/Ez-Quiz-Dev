@@ -49,6 +49,22 @@ describe('buildGeneratorPayload', () => {
     });
   });
 
+  test('carries source report metadata for client-side section planning', () => {
+    const sourceReport = {
+      version: 1,
+      sections: [{ id: 'section-001', text: 'Useful section text', score: 80, flags: [] }],
+    };
+    const result = buildGeneratorPayload({
+      topic: 'Scan',
+      difficulty: 'easy',
+      count: 3,
+      sourceText: 'Useful section text',
+      sourceReport,
+    });
+
+    expect(result.sourceReport).toBe(sourceReport);
+  });
+
   test('caps cleaned source material at the shared generation limit', () => {
     const result = buildGeneratorPayload({
       topic: 'Long Notes',

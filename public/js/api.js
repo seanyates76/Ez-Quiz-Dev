@@ -80,7 +80,10 @@ function normalizeEndpointSpecs(){
 const API_ENDPOINT_CANDIDATES = normalizeEndpointSpecs();
 const LARGE_SOURCE_MULTI_REQUEST_THRESHOLD = 20000;
 export const LARGE_SOURCE_CHUNK_TARGET_CHARS = 4000;
+export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
+export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
 const LARGE_SOURCE_SHORTFALL_RETRY_CAP = 2;
+const SECTION_REQUEST_MAX_QUESTIONS = 2;
 
 function toPositiveCount(value, fallback = 10){
   const parsed = parseInt(value, 10);
@@ -177,6 +180,11 @@ function shouldUseLargeSourceBatching(count, opts){
   return sourceText.length >= LARGE_SOURCE_MULTI_REQUEST_THRESHOLD && count > 0;
 }
 
+function stripClientOnlyOptions(opts = {}){
+  const { sourceReport, ...safe } = opts || {};
+  return safe;
+}
+
 function sourceChunkBoundary(windowText, target){
   const minUsefulCut = Math.floor(target * 0.55);
   const paragraphCut = windowText.lastIndexOf('\n\n');
@@ -239,6 +247,135 @@ function distributeQuestionCountAcrossChunks(chunks, count){
   })).filter((entry) => entry.count > 0);
 }
 
+function hasDisqualifyingSectionFlag(section){
+  const flags = Array.isArray(section && section.flags) ? section.flags : [];
+  return flags.some((flag) => /^(weak|empty|too-short|placeholder|boilerplate|low-information)$/i.test(String(flag || '')));
+}
+
+function sectionSignalCount(section){
+  const reasons = Array.isArray(section && section.reasons) ? section.reasons : [];
+  let count = reasons.filter((reason) => /^(bullet-heavy|many-bullets|definitions|terms|commands|code-blocks|cause-effect|comparison|important-keywords|multiple-lists)$/i.test(String(reason || ''))).length;
+  if(section && section.definitionSignal) count += 1;
+  if(section && section.termSignal) count += 1;
+  if(section && section.commandSignal) count += 1;
+  if(section && Number(section.bulletCount || 0) >= 3) count += 1;
+  if(section && Number(section.codeBlockCount || 0) > 0) count += 1;
+  return count;
+}
+
+function normalizeSectionForPlanning(section, index){
+  if(!section || typeof section !== 'object') return null;
+  const text = String(section.text || '').trim();
+  const score = Number(section.score || 0);
+  if(!text || text.length < 80) return null;
+  if(score < SECTION_QUIZ_WORTHY_MIN_SCORE) return null;
+  if(hasDisqualifyingSectionFlag(section)) return null;
+  const id = String(section.id || `section-${index + 1}`).trim() || `section-${index + 1}`;
+  const heading = String(section.heading || '').trim();
+  const headingPath = Array.isArray(section.headingPath)
+    ? section.headingPath.map((entry) => String(entry || '').trim()).filter(Boolean)
+    : [];
+  return {
+    id,
+    heading,
+    headingPath,
+    text,
+    score,
+    signalCount: sectionSignalCount(section),
+    charCount: Number(section.charCount || text.length) || text.length,
+    originalIndex: index,
+  };
+}
+
+function selectUsableSections(sourceReport){
+  const sections = sourceReport && Array.isArray(sourceReport.sections) ? sourceReport.sections : [];
+  return sections
+    .map((section, index) => normalizeSectionForPlanning(section, index))
+    .filter(Boolean)
+    .sort((a, b) => {
+      if(b.score !== a.score) return b.score - a.score;
+      if(b.signalCount !== a.signalCount) return b.signalCount - a.signalCount;
+      if(b.charCount !== a.charCount) return b.charCount - a.charCount;
+      return a.originalIndex - b.originalIndex;
+    });
+}
+
+function trimSectionTextForPacket(raw, maxChars = SECTION_PACKET_TEXT_MAX_CHARS){
+  const text = String(raw || '').trim();
+  const safeMax = Math.max(600, parseInt(maxChars, 10) || SECTION_PACKET_TEXT_MAX_CHARS);
+  if(text.length <= safeMax) return text;
+  const windowText = text.slice(0, safeMax);
+  const cut = sourceChunkBoundary(windowText, safeMax);
+  return text.slice(0, cut).trim();
+}
+
+function buildSectionPacket(section, opts = {}){
+  const sourceName = String(opts.sourceName || '').trim();
+  const path = section.headingPath.length
+    ? section.headingPath.join(' > ')
+    : section.heading;
+  const lines = [];
+  if(sourceName) lines.push(`Source name: ${sourceName}`);
+  if(path) lines.push(`Heading path: ${path}`);
+  if(section.heading && section.heading !== path) lines.push(`Section heading: ${section.heading}`);
+  lines.push('Section content:');
+  lines.push(trimSectionTextForPacket(section.text));
+  return {
+    sectionId: section.id,
+    sourceText: lines.join('\n').trim(),
+  };
+}
+
+function distributeQuestionCountAcrossSections(sections, count, opts = {}){
+  const requested = Math.max(1, toPositiveCount(count));
+  if(!Array.isArray(sections) || !sections.length) return [];
+  const packets = sections.map((section) => buildSectionPacket(section, opts));
+  const plan = [];
+  let remaining = requested;
+  const firstPassAsk = packets.length >= requested ? 1 : SECTION_REQUEST_MAX_QUESTIONS;
+
+  for(const packet of packets){
+    if(remaining <= 0) break;
+    const ask = Math.min(firstPassAsk, remaining);
+    plan.push({ ...packet, count: ask });
+    remaining -= ask;
+  }
+
+  let cursor = 0;
+  while(remaining > 0 && packets.length){
+    const packet = packets[cursor++ % packets.length];
+    const ask = Math.min(SECTION_REQUEST_MAX_QUESTIONS, remaining);
+    plan.push({ ...packet, count: ask });
+    remaining -= ask;
+  }
+
+  return plan;
+}
+
+function buildSectionRequestPlan(opts, count){
+  const sections = selectUsableSections(opts && opts.sourceReport);
+  if(!sections.length) return null;
+  const requestPlan = distributeQuestionCountAcrossSections(sections, count, opts);
+  if(!requestPlan.length) return null;
+  return {
+    requestPlan,
+    retryPackets: sections.map((section) => buildSectionPacket(section, opts)),
+  };
+}
+
+function nextSectionRetryPacket(retryPackets, attemptedIds, retryCursor){
+  if(!Array.isArray(retryPackets) || !retryPackets.length) return { packet: null, retryCursor };
+  for(let offset = 0; offset < retryPackets.length; offset += 1){
+    const index = (retryCursor + offset) % retryPackets.length;
+    const packet = retryPackets[index];
+    if(packet && !attemptedIds.has(packet.sectionId)){
+      return { packet, retryCursor: index + 1 };
+    }
+  }
+  const packet = retryPackets[retryCursor % retryPackets.length];
+  return { packet, retryCursor: retryCursor + 1 };
+}
+
 function readableGenerationError(err){
   const msg = err && err.message ? err.message : String(err || 'Generation failed');
   try{
@@ -260,9 +397,10 @@ function batchFailureError(err, batchNo, completed, requested){
 }
 
 async function postGenerate(topic, count, opts = {}){
-  const payload = JSON.stringify({ topic, count, ...opts });
+  const requestOpts = stripClientOnlyOptions(opts);
+  const payload = JSON.stringify({ topic, count, ...requestOpts });
   const attemptErrors = [];
-  const hasSourceText = !!String(opts && opts.sourceText || '').trim();
+  const hasSourceText = !!String(requestOpts && requestOpts.sourceText || '').trim();
   const endpointCandidates = hasSourceText
     ? API_ENDPOINT_CANDIDATES.filter((spec) => spec.allowSourceFallback)
     : API_ENDPOINT_CANDIDATES;
@@ -318,8 +456,11 @@ async function postGenerate(topic, count, opts = {}){
 
 async function generateLargeSourceWithAI(topic, count, opts = {}){
   const requested = toPositiveCount(count);
-  const sourceChunks = splitSourceTextIntoChunks(opts.sourceText);
-  const requestPlan = distributeQuestionCountAcrossChunks(sourceChunks, requested);
+  const sectionPlan = buildSectionRequestPlan(opts, requested);
+  const sourceChunks = sectionPlan ? [] : splitSourceTextIntoChunks(opts.sourceText);
+  const requestPlan = sectionPlan
+    ? sectionPlan.requestPlan
+    : distributeQuestionCountAcrossChunks(sourceChunks, requested);
   const seenKeys = new Set();
   const avoidStems = sanitizeAvoidStems(opts.avoidStems);
   for(const stem of avoidStems){
@@ -333,19 +474,35 @@ async function generateLargeSourceWithAI(topic, count, opts = {}){
   let retryCursor = 0;
   const maxInitialAsk = Math.max(...requestPlan.map((entry) => entry.count), 1);
   const maxRequests = requestPlan.length + LARGE_SOURCE_SHORTFALL_RETRY_CAP;
+  const attemptedSectionIds = new Set();
 
   while(collected.length < requested && requestNo < maxRequests){
     const remaining = requested - collected.length;
     const planned = requestPlan[requestNo];
-    const chunk = planned
-      ? planned.sourceText
-      : sourceChunks[retryCursor++ % sourceChunks.length];
-    const ask = planned ? planned.count : Math.min(maxInitialAsk, remaining);
+    let sourceText;
+    let ask;
+    if(planned){
+      sourceText = planned.sourceText;
+      ask = planned.count;
+    } else if(sectionPlan){
+      const retry = nextSectionRetryPacket(sectionPlan.retryPackets, attemptedSectionIds, retryCursor);
+      retryCursor = retry.retryCursor;
+      sourceText = retry.packet && retry.packet.sourceText;
+      ask = Math.min(SECTION_REQUEST_MAX_QUESTIONS, remaining);
+    } else {
+      sourceText = sourceChunks[retryCursor++ % sourceChunks.length];
+      ask = Math.min(maxInitialAsk, remaining);
+    }
+    if(planned && planned.sectionId) attemptedSectionIds.add(planned.sectionId);
+    if(!planned && sectionPlan && sourceText){
+      const matched = sectionPlan.retryPackets.find((packet) => packet.sourceText === sourceText);
+      if(matched && matched.sectionId) attemptedSectionIds.add(matched.sectionId);
+    }
     requestNo += 1;
 
     let out;
     try{
-      out = await postGenerate(topic, ask, { ...opts, sourceText: chunk, avoidStems: avoidStems.slice(-60) });
+      out = await postGenerate(topic, ask, { ...opts, sourceText, avoidStems: avoidStems.slice(-60) });
     }catch(err){
       throw batchFailureError(err, requestNo, collected.length, requested);
     }

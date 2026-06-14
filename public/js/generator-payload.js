@@ -12,6 +12,10 @@ function cleanSourceText(raw) {
     .slice(0, MAX_SOURCE_TEXT_CHARS);
 }
 
+function isUsableSourceReport(report) {
+  return !!(report && typeof report === 'object' && Array.isArray(report.sections));
+}
+
 export function buildGeneratorPayload(snapshot = {}) {
   const topicRaw = snapshot.topic == null ? '' : String(snapshot.topic);
   const difficultyRaw = snapshot.difficulty == null ? '' : String(snapshot.difficulty);
@@ -24,6 +28,7 @@ export function buildGeneratorPayload(snapshot = {}) {
     payload.sourceText = sourceText;
     const sourceName = String(snapshot.sourceName || '').trim();
     if (sourceName) payload.sourceName = sourceName.slice(0, 160);
+    if (isUsableSourceReport(snapshot.sourceReport)) payload.sourceReport = snapshot.sourceReport;
   }
   return payload;
 }

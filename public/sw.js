@@ -8,8 +8,8 @@
  * page for navigation requests when offline.
  */
 
-const ASSET_VERSION = '1.5.35';
-const CACHE_NAME = 'ezq-v1219';
+const ASSET_VERSION = '1.5.37';
+const CACHE_NAME = 'ezq-v1221';
 const MODULE_IMPORT_VERSION = ASSET_VERSION;
 const PRECACHE_URLS = [
   '/index.html',
@@ -25,6 +25,7 @@ const PRECACHE_URLS = [
   '/js/editor.gui.js?v=' + ASSET_VERSION,
   '/js/generator.js?v=' + MODULE_IMPORT_VERSION,
   '/js/generator-payload.js?v=' + MODULE_IMPORT_VERSION,
+  '/js/source-sections.js?v=' + MODULE_IMPORT_VERSION,
   '/js/a11y-announcer.js?v=' + MODULE_IMPORT_VERSION,
   '/js/api.js?v=' + MODULE_IMPORT_VERSION,
   '/js/explain-api.js?v=' + MODULE_IMPORT_VERSION,

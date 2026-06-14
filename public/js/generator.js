@@ -1,13 +1,14 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.35';
+import { generateWithAI } from './api.js?v=1.5.37';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.35';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.35';
+import { announce } from './a11y-announcer.js?v=1.5.37';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.37';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.37';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
@@ -322,7 +323,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }catch{}
   }
   function ensureMediaState(){
-    S.media = S.media || { sourceText: '', sourceName: '', sourceKind: '', sourceCharCount: 0 };
+    S.media = S.media || { sourceText: '', sourceName: '', sourceKind: '', sourceCharCount: 0, sourceReport: null };
+    if (!Object.prototype.hasOwnProperty.call(S.media, 'sourceReport')) S.media.sourceReport = null;
     return S.media;
   }
   function cleanImportedSource(raw){
@@ -354,23 +356,34 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!mediaSourceStatus || !mediaSourceLabel) return;
     if(!text.trim()){
       mediaSourceLabel.textContent = '';
+      delete mediaSourceStatus.dataset.sectionCount;
+      delete mediaSourceStatus.dataset.quizWorthyCount;
+      delete mediaSourceStatus.dataset.weakSectionCount;
       mediaSourceStatus.hidden = true;
       return;
     }
     const name = media.sourceName || 'Imported source';
     const chars = Number(media.sourceCharCount || text.length);
     const kind = media.sourceKind ? String(media.sourceKind).toUpperCase() : 'MEDIA';
-    mediaSourceLabel.textContent = `${kind} ready: ${name} · ${chars.toLocaleString()} chars extracted`;
+    const report = media.sourceReport || analyzeSourceText(text);
+    const summary = summarizeSourceReport(report);
+    const sectionSummary = formatSourceSectionSummary(report);
+    mediaSourceStatus.dataset.sectionCount = String(summary.sectionCount || 0);
+    mediaSourceStatus.dataset.quizWorthyCount = String(summary.quizWorthyCount || 0);
+    mediaSourceStatus.dataset.weakSectionCount = String(summary.weakCount || 0);
+    mediaSourceLabel.textContent = `${kind} ready: ${name} · ${chars.toLocaleString()} chars extracted${sectionSummary ? ` · ${sectionSummary}` : ''}`;
     mediaSourceStatus.hidden = false;
   }
   function setImportedSource({ text, name, kind, size, charCount } = {}){
     const cleaned = cleanImportedSource(text);
+    const report = analyzeSourceText(cleaned);
     const media = ensureMediaState();
     media.sourceText = cleaned;
     media.sourceName = String(name || '').trim();
     media.sourceKind = String(kind || '').trim();
     media.sourceSize = Number(size || 0);
     media.sourceCharCount = cleaned.length;
+    media.sourceReport = report;
     if(topicInput && !(topicInput.value || '').trim()){
       topicInput.value = sourceTopicLabel(media.sourceName);
       try{ topicInput.dispatchEvent(new Event('input', { bubbles: true })); }catch{}
@@ -378,7 +391,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     renderMediaSourceStatus();
   }
   function clearImportedSource({ announceChange = false } = {}){
-    S.media = { sourceText: '', sourceName: '', sourceKind: '', sourceSize: 0, sourceCharCount: 0 };
+    S.media = { sourceText: '', sourceName: '', sourceKind: '', sourceSize: 0, sourceCharCount: 0, sourceReport: null };
     renderMediaSourceStatus();
     markDirtyIfChanged();
     if(announceChange){
@@ -392,6 +405,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(payload.sourceText){
       opts.sourceText = payload.sourceText;
       if(payload.sourceName) opts.sourceName = payload.sourceName;
+      if(payload.sourceReport) opts.sourceReport = payload.sourceReport;
     }
     return opts;
   }
@@ -465,6 +479,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       ...snapshot,
       sourceText: media.sourceText || '',
       sourceName: media.sourceName || '',
+      sourceReport: media.sourceReport || null,
     };
   }
   // Improve accessible label on import button
