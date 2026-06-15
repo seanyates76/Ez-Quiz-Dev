@@ -28,15 +28,70 @@ function sourceFramingInstructions(){
   ].join('\n');
 }
 
+function difficultyGuidance(difficulty){
+  const diff = (difficulty && String(difficulty).toLowerCase()) || '';
+  const prettyDiff = diff
+    ? diff.split(/[-_\s]+/).map((w) => w ? w.charAt(0).toUpperCase() + w.slice(1) : '').join(' ')
+    : '';
+
+  if(!diff) return '';
+
+  const shared = [
+    `Difficulty target: ${prettyDiff}. Difficulty should come from the thinking required, not from dense wording.`,
+    `Use clear technician/instructor language. Keep stems concise unless the scenario genuinely needs detail.`,
+    `Avoid making questions harder by using inflated phrasing, vague abstractions, or excessive absolute traps.`,
+    `Do not overuse words like "solely", "exclusively", "guarantee", "inherently", "unequivocally", or "definitively" unless that exact absolute meaning is the concept being tested.`,
+  ];
+
+  if(diff === 'very easy'){
+    return [
+      ...shared,
+      `Very Easy: test one obvious fact, term, command purpose, or basic behavior. Use short direct stems and obvious distractors.`,
+    ].join('\n');
+  }
+
+  if(diff === 'easy'){
+    return [
+      ...shared,
+      `Easy: test one direct fact, definition, command purpose, or basic behavior. Use short stems. Avoid trick wording.`,
+    ].join('\n');
+  }
+
+  if(diff === 'medium'){
+    return [
+      ...shared,
+      `Medium: test applied understanding. Use compact realistic scenarios that require one inference, comparison, or cause/effect link. Distractors should be plausible but not sneaky.`,
+    ].join('\n');
+  }
+
+  if(diff === 'hard'){
+    return [
+      ...shared,
+      `Hard: test troubleshooting judgment, design tradeoffs, route/device behavior, command-output interpretation, or multi-step reasoning.`,
+      `Hard scenarios may include more context, but the wording should stay clean and practical.`,
+      `Prefer realistic network situations over abstract verbal traps.`,
+      `For TF/YN, do not make most questions hinge on one sneaky absolute word. The learner should need networking knowledge, not legalistic reading.`,
+    ].join('\n');
+  }
+
+  if(diff === 'expert'){
+    return [
+      ...shared,
+      `Expert: test edge cases, multi-step diagnosis, competing design tradeoffs, or subtle protocol/device behavior. Keep the language clear even when the reasoning is demanding.`,
+    ].join('\n');
+  }
+
+  return [
+    ...shared,
+    `Match the requested level with appropriate reasoning depth and fair distractors.`,
+  ].join('\n');
+}
+
 // Utility: build strict prompt compatible with front-end parser
 function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
   const allowLine = `Allowed question types: ${allowed.join(', ')} (use only these).`;
-  const diff = (difficulty && String(difficulty).toLowerCase()) || '';
-  const prettyDiff = diff ? diff.split(/[-_\s]+/).map(w=> w ? w.charAt(0).toUpperCase()+w.slice(1) : '').join(' ') : '';
-  const diffLine = diff
-    ? `Difficulty guidance: scale is Very Easy < Easy < Medium < Hard < Expert. Target level: ${prettyDiff}. Match question complexity, vocabulary, and expected knowledge to this level.`
-    : '';
+  const diffLine = difficultyGuidance(difficulty);
   const avoid = Array.isArray(avoidStems) && avoidStems.length
     ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
     : '';
@@ -70,11 +125,7 @@ function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
 
 function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
-  const diff = (difficulty && String(difficulty).toLowerCase()) || '';
-  const prettyDiff = diff ? diff.split(/[-_\s]+/).map(w=> w ? w.charAt(0).toUpperCase()+w.slice(1) : '').join(' ') : '';
-  const diffLine = diff
-    ? `Match difficulty to ${prettyDiff} on a scale of Very Easy < Easy < Medium < Hard < Expert.`
-    : '';
+  const diffLine = difficultyGuidance(difficulty);
   const source = cleanSourceMaterial(sourceText);
   const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   return [

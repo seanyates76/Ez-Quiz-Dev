@@ -41,6 +41,17 @@ function expectSourceHiddenFraming(out){
   expect(out).toContain('multi-claim sentences joined by "and," "while," "although," or "because"');
 }
 
+function expectSharedDifficultyGuidance(out, level){
+  expect(out).toContain(`Difficulty target: ${level}.`);
+  expect(out).toContain('Difficulty should come from the thinking required, not from dense wording.');
+  expect(out).toContain('Use clear technician/instructor language.');
+  expect(out).toContain('Keep stems concise unless the scenario genuinely needs detail.');
+  expect(out).toContain('inflated phrasing');
+  expect(out).toContain('vague abstractions');
+  expect(out).toContain('excessive absolute traps');
+  expect(out).toContain('"solely", "exclusively", "guarantee", "inherently", "unequivocally", or "definitively"');
+}
+
 describe('providers helpers', () => {
   test('buildStructuredPrompt requests minified JSON schema', () => {
     const out = buildStructuredPrompt('History', 3, ['MC','YN'], 'hard');
@@ -50,6 +61,44 @@ describe('providers helpers', () => {
     expect(out).toMatch(/Respond with valid minified JSON only/);
     expect(out).toMatch(/Include exactly 3 questions/);
     expect(out).toMatch(/"type": "MC" \| "TF" \| "YN" \| "MT"/);
+  });
+
+  test('easy difficulty guidance favors direct checks and avoids tricks', () => {
+    const out = buildPrompt('Ports', 2, ['TF'], 'easy', [], '');
+    expect(out).toMatch(/Task: Produce a quiz about Ports\./);
+    expect(out).not.toMatch(/private instructor knowledge/i);
+    expectSharedDifficultyGuidance(out, 'Easy');
+    expect(out).toContain('Easy: test one direct fact, definition, command purpose, or basic behavior.');
+    expect(out).toContain('Use short stems. Avoid trick wording.');
+  });
+
+  test('medium difficulty guidance favors compact applied scenarios', () => {
+    const out = buildStructuredPrompt('Switching', 3, ['MC'], 'medium');
+    expectSharedDifficultyGuidance(out, 'Medium');
+    expect(out).toContain('Medium: test applied understanding.');
+    expect(out).toContain('Use compact realistic scenarios that require one inference, comparison, or cause/effect link.');
+    expect(out).toContain('Distractors should be plausible but not sneaky.');
+  });
+
+  test('hard difficulty guidance requires reasoning instead of verbal traps', () => {
+    const legacy = buildPrompt('Routing', 4, ['MC','TF'], 'hard', [], '');
+    const structured = buildStructuredPrompt('Routing', 4, ['MC','TF'], 'hard');
+
+    [legacy, structured].forEach((out) => {
+      expectSharedDifficultyGuidance(out, 'Hard');
+      expect(out).toContain('Hard: test troubleshooting judgment, design tradeoffs, route/device behavior, command-output interpretation, or multi-step reasoning.');
+      expect(out).toContain('Hard scenarios may include more context, but the wording should stay clean and practical.');
+      expect(out).toContain('Prefer realistic network situations over abstract verbal traps.');
+      expect(out).toContain('do not make most questions hinge on one sneaky absolute word');
+      expect(out).toContain('networking knowledge, not legalistic reading');
+    });
+  });
+
+  test('expert difficulty guidance emphasizes edge cases and clear language', () => {
+    const out = buildPrompt('OSPF', 5, ['MC'], 'expert', [], '');
+    expectSharedDifficultyGuidance(out, 'Expert');
+    expect(out).toContain('Expert: test edge cases, multi-step diagnosis, competing design tradeoffs, or subtle protocol/device behavior.');
+    expect(out).toContain('Keep the language clear even when the reasoning is demanding.');
   });
 
   test('buildPrompt treats source-backed generation as hidden instructor knowledge', () => {
@@ -77,6 +126,7 @@ describe('providers helpers', () => {
     expect(out).toMatch(/Task: Produce a quiz about Ports\./);
     expect(out).not.toMatch(/private instructor knowledge/i);
     expect(out).not.toMatch(/PRIVATE INSTRUCTOR KNOWLEDGE START/);
+    expectSharedDifficultyGuidance(out, 'Easy');
     expect(out).toMatch(/Avoid repeating these already-used question stems: Old stem\./);
     expect(out).toMatch(/EXACTLY 2 quiz lines/);
   });
