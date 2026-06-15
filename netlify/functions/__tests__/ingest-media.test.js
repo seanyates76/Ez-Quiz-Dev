@@ -108,6 +108,26 @@ describe('ingest-media endpoint', () => {
     });
   });
 
+  test('caps deterministic source extraction at 60,000 characters', async () => {
+    const { handler } = require('../ingest-media.js');
+    const buf = Buffer.from('A'.repeat(60010));
+    const res = await handler(event(mediaPayload(buf, {
+      name: 'long-notes.md',
+      type: 'text/markdown',
+      kind: 'md',
+    })));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.text).toHaveLength(60000);
+    expect(body.metadata).toMatchObject({
+      kind: 'md',
+      provider: 'deterministic',
+      model: 'md',
+      charCount: 60000,
+    });
+  });
+
   test('accepts UTF-16 BOM text for deterministic extraction', async () => {
     const { handler } = require('../ingest-media.js');
     const buf = Buffer.concat([

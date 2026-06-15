@@ -23,6 +23,12 @@ describe('buildGeneratorPayload', () => {
     expect(result.count).toBe(12);
   });
 
+  test('allows the public 50-question default when no override is configured', () => {
+    delete window.__EZQ__;
+    const result = buildGeneratorPayload({ topic: 'Space', difficulty: 'hard', count: 50 });
+    expect(result.count).toBe(50);
+  });
+
   test('defaults topic and difficulty when values are blank', () => {
     delete window.__EZQ__;
     const result = buildGeneratorPayload({ topic: '   ', difficulty: '', count: '' });
@@ -70,9 +76,9 @@ describe('buildGeneratorPayload', () => {
       topic: 'Long Notes',
       difficulty: 'medium',
       count: 5,
-      sourceText: 'A'.repeat(30010),
+      sourceText: 'A'.repeat(60010),
     });
 
-    expect(result.sourceText).toHaveLength(30000);
+    expect(result.sourceText).toHaveLength(60000);
   });
 });

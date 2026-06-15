@@ -23,7 +23,7 @@ try {
 try {
   const bag = (window.__EZQ__ = window.__EZQ__ || window.EZQ || {});
   if (!Number.isFinite(bag.MAX_QUESTIONS)) {
-    bag.MAX_QUESTIONS = 20;
+    bag.MAX_QUESTIONS = 50;
   }
   if (window.EZQ && window.EZQ !== bag && !Number.isFinite(window.EZQ.MAX_QUESTIONS)) {
     window.EZQ.MAX_QUESTIONS = bag.MAX_QUESTIONS;

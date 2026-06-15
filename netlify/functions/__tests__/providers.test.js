@@ -29,9 +29,9 @@ describe('providers helpers', () => {
   });
 
   test('source material cleanup uses the shared generation cap', () => {
-    const out = buildPrompt('Long Notes', 4, ['MC'], 'medium', [], 'A'.repeat(30010));
+    const out = buildPrompt('Long Notes', 4, ['MC'], 'medium', [], 'A'.repeat(60010));
     const source = out.match(/SOURCE MATERIAL START\n([\s\S]+)\nSOURCE MATERIAL END/)[1];
-    expect(source).toHaveLength(30000);
+    expect(source).toHaveLength(60000);
   });
 
   test('callProvider echo returns deterministic text', async () => {

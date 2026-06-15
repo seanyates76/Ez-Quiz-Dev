@@ -143,7 +143,7 @@ describe('generator media import overlap regression', () => {
         if (Number.isFinite(parsed) && parsed > 0) return parsed;
         return fallback ?? 10;
       },
-      getMaxQuestions: () => 20,
+      getMaxQuestions: () => 50,
       parseEditorInput,
       generateWithAI,
       ImportController,
@@ -282,14 +282,31 @@ describe('generator media import overlap regression', () => {
     expect(readers).toHaveLength(1);
     expect(readers[0].file.size).toBe(128 * 1024);
 
-    readers[0].result = new TextEncoder().encode('B'.repeat(50000)).buffer;
+    readers[0].result = new TextEncoder().encode('B'.repeat(70000)).buffer;
     readers[0].onload();
     await flush();
     await flush();
 
     expect(fetchCalls).toHaveLength(0);
-    expect(state.media.sourceText).toHaveLength(30000);
-    expect(document.getElementById('mediaSourceLabel').textContent).toContain('30,000 chars extracted');
+    expect(state.media.sourceText).toHaveLength(60000);
+    expect(document.getElementById('mediaSourceLabel').textContent).toContain('60,000 chars extracted');
+  });
+
+  test('makes 50-question generation selectable and requestable', async () => {
+    const countInput = document.getElementById('countInput');
+    expect(Array.from(countInput.options).map((option) => option.value)).toContain('50');
+
+    document.getElementById('topicInput').value = 'ccna 2025';
+    countInput.value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(generateWithAI).toHaveBeenCalledWith('ccna 2025', 50, expect.objectContaining({
+      difficulty: 'medium',
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
   });
 
   test('creates a topic quiz without auto-starting and sends the expected payload', async () => {
@@ -316,6 +333,24 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('generateBtn').textContent).toBe('Create New Quiz');
     expect(beginQuiz).not.toHaveBeenCalled();
     expect(syncSettingsFromUI).not.toHaveBeenCalled();
+  });
+
+  test('does not unlock Start Quiz when generation fails before valid lines return', async () => {
+    generateWithAI.mockRejectedValueOnce(new Error('Generation returned 0 of 5 usable questions after 3 batches.'));
+
+    document.getElementById('topicInput').value = 'ccna retry';
+    document.getElementById('countInput').value = '5';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(parseEditorInput).not.toHaveBeenCalled();
+    expect(document.getElementById('status').textContent).toContain('Could not create a valid quiz: Generation returned 0 of 5 usable questions');
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+    expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('true');
+    expect(document.getElementById('startToolbarBtn').dataset.startDisabled).toBe('true');
+    expect(beginQuiz).not.toHaveBeenCalled();
   });
 
   test('uses plural ready grammar for generated quizzes', async () => {

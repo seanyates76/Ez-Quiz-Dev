@@ -6,11 +6,11 @@
   <title>EZ Quiz</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=1.5.37"></script>
-  <link rel="stylesheet" href="styles.css?v=1.5.37" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.37">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.37">
-  <script src="js/boot-beta.js?v=1.5.37"></script>
+  <script src="js/theme-preload.js?v=1.5.38"></script>
+  <link rel="stylesheet" href="styles.css?v=1.5.38" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.38">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.38">
+  <script src="js/boot-beta.js?v=1.5.38"></script>
 </head>
 <body>
   <header class="site-header" role="banner">
@@ -121,6 +121,8 @@
               <option value="10" selected>10</option>
               <option value="15">15</option>
               <option value="20">20</option>
+              <option value="30">30</option>
+              <option value="50">50</option>
             </select>
             <div class="stepper-group" role="group" aria-label="Adjust length">
               <button type="button" class="stepper stepper-up" data-step="up" aria-label="Increase length">▲</button>
@@ -140,7 +142,7 @@
       <div id="status" class="build-status" role="status" aria-live="polite" data-build-state="idle">
         Add a topic or study material, then create a quiz.
       </div>
-      <div id="genCountHint" class="sr-only">Public quiz limit is 20 questions.</div>
+      <div id="genCountHint" class="sr-only">Public quiz limit is 50 questions.</div>
       <div id="startHelp" class="sr-only">Start Quiz is enabled after a valid quiz is ready.</div>
       <div id="regenHint" class="regen-hint" role="status" aria-live="polite" hidden>
         Updated inputs — create a new quiz when ready.
@@ -404,7 +406,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <h4>AI Generation</h4>
           <ul>
             <li>Create sends Topic or Study Material, Length, Difficulty, and selected types to the AI.</li>
-            <li>Public quiz lengths are 5, 10, 15, and 20 questions while larger builds remain a future reliability goal.</li>
+            <li>Public quiz lengths are 5, 10, 15, 20, 30, and 50 questions.</li>
             <li>If nothing usable returns, try fewer questions, a smaller source, Demo Set, or manual import.</li>
           </ul>
         </section>
@@ -536,7 +538,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <h4>v3.4.0</h4>
           <ul>
             <li>Create Quiz now builds first; Start Quiz unlocks only after a valid quiz is ready.</li>
-            <li>Public quiz lengths are 5, 10, 15, and 20 questions while larger 30/50-question builds stay on the reliability roadmap.</li>
+            <li>Public quiz lengths are 5, 10, 15, 20, 30, and 50 questions.</li>
             <li>Study-material import and Results explanations are part of the production flow.</li>
           </ul>
         </section>
@@ -694,10 +696,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=1.5.37"></script>
-  <script type="module" src="js/auto-refresh.js?v=1.5.37"></script>
-  <script type="module" src="js/patches.js?v=1.5.37"></script>
-  <script type="module" src="js/editor.gui.js?v=1.5.37"></script>
+  <script type="module" src="js/main.js?v=1.5.38"></script>
+  <script type="module" src="js/auto-refresh.js?v=1.5.38"></script>
+  <script type="module" src="js/patches.js?v=1.5.38"></script>
+  <script type="module" src="js/editor.gui.js?v=1.5.38"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">

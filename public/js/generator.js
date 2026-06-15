@@ -1,14 +1,14 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.37';
+import { generateWithAI } from './api.js?v=1.5.38';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.37';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.37';
-import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.37';
+import { announce } from './a11y-announcer.js?v=1.5.38';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.38';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.38';
 import { showVeil, hideVeil, MESSAGES } from './veil.js';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
@@ -138,8 +138,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   };
   const LOCAL_TEXT_KINDS = new Set(['txt', 'md', 'html', 'csv', 'json', 'rtf']);
-  const MAX_IMPORTED_SOURCE_CHARS = 30000;
+  const MAX_IMPORTED_SOURCE_CHARS = 60000;
   const MAX_LOCAL_TEXT_READ_BYTES = 128 * 1024;
+  const QUESTION_COUNT_CHOICES = [5, 10, 15, 20, 30, 50];
   const toolbar = document.querySelector('.gen-toolbar');
   const topicAffix = document.querySelector('.topic-affix');
   const editor = $('editor');
@@ -188,9 +189,16 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   registerCountSoftTarget(startBtn);
   const startToolbarBtn = document.getElementById('startToolbarBtn');
   registerCountSoftTarget(startToolbarBtn);
-  function getCountInvalidMessage(){
+  function availableCountChoices(){
     const max = getMaxQuestions();
-    return `Choose 5, 10, 15, or 20 questions before creating.`;
+    return QUESTION_COUNT_CHOICES.filter((value) => value <= max);
+  }
+  function getCountInvalidMessage(){
+    const choices = availableCountChoices();
+    const label = choices.length > 1
+      ? `${choices.slice(0, -1).join(', ')}, or ${choices[choices.length - 1]}`
+      : String(choices[0] || getMaxQuestions());
+    return `Choose ${label} questions before creating.`;
   }
   function updateCountHint(){
     const max = getMaxQuestions();
@@ -1177,7 +1185,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
   function adjustCount(delta){
     if(!countInput) return;
-    const choices = [5, 10, 15, 20].filter((value) => value <= getMaxQuestions());
+    const choices = availableCountChoices();
     const current = clampCount(countInput.value, { fallback: 10 });
     const at = choices.indexOf(current);
     const baseIndex = at >= 0 ? at : choices.findIndex((value) => value >= current);
