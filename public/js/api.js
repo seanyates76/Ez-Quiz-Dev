@@ -83,11 +83,27 @@ export const LARGE_SOURCE_CHUNK_TARGET_CHARS = 4000;
 export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
 export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
 const LARGE_SOURCE_SHORTFALL_RETRY_CAP = 2;
-const SECTION_REQUEST_MAX_QUESTIONS = 2;
+const SECTION_REQUEST_QUESTION_COUNT = 1;
+const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
+const SECTION_BASE_TYPE_SEQUENCE = ['MC', 'TF', 'YN'];
+const SECTION_SAFE_FALLBACK_TYPE_SEQUENCE = ['TF', 'MC', 'YN'];
 
 function toPositiveCount(value, fallback = 10){
   const parsed = parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeQuestionTypesForPlanning(raw){
+  if(!Array.isArray(raw) || raw.length === 0) return VALID_QUESTION_TYPES.slice();
+  const out = [];
+  const seen = new Set();
+  for(const entry of raw){
+    const type = String(entry || '').trim().toUpperCase();
+    if(!VALID_QUESTION_TYPES.includes(type) || seen.has(type)) continue;
+    seen.add(type);
+    out.push(type);
+  }
+  return out;
 }
 
 function cleanStem(raw){
@@ -263,6 +279,17 @@ function sectionSignalCount(section){
   return count;
 }
 
+function sectionHasStrongMatchingSignal(section){
+  const reasons = Array.isArray(section && section.reasons)
+    ? section.reasons.map((reason) => String(reason || '').toLowerCase())
+    : [];
+  const hasDefinitionSignal = !!(section && section.definitionSignal) || reasons.includes('definitions');
+  const hasTermSignal = !!(section && section.termSignal) || reasons.includes('terms');
+  const listLike = Number(section && section.bulletCount || 0) >= 2 || Number(section && section.listCount || 0) >= 1;
+  const enoughPairs = listLike || Number(section && section.lineCount || 0) >= 3;
+  return hasDefinitionSignal && hasTermSignal && enoughPairs;
+}
+
 function normalizeSectionForPlanning(section, index){
   if(!section || typeof section !== 'object') return null;
   const text = String(section.text || '').trim();
@@ -284,6 +311,7 @@ function normalizeSectionForPlanning(section, index){
     signalCount: sectionSignalCount(section),
     charCount: Number(section.charCount || text.length) || text.length,
     originalIndex: index,
+    mtEligible: sectionHasStrongMatchingSignal(section),
   };
 }
 
@@ -326,54 +354,115 @@ function buildSectionPacket(section, opts = {}){
   };
 }
 
+function sectionPlanningPool(sections, allowedTypes){
+  const baseTypes = SECTION_BASE_TYPE_SEQUENCE.filter((type) => allowedTypes.includes(type));
+  if(baseTypes.length) return sections;
+  if(allowedTypes.includes('MT')) return sections.filter((section) => section.mtEligible);
+  return [];
+}
+
+function createSectionTypePlanner(allowedTypes){
+  const baseTypes = SECTION_BASE_TYPE_SEQUENCE.filter((type) => allowedTypes.includes(type));
+  const allowMt = allowedTypes.includes('MT');
+  let baseCursor = 0;
+  let baseSinceMt = 0;
+  return (section) => {
+    if(!baseTypes.length){
+      return allowMt && section && section.mtEligible ? 'MT' : '';
+    }
+    if(allowMt && section && section.mtEligible && baseSinceMt >= baseTypes.length){
+      baseSinceMt = 0;
+      return 'MT';
+    }
+    const type = baseTypes[baseCursor % baseTypes.length];
+    baseCursor += 1;
+    baseSinceMt += 1;
+    return type;
+  };
+}
+
+function buildSectionRequestEntry(section, opts, plannedType){
+  const packet = buildSectionPacket(section, opts);
+  return {
+    ...packet,
+    count: SECTION_REQUEST_QUESTION_COUNT,
+    plannedType,
+    types: [plannedType],
+    mtEligible: !!section.mtEligible,
+    attemptedTypes: [plannedType],
+  };
+}
+
 function distributeQuestionCountAcrossSections(sections, count, opts = {}){
   const requested = Math.max(1, toPositiveCount(count));
-  if(!Array.isArray(sections) || !sections.length) return [];
-  const packets = sections.map((section) => buildSectionPacket(section, opts));
+  if(!Array.isArray(sections) || !sections.length) return { requestPlan: [], retryPackets: [], allowedTypes: [] };
+  const allowedTypes = normalizeQuestionTypesForPlanning(opts.types);
+  if(!allowedTypes.length) return { requestPlan: [], retryPackets: [], allowedTypes: [] };
+  const plannedSections = sectionPlanningPool(sections, allowedTypes);
+  if(!plannedSections.length) return { requestPlan: [], retryPackets: [], allowedTypes };
+  const chooseType = createSectionTypePlanner(allowedTypes);
   const plan = [];
-  let remaining = requested;
-  const firstPassAsk = packets.length >= requested ? 1 : SECTION_REQUEST_MAX_QUESTIONS;
-
-  for(const packet of packets){
-    if(remaining <= 0) break;
-    const ask = Math.min(firstPassAsk, remaining);
-    plan.push({ ...packet, count: ask });
-    remaining -= ask;
+  for(let index = 0; index < requested; index += 1){
+    const section = plannedSections[index % plannedSections.length];
+    const plannedType = chooseType(section);
+    if(!plannedType) continue;
+    plan.push(buildSectionRequestEntry(section, opts, plannedType));
   }
-
-  let cursor = 0;
-  while(remaining > 0 && packets.length){
-    const packet = packets[cursor++ % packets.length];
-    const ask = Math.min(SECTION_REQUEST_MAX_QUESTIONS, remaining);
-    plan.push({ ...packet, count: ask });
-    remaining -= ask;
-  }
-
-  return plan;
+  return {
+    requestPlan: plan,
+    retryPackets: plannedSections.map((section) => ({
+      ...buildSectionPacket(section, opts),
+      mtEligible: !!section.mtEligible,
+    })),
+    allowedTypes,
+  };
 }
 
 function buildSectionRequestPlan(opts, count){
   const sections = selectUsableSections(opts && opts.sourceReport);
   if(!sections.length) return null;
-  const requestPlan = distributeQuestionCountAcrossSections(sections, count, opts);
+  const distribution = distributeQuestionCountAcrossSections(sections, count, opts);
+  const requestPlan = distribution.requestPlan;
   if(!requestPlan.length) return null;
   return {
     requestPlan,
-    retryPackets: sections.map((section) => buildSectionPacket(section, opts)),
+    retryPackets: distribution.retryPackets,
+    allowedTypes: distribution.allowedTypes,
   };
 }
 
-function nextSectionRetryPacket(retryPackets, attemptedIds, retryCursor){
-  if(!Array.isArray(retryPackets) || !retryPackets.length) return { packet: null, retryCursor };
-  for(let offset = 0; offset < retryPackets.length; offset += 1){
-    const index = (retryCursor + offset) % retryPackets.length;
-    const packet = retryPackets[index];
-    if(packet && !attemptedIds.has(packet.sectionId)){
-      return { packet, retryCursor: index + 1 };
-    }
-  }
-  const packet = retryPackets[retryCursor % retryPackets.length];
-  return { packet, retryCursor: retryCursor + 1 };
+function sectionFallbackTypeOrder(allowedTypes, packet){
+  const safeTypes = SECTION_SAFE_FALLBACK_TYPE_SEQUENCE.filter((type) => allowedTypes.includes(type));
+  if(safeTypes.length) return safeTypes;
+  if(allowedTypes.includes('MT') && packet && packet.mtEligible) return ['MT'];
+  return [];
+}
+
+function sameSectionRetryPacket(entry, sectionPlan){
+  const retryPackets = Array.isArray(sectionPlan && sectionPlan.retryPackets) ? sectionPlan.retryPackets : [];
+  return retryPackets.find((packet) => packet && packet.sectionId === entry.sectionId) || null;
+}
+
+function buildSectionZeroLineRetry(entry, sectionPlan){
+  const packet = sameSectionRetryPacket(entry, sectionPlan) || entry;
+  if(!packet || !packet.sourceText) return null;
+  const allowedTypes = Array.isArray(sectionPlan && sectionPlan.allowedTypes) ? sectionPlan.allowedTypes : [];
+  const attemptedTypes = Array.isArray(entry && entry.attemptedTypes)
+    ? entry.attemptedTypes.map((type) => String(type || '').toUpperCase()).filter(Boolean)
+    : [];
+  const order = sectionFallbackTypeOrder(allowedTypes, packet);
+  if(!order.length) return null;
+  const nextType = order.find((type) => !attemptedTypes.includes(type))
+    || (order.length === 1 && attemptedTypes.length < 2 ? order[0] : '');
+  if(!nextType) return null;
+  return {
+    ...packet,
+    count: SECTION_REQUEST_QUESTION_COUNT,
+    plannedType: nextType,
+    types: [nextType],
+    attemptedTypes: Array.from(new Set([...attemptedTypes, nextType])),
+    retryOfSectionId: entry && entry.sectionId || packet.sectionId,
+  };
 }
 
 function readableGenerationError(err){
@@ -394,6 +483,12 @@ function batchFailureError(err, batchNo, completed, requested){
   const wrapped = new Error(message);
   wrapped.name = 'GenerationBatchError';
   return wrapped;
+}
+
+function isZeroQuestionUnderCountError(err, expected){
+  const detail = readableGenerationError(err);
+  const match = String(detail || '').match(/Only generated\s+0\s+of\s+(\d+)\s+requested questions/i);
+  return !!(match && Number(match[1]) === Number(expected));
 }
 
 async function postGenerate(topic, count, opts = {}){
@@ -454,19 +549,79 @@ async function postGenerate(topic, count, opts = {}){
   throw new Error(JSON.stringify({ error: 'All API endpoints failed', attempts: attemptErrors }));
 }
 
-async function generateLargeSourceWithAI(topic, count, opts = {}){
-  const requested = toPositiveCount(count);
-  const sectionPlan = buildSectionRequestPlan(opts, requested);
-  const sourceChunks = sectionPlan ? [] : splitSourceTextIntoChunks(opts.sourceText);
-  const requestPlan = sectionPlan
-    ? sectionPlan.requestPlan
-    : distributeQuestionCountAcrossChunks(sourceChunks, requested);
+function createCollectionState(opts = {}){
   const seenKeys = new Set();
   const avoidStems = sanitizeAvoidStems(opts.avoidStems);
   for(const stem of avoidStems){
     const key = normalizedStem(stem);
     if(key) seenKeys.add(key);
   }
+  return { seenKeys, avoidStems };
+}
+
+function generationUnderCountError(completed, requested, requestNo){
+  const err = new Error(`Generation returned ${completed} of ${requested} usable questions after ${requestNo} batches. Try fewer questions, a smaller source, or retry.`);
+  err.name = 'GenerationUnderCount';
+  return err;
+}
+
+async function generateSectionLargeSourceWithAI(topic, requested, opts, sectionPlan){
+  const { seenKeys, avoidStems } = createCollectionState(opts);
+  const pending = sectionPlan.requestPlan.slice();
+  const collected = [];
+  let title = '';
+  let requestNo = 0;
+  const maxRequests = sectionPlan.requestPlan.length + Math.max(LARGE_SOURCE_SHORTFALL_RETRY_CAP, requested);
+
+  while(collected.length < requested && pending.length && requestNo < maxRequests){
+    const planned = pending.shift();
+    const ask = Math.min(SECTION_REQUEST_QUESTION_COUNT, requested - collected.length);
+    requestNo += 1;
+
+    let out;
+    try{
+      out = await postGenerate(topic, ask, {
+        ...opts,
+        sourceText: planned.sourceText,
+        types: planned.types,
+        avoidStems: avoidStems.slice(-60),
+      });
+    }catch(err){
+      const retry = isZeroQuestionUnderCountError(err, ask)
+        ? buildSectionZeroLineRetry(planned, sectionPlan)
+        : null;
+      if(retry){
+        pending.unshift(retry);
+        continue;
+      }
+      throw batchFailureError(err, requestNo, collected.length, requested);
+    }
+
+    if(!title && out && out.title) title = out.title;
+    const beforeCount = collected.length;
+    const accepted = collectUniqueQuizLines(out && out.lines, seenKeys, avoidStems);
+    for(const line of accepted){
+      if(collected.length >= requested) break;
+      collected.push(line);
+    }
+
+    if(collected.length === beforeCount){
+      const retry = buildSectionZeroLineRetry(planned, sectionPlan);
+      if(retry) pending.unshift(retry);
+    }
+  }
+
+  if(collected.length !== requested){
+    throw generationUnderCountError(collected.length, requested, requestNo);
+  }
+
+  return { lines: collected.join('\n'), title, batched: true };
+}
+
+async function generateChunkedLargeSourceWithAI(topic, requested, opts = {}){
+  const sourceChunks = splitSourceTextIntoChunks(opts.sourceText);
+  const requestPlan = distributeQuestionCountAcrossChunks(sourceChunks, requested);
+  const { seenKeys, avoidStems } = createCollectionState(opts);
 
   const collected = [];
   let title = '';
@@ -474,7 +629,6 @@ async function generateLargeSourceWithAI(topic, count, opts = {}){
   let retryCursor = 0;
   const maxInitialAsk = Math.max(...requestPlan.map((entry) => entry.count), 1);
   const maxRequests = requestPlan.length + LARGE_SOURCE_SHORTFALL_RETRY_CAP;
-  const attemptedSectionIds = new Set();
 
   while(collected.length < requested && requestNo < maxRequests){
     const remaining = requested - collected.length;
@@ -484,19 +638,9 @@ async function generateLargeSourceWithAI(topic, count, opts = {}){
     if(planned){
       sourceText = planned.sourceText;
       ask = planned.count;
-    } else if(sectionPlan){
-      const retry = nextSectionRetryPacket(sectionPlan.retryPackets, attemptedSectionIds, retryCursor);
-      retryCursor = retry.retryCursor;
-      sourceText = retry.packet && retry.packet.sourceText;
-      ask = Math.min(SECTION_REQUEST_MAX_QUESTIONS, remaining);
     } else {
       sourceText = sourceChunks[retryCursor++ % sourceChunks.length];
       ask = Math.min(maxInitialAsk, remaining);
-    }
-    if(planned && planned.sectionId) attemptedSectionIds.add(planned.sectionId);
-    if(!planned && sectionPlan && sourceText){
-      const matched = sectionPlan.retryPackets.find((packet) => packet.sourceText === sourceText);
-      if(matched && matched.sectionId) attemptedSectionIds.add(matched.sectionId);
     }
     requestNo += 1;
 
@@ -516,12 +660,19 @@ async function generateLargeSourceWithAI(topic, count, opts = {}){
   }
 
   if(collected.length !== requested){
-    const err = new Error(`Generation returned ${collected.length} of ${requested} usable questions after ${requestNo} batches. Try fewer questions, a smaller source, or retry.`);
-    err.name = 'GenerationUnderCount';
-    throw err;
+    throw generationUnderCountError(collected.length, requested, requestNo);
   }
 
   return { lines: collected.join('\n'), title, batched: true };
+}
+
+async function generateLargeSourceWithAI(topic, count, opts = {}){
+  const requested = toPositiveCount(count);
+  const sectionPlan = buildSectionRequestPlan(opts, requested);
+  if(sectionPlan){
+    return generateSectionLargeSourceWithAI(topic, requested, opts, sectionPlan);
+  }
+  return generateChunkedLargeSourceWithAI(topic, requested, opts);
 }
 
 export async function generateWithAI(topic, count, opts = {}){
