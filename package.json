@@ -18,13 +18,13 @@
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
     "nodemailer": "^8.0.4",
-    "yauzl": "^3.3.0"
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
-    "jest": "^30.3.0",
-    "jest-environment-jsdom": "^30.3.0",
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
     "jsdom": "^27.0.0",
-    "netlify-cli": "^26.0.1",
+    "netlify-cli": "^26.1.0",
     "puppeteer": "^24.40.0"
   },
   "overrides": {
