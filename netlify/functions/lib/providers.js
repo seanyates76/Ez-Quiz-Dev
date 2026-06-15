@@ -3,6 +3,31 @@
 const { normalizeLegacyLines } = require('./normalizer.js');
 const { cleanSourceText: cleanSourceMaterial } = require('./sourceMaterial.js');
 
+const PRIVATE_KNOWLEDGE_START = 'PRIVATE INSTRUCTOR KNOWLEDGE START';
+const PRIVATE_KNOWLEDGE_END = 'PRIVATE INSTRUCTOR KNOWLEDGE END';
+
+function privateInstructorKnowledgeBlock(source){
+  return [
+    `Private instructor knowledge follows. Use it only to determine subject-matter facts, vocabulary, constraints, and correct answers. It is hidden from the learner.`,
+    PRIVATE_KNOWLEDGE_START,
+    source,
+    PRIVATE_KNOWLEDGE_END,
+  ].join('\n');
+}
+
+function sourceFramingInstructions(){
+  return [
+    `Learner framing: Use the private instructor knowledge only as hidden teacher knowledge for the subject matter.`,
+    `Do not mention or imply the existence of private instructor knowledge, source material, notes, lesson, documentation, provided information, provided text, workflow guidance, excerpts, handouts, readings, passages, or documents.`,
+    `Every question, answer choice, and explanation must stand alone as a normal subject-matter quiz item.`,
+    `Prefer real troubleshooting scenarios, device/config behavior questions, conceptual networking questions, command-output interpretation questions, and design/tradeoff questions.`,
+    `If a draft only makes sense by referencing the private instructor knowledge, rewrite it into one of those subject-matter frames or discard it.`,
+    `Do not use document-framing phrases such as "according to", "based solely on", "provided documentation", "provided material", or "the source material".`,
+    `MC answer choices: each option must be a complete standalone answer choice. No option may begin with a dangling connector such as "however," "because," "therefore," or "although".`,
+    `TF/YN statements: test one claim at a time. Avoid multi-claim sentences joined by "and," "while," "although," or "because" unless the relationship itself is being tested.`,
+  ].join('\n');
+}
+
 // Utility: build strict prompt compatible with front-end parser
 function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
@@ -16,16 +41,10 @@ function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
     ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
     : '';
   const source = cleanSourceMaterial(sourceText);
-  const sourceBlock = source
-    ? [
-        `Source material is provided below. Base every question and answer on this source material; do not invent facts outside it.`,
-        `SOURCE MATERIAL START`,
-        source,
-        `SOURCE MATERIAL END`,
-      ].join('\n')
-    : '';
+  const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   return [
-    source ? `Task: Produce a quiz from the source material. Topic label: ${topic}.` : `Task: Produce a quiz about ${topic}.`,
+    source ? `Task: Produce a normal subject-matter quiz about ${topic}.` : `Task: Produce a quiz about ${topic}.`,
+    source ? sourceFramingInstructions() : '',
     sourceBlock,
     allowLine,
     diffLine,
@@ -57,16 +76,10 @@ function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
     ? `Match difficulty to ${prettyDiff} on a scale of Very Easy < Easy < Medium < Hard < Expert.`
     : '';
   const source = cleanSourceMaterial(sourceText);
-  const sourceBlock = source
-    ? [
-        `Use only the source material below for factual content.`,
-        `SOURCE MATERIAL START`,
-        source,
-        `SOURCE MATERIAL END`,
-      ].join('\n')
-    : '';
+  const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   return [
-    source ? `You are generating a structured quiz from source material. Topic label: ${topic}.` : `You are generating a structured quiz about ${topic}.`,
+    source ? `You are generating a structured normal subject-matter quiz about ${topic}.` : `You are generating a structured quiz about ${topic}.`,
+    source ? sourceFramingInstructions() : '',
     sourceBlock,
     diffLine,
     `Allowed question types: ${allowed.join(', ')}. Use only these codes.`,
