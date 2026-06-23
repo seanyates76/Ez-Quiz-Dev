@@ -1,6 +1,22 @@
 Changelog
 =========
 
+2026-06-23 — v3.6.0 release prep
+- Generation
+  - Topic-only quizzes now build in smaller batches for better quality while preserving requested count.
+  - Larger study material uses section-aware planning when source reports are available.
+  - Difficulty guidance is normalized across Very Easy, Easy, Medium, Hard, and Expert.
+  - Source-backed prompts keep learner-visible wording clean and avoid references to notes/source material.
+- Import
+  - Covered release import formats with focused tests: PDF provider path, DOCX, TXT, Markdown, and unsupported legacy `.doc`.
+  - PDF import now reports a clearer provider-configuration message when Gemini media extraction is unavailable.
+- Update behavior
+  - Landing intro dismissal and last-seen app version are tracked separately.
+  - Users who chose “Don’t show again” can still see a one-time lightweight What’s New panel for a new app version.
+- Maintenance
+  - Version labels and package metadata prepared for v3.6.0.
+  - Asset query strings bumped to `1.5.39`; service worker cache advanced to `ezq-v1223`.
+
 2025-10-22 — v3.3 (hotfix) / 1.5.18-hotfix
 - Reset
   - Performs a cache-busting navigation to avoid BFCache/stale state after clearing SW + caches.

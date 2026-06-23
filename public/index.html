@@ -6,11 +6,11 @@
   <title>EZ Quiz</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=1.5.38"></script>
-  <link rel="stylesheet" href="styles.css?v=1.5.38" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.38">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.38">
-  <script src="js/boot-beta.js?v=1.5.38"></script>
+  <script src="js/theme-preload.js?v=1.5.39"></script>
+  <link rel="stylesheet" href="styles.css?v=1.5.39" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.39">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.39">
+  <script src="js/boot-beta.js?v=1.5.39"></script>
 </head>
 <body>
   <header class="site-header" role="banner">
@@ -51,23 +51,23 @@
         </div>
         <div id="landingPanelNew" class="preview-panel" role="tabpanel" aria-labelledby="landingTabNew" data-preview-panel="0">
           <ul class="preview-list">
-            <li>Create from a topic or your study material.</li>
-            <li>Start when your quiz is ready.</li>
-            <li>Review missed answers with simple explanations.</li>
+            <li>Create up to 50 questions from a topic or study material.</li>
+            <li>Larger sources are planned by useful sections before questions are written.</li>
+            <li>Source-backed questions read like normal quiz items, not references to your notes.</li>
           </ul>
         </div>
         <div id="landingPanelSoon" class="preview-panel" role="tabpanel" aria-labelledby="landingTabSoon" data-preview-panel="1" hidden>
           <ul class="preview-list">
-            <li>Better support for larger quizzes.</li>
-            <li>Clearer progress for big imports.</li>
+            <li>Bring-your-own-key mode for larger private source caps.</li>
+            <li>Clearer progress details for long-running imports and generation.</li>
             <li>Flashcards and review tools for missed concepts.</li>
           </ul>
         </div>
         <div id="landingPanelTips" class="preview-panel" role="tabpanel" aria-labelledby="landingTabTips" data-preview-panel="2" hidden>
           <ul class="preview-list">
-            <li>Use a short topic for quick practice.</li>
-            <li>Use study material for notes, documents, or pasted text.</li>
-            <li>If a build fails, try a smaller source or shorter quiz.</li>
+            <li>Short topics now build in smaller batches for better quality.</li>
+            <li>Import PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, or images.</li>
+            <li>If a build fails, retry or use fewer questions.</li>
           </ul>
         </div>
       </div>
@@ -309,7 +309,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
   <footer class="container" role="contentinfo">
     <nav aria-label="Footer">
       <div class="footer-links" role="list">
-        <a id="versionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" role="listitem">v1.5.0-beta.12</a>
+        <a id="versionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" role="listitem">v3.6.0</a>
         <span aria-hidden="true">•</span>
         <a id="privacyLink" href="#" data-modal="privacyModal" role="listitem">Privacy</a>
         <span aria-hidden="true">•</span>
@@ -407,7 +407,8 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <ul>
             <li>Create sends Topic or Study Material, Length, Difficulty, and selected types to the AI.</li>
             <li>Public quiz lengths are 5, 10, 15, 20, 30, and 50 questions.</li>
-            <li>If nothing usable returns, try fewer questions, a smaller source, Demo Set, or manual import.</li>
+            <li>Topic-only quizzes use smaller batches; larger study material is planned by source sections when possible.</li>
+            <li>Supported imports: PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.</li>
           </ul>
         </section>
 
@@ -416,11 +417,11 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <details class="help-accordion">
             <summary>What's New</summary>
             <ul>
-              <li><strong>Create vs Start:</strong> Create builds the quiz; Start begins a ready quiz.</li>
-              <li><strong>Options panel:</strong> Timer, Theme, Types, and Quiz Editor tools in one place.</li>
-              <li><strong>Quiz Editor:</strong> Editor, Mirror, Copy prompts, Export .txt.</li>
-              <li><strong>Defaults:</strong> Save Count/Difficulty/Types; Reset defaults clears them.</li>
-              <li><strong>Navigation polish:</strong> Equal-width fields on mobile; clearer focus.</li>
+              <li><strong>Generation quality:</strong> Topic-only quizzes now build in smaller batches.</li>
+              <li><strong>Source planning:</strong> Larger study material is split into useful sections before generation.</li>
+              <li><strong>Cleaner source-backed items:</strong> Questions avoid phrases like “according to the notes.”</li>
+              <li><strong>Import formats:</strong> PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.</li>
+              <li><strong>Quiz size:</strong> Public quiz lengths now include 30 and 50 questions.</li>
             </ul>
           </details>
         </section>
@@ -514,7 +515,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <button id="resetApp" class="btn danger">Reset App</button>
         </div>
         <p class="muted small settings-version" data-version-copy>
-          Version <a id="versionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" data-version-label>v3.5.0</a>
+          Version <a id="versionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" data-version-label>v3.6.0</a>
           <span aria-hidden="true">·</span>
           <span data-version-mode>Production</span> build
         </p>
@@ -535,11 +536,12 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       </header>
       <div class="modal__body">
         <section class="release-notes release-notes--production">
-          <h4>v3.5.0</h4>
+          <h4>v3.6.0</h4>
           <ul>
-            <li>Create Quiz now builds first; Start Quiz unlocks only after a valid quiz is ready.</li>
-            <li>Public quiz lengths are 5, 10, 15, 20, 30, and 50 questions.</li>
-            <li>Study-material import and Results explanations are part of the production flow.</li>
+            <li>Topic-only quizzes now build in smaller batches while preserving the requested count.</li>
+            <li>Larger study material uses smarter source-section planning and cleaner source-backed wording.</li>
+            <li>Public quiz lengths include 30 and 50 questions.</li>
+            <li>Imports support PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.</li>
           </ul>
         </section>
         <section>
@@ -696,10 +698,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=1.5.38"></script>
-  <script type="module" src="js/auto-refresh.js?v=1.5.38"></script>
-  <script type="module" src="js/patches.js?v=1.5.38"></script>
-  <script type="module" src="js/editor.gui.js?v=1.5.38"></script>
+  <script type="module" src="js/main.js?v=1.5.39"></script>
+  <script type="module" src="js/auto-refresh.js?v=1.5.39"></script>
+  <script type="module" src="js/patches.js?v=1.5.39"></script>
+  <script type="module" src="js/editor.gui.js?v=1.5.39"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">

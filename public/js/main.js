@@ -2,9 +2,9 @@ import { S } from './state.js';
 import { $, byQSA, showUpdateBannerIfReady } from './utils.js';
 import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel } from './settings.js';
 import { wireModals } from './modals.js';
-import { wireGenerator } from './generator.js?v=1.5.38';
-import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=1.5.38';
-import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=1.5.38';
+import { wireGenerator } from './generator.js?v=1.5.39';
+import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=1.5.39';
+import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=1.5.39';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
 function debugLog(message){
@@ -72,7 +72,7 @@ function init(){
   wireResultsControls();
 
   (function hydrateVersionDetails(){
-    const PRODUCTION_VERSION = 'v3.5.0';
+    const PRODUCTION_VERSION = 'v3.6.0';
     const versionCopy = document.querySelector('[data-version-copy]');
     const modeLabel = versionCopy?.querySelector('[data-version-mode]') || null;
     const versionLabel = versionCopy?.querySelector('[data-version-label]') || null;
