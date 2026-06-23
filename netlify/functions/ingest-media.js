@@ -247,6 +247,15 @@ function echoAllowed(env) {
   return env.NODE_ENV === 'test' || truthy(env.ALLOW_ECHO_MEDIA_IMPORT);
 }
 
+function providerNotConfiguredMessage(kind) {
+  const normalized = String(kind || '').trim().toLowerCase();
+  if (normalized === 'pdf') return 'PDF import needs a configured Gemini media extraction provider.';
+  if (normalized === 'png' || normalized === 'jpeg' || normalized === 'gif') {
+    return 'Image import needs a configured media extraction provider.';
+  }
+  return 'Media import provider is not configured.';
+}
+
 function cleanExtractedText(text) {
   return String(text || '')
     .replace(/^\uFEFF/, '')
@@ -461,7 +470,7 @@ async function extractWithOpenAI(file, env) {
 async function extractText(file, env) {
   if (DETERMINISTIC_KINDS.has(file.kind)) return extractDeterministicText(file);
   const provider = resolveProvider(env, file.kind);
-  if (!provider) throw makeMediaError('Media import provider is not configured', 'MEDIA_PROVIDER_NOT_CONFIGURED', 503);
+  if (!provider) throw makeMediaError(providerNotConfiguredMessage(file.kind), 'MEDIA_PROVIDER_NOT_CONFIGURED', 503);
   if (provider === 'gemini') return extractWithGemini(file, env);
   if (provider === 'openai') return extractWithOpenAI(file, env);
   if (provider === 'echo') {
