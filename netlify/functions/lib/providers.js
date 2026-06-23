@@ -29,7 +29,9 @@ function sourceFramingInstructions(){
 }
 
 function difficultyGuidance(difficulty){
-  const diff = (difficulty && String(difficulty).toLowerCase()) || '';
+  const diff = difficulty
+    ? String(difficulty).trim().toLowerCase().replace(/[-_\s]+/g, ' ')
+    : '';
   const prettyDiff = diff
     ? diff.split(/[-_\s]+/).map((w) => w ? w.charAt(0).toUpperCase() + w.slice(1) : '').join(' ')
     : '';

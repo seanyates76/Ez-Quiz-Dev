@@ -72,6 +72,17 @@ describe('providers helpers', () => {
     expect(out).toContain('Use short stems. Avoid trick wording.');
   });
 
+  test('very easy difficulty guidance stays simple without dense wording', () => {
+    const legacy = buildPrompt('Ports', 2, ['TF'], 'very-easy', [], '');
+    const structured = buildStructuredPrompt('Ports', 2, ['TF'], 'very-easy');
+
+    [legacy, structured].forEach((out) => {
+      expectSharedDifficultyGuidance(out, 'Very Easy');
+      expect(out).toContain('Very Easy: test one obvious fact, term, command purpose, or basic behavior.');
+      expect(out).toContain('Use short direct stems and obvious distractors.');
+    });
+  });
+
   test('medium difficulty guidance favors compact applied scenarios', () => {
     const out = buildStructuredPrompt('Switching', 3, ['MC'], 'medium');
     expectSharedDifficultyGuidance(out, 'Medium');
