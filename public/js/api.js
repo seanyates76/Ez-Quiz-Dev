@@ -79,10 +79,12 @@ function normalizeEndpointSpecs(){
 
 const API_ENDPOINT_CANDIDATES = normalizeEndpointSpecs();
 const LARGE_SOURCE_MULTI_REQUEST_THRESHOLD = 20000;
+export const TOPIC_ONLY_BATCH_SIZE = 5;
 export const LARGE_SOURCE_CHUNK_TARGET_CHARS = 4000;
 export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
 export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
 const LARGE_SOURCE_SHORTFALL_RETRY_CAP = 2;
+const TOPIC_ONLY_SHORTFALL_RETRY_CAP = 2;
 const SECTION_REQUEST_QUESTION_COUNT = 1;
 const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
 const SECTION_BASE_TYPE_SEQUENCE = ['MC', 'TF', 'YN'];
@@ -196,6 +198,11 @@ function shouldUseLargeSourceBatching(count, opts){
   return sourceText.length >= LARGE_SOURCE_MULTI_REQUEST_THRESHOLD && count > 0;
 }
 
+function shouldUseTopicOnlyBatching(count, opts){
+  const sourceText = opts && typeof opts.sourceText === 'string' ? opts.sourceText.trim() : '';
+  return !sourceText && count > TOPIC_ONLY_BATCH_SIZE;
+}
+
 function stripClientOnlyOptions(opts = {}){
   const { sourceReport, ...safe } = opts || {};
   return safe;
@@ -261,6 +268,19 @@ function distributeQuestionCountAcrossChunks(chunks, count){
     sourceText: chunk,
     count: base + (index < extra ? 1 : 0),
   })).filter((entry) => entry.count > 0);
+}
+
+function distributeTopicOnlyQuestionCount(count, batchSize = TOPIC_ONLY_BATCH_SIZE){
+  const requested = Math.max(1, toPositiveCount(count));
+  const size = Math.max(1, Math.min(TOPIC_ONLY_BATCH_SIZE, toPositiveCount(batchSize, TOPIC_ONLY_BATCH_SIZE)));
+  const plan = [];
+  let remaining = requested;
+  while(remaining > 0){
+    const ask = Math.min(size, remaining);
+    plan.push({ count: ask });
+    remaining -= ask;
+  }
+  return plan;
 }
 
 function hasDisqualifyingSectionFlag(section){
@@ -675,10 +695,50 @@ async function generateLargeSourceWithAI(topic, count, opts = {}){
   return generateChunkedLargeSourceWithAI(topic, requested, opts);
 }
 
+async function generateTopicOnlyWithAI(topic, count, opts = {}){
+  const requested = toPositiveCount(count);
+  const requestPlan = distributeTopicOnlyQuestionCount(requested);
+  const { seenKeys, avoidStems } = createCollectionState(opts);
+  const collected = [];
+  let title = '';
+  let requestNo = 0;
+  const maxRequests = requestPlan.length + TOPIC_ONLY_SHORTFALL_RETRY_CAP;
+
+  while(collected.length < requested && requestNo < maxRequests){
+    const remaining = requested - collected.length;
+    const planned = requestPlan[requestNo];
+    const ask = planned ? planned.count : Math.min(TOPIC_ONLY_BATCH_SIZE, remaining);
+    requestNo += 1;
+
+    let out;
+    try{
+      out = await postGenerate(topic, ask, { ...opts, avoidStems: avoidStems.slice(-60) });
+    }catch(err){
+      throw batchFailureError(err, requestNo, collected.length, requested);
+    }
+
+    if(!title && out && out.title) title = out.title;
+    const accepted = collectUniqueQuizLines(out && out.lines, seenKeys, avoidStems);
+    for(const line of accepted){
+      if(collected.length >= requested) break;
+      collected.push(line);
+    }
+  }
+
+  if(collected.length !== requested){
+    throw generationUnderCountError(collected.length, requested, requestNo);
+  }
+
+  return { lines: collected.join('\n'), title, batched: true };
+}
+
 export async function generateWithAI(topic, count, opts = {}){
   const requested = toPositiveCount(count);
   if(shouldUseLargeSourceBatching(requested, opts)){
     return generateLargeSourceWithAI(topic, requested, opts);
+  }
+  if(shouldUseTopicOnlyBatching(requested, opts)){
+    return generateTopicOnlyWithAI(topic, requested, opts);
   }
   return postGenerate(topic, count, opts);
 }

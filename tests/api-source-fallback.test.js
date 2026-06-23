@@ -4,7 +4,7 @@
 const { loadBrowserModule } = require('./utils');
 
 function loadApi() {
-  return loadBrowserModule('public/js/api.js', ['generateWithAI', 'LARGE_SOURCE_CHUNK_TARGET_CHARS', 'SECTION_PACKET_TEXT_MAX_CHARS']);
+  return loadBrowserModule('public/js/api.js', ['generateWithAI', 'TOPIC_ONLY_BATCH_SIZE', 'LARGE_SOURCE_CHUNK_TARGET_CHARS', 'SECTION_PACKET_TEXT_MAX_CHARS']);
 }
 
 describe('generateWithAI source-backed endpoint routing', () => {
@@ -511,23 +511,79 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(lines).not.toContain('not a quiz line');
   });
 
-  test('topic-only count 20 still makes one API request', async () => {
-    const { generateWithAI } = loadApi();
+  test('topic-only count 20 uses batches of five without source text', async () => {
+    const { generateWithAI, TOPIC_ONLY_BATCH_SIZE } = loadApi();
     const allTypes = ['MC', 'TF', 'YN', 'MT'];
     const bodies = [];
+    let nextQuestion = 1;
     global.fetch = jest.fn(async (_url, options = {}) => {
       const body = JSON.parse(options.body || '{}');
       bodies.push(body);
-      return okResponse(tfLines(1, body.count));
+      const start = nextQuestion;
+      nextQuestion += body.count;
+      return okResponse(tfLines(start, body.count));
     });
 
     const out = await generateWithAI('Ports', 20, { types: allTypes });
 
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0].count).toBe(20);
-    expect(bodies[0].types).toEqual(allTypes);
-    expect(bodies[0]).not.toHaveProperty('sourceText');
+    expect(TOPIC_ONLY_BATCH_SIZE).toBe(5);
+    expect(bodies).toHaveLength(4);
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
+    expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(allTypes))).toBe(true);
+    expect(bodies.every((body) => !Object.prototype.hasOwnProperty.call(body, 'sourceText'))).toBe(true);
+    expect(bodies[0].avoidStems).toEqual([]);
+    expect(bodies[1].avoidStems).toEqual([
+      'Question 1.',
+      'Question 2.',
+      'Question 3.',
+      'Question 4.',
+      'Question 5.',
+    ]);
     expect(out.lines.split('\n')).toHaveLength(20);
+  });
+
+  test('topic-only batching preserves exact requested count with a short final batch', async () => {
+    const { generateWithAI } = loadApi();
+    const bodies = [];
+    let nextQuestion = 1;
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      const start = nextQuestion;
+      nextQuestion += body.count;
+      return okResponse(tfLines(start, body.count));
+    });
+
+    const out = await generateWithAI('Ports', 12, { types: ['TF'] });
+
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 2]);
+    expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(['TF']))).toBe(true);
+    expect(out.lines.split('\n')).toHaveLength(12);
+  });
+
+  test('topic-only batching retries only remaining questions after duplicate stems', async () => {
+    const { generateWithAI } = loadApi();
+    const bodies = [];
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      if(bodies.length === 1) return okResponse(tfLines(1, 5));
+      if(bodies.length === 2) {
+        return okResponse([
+          'TF|Question 1.|T',
+          tfLines(6, 4),
+        ].join('\n'));
+      }
+      return okResponse(tfLines(10, body.count));
+    });
+
+    const out = await generateWithAI('Ports', 10, { types: ['TF'] });
+
+    const lines = out.lines.split('\n');
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 1]);
+    expect(bodies[2].avoidStems).toEqual(Array.from({ length: 9 }, (_, idx) => `Question ${idx + 1}.`));
+    expect(lines).toHaveLength(10);
+    expect(lines.filter((line) => line === 'TF|Question 1.|T')).toHaveLength(1);
   });
 
   test('small-source count 20 still makes one API request', async () => {
