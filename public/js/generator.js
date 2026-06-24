@@ -20,7 +20,14 @@ function formatUnitCount(count, singular, plural = `${singular}s`){
   return `${n} ${n === 1 ? singular : plural}`;
 }
 
-const GENERATION_ROTATING_MESSAGES = [
+const GENERATION_TOPIC_MESSAGES = [
+  'Planning the quiz.',
+  'Writing questions.',
+  'Checking answer choices.',
+  'Formatting the quiz.',
+];
+
+const GENERATION_SOURCE_MESSAGES = [
   'Reading your study material.',
   'Finding quiz-worthy sections.',
   'Writing questions.',
@@ -33,6 +40,24 @@ const GENERATION_LARGE_SOURCE_MESSAGES = [
   'Sorting the strong sections from the fluff.',
   'Still working through the big stuff.',
 ];
+
+function hasSourcePayload(payload = {}){
+  return !!String(payload.sourceText || '').trim();
+}
+
+function canceledGenerationMessage(payload = {}){
+  return hasSourcePayload(payload)
+    ? 'Your topic and study material are still here.'
+    : 'Your topic is still here.';
+}
+
+function shouldReduceMotion(){
+  try {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  } catch {
+    return false;
+  }
+}
 
 function hasStartableQuiz(){
   const startBtn = $('startBtn');
@@ -234,6 +259,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     generationStatusCard.hidden = nextState === 'idle';
     generationStatusCard.dataset.generationState = nextState;
     generationStatusCard.classList.toggle('is-animating', nextState === 'generating');
+    generationStatusCard.classList.toggle('is-complete', nextState === 'success');
+    generationStatusCard.classList.toggle('is-success-pulsing', nextState === 'success' && !shouldReduceMotion());
     generationStatusCard.setAttribute('aria-busy', nextState === 'generating' ? 'true' : 'false');
     if(options.largeSource) generationStatusCard.dataset.largeSource = 'true';
     else delete generationStatusCard.dataset.largeSource;
@@ -247,9 +274,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }
     if(generationStatusMessage){
       const fallback = nextState === 'success' ? 'Start Quiz is ready when you are.'
-        : nextState === 'canceled' ? 'Your topic and study material are still here.'
+        : nextState === 'canceled' ? 'Your inputs are still here.'
         : nextState === 'error' ? 'Check the message below and try again.'
-        : GENERATION_ROTATING_MESSAGES[0];
+        : GENERATION_TOPIC_MESSAGES[0];
       generationStatusMessage.textContent = message || fallback;
     }
     if(generationStatusMeta){
@@ -270,9 +297,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     stopGenerationStatusRotation();
     const payload = session?.payload || {};
     const largeSource = isLargeGenerationSource(payload);
+    const baseMessages = hasSourcePayload(payload)
+      ? GENERATION_SOURCE_MESSAGES
+      : GENERATION_TOPIC_MESSAGES;
     const messages = largeSource
-      ? GENERATION_ROTATING_MESSAGES.concat(GENERATION_LARGE_SOURCE_MESSAGES)
-      : GENERATION_ROTATING_MESSAGES.slice();
+      ? baseMessages.concat(GENERATION_LARGE_SOURCE_MESSAGES)
+      : baseMessages.slice();
     let idx = 0;
     const metadata = formatGenerationMetadata(payload);
     setGenerationStatusState('generating', {
@@ -333,7 +363,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     setGenerationStatusState('canceled', {
       requestId: session.id,
       metadata: formatGenerationMetadata(session.payload),
-      message: 'Your topic and study material are still here.',
+      message: canceledGenerationMessage(session.payload),
       largeSource: isLargeGenerationSource(session.payload),
     });
     setBuildStatus('idle', 'Generation canceled.');
@@ -1222,7 +1252,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       setGenerationStatusState('success', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload, { generatedCount: parsed.questions.length }),
-        message: 'Start Quiz is ready when you are.',
+        message: ((out && out.partial) || parsed.questions.length !== Number(payload.count || 0))
+          ? `Quiz ready with ${formatUnitCount(parsed.questions.length, 'question')}.`
+          : 'Start Quiz is ready when you are.',
         largeSource: isLargeGenerationSource(payload),
       });
       setPrimaryAction();
@@ -1232,7 +1264,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         setGenerationStatusState('canceled', {
           requestId: session.id,
           metadata: formatGenerationMetadata(payload),
-          message: 'Your topic and study material are still here.',
+          message: canceledGenerationMessage(payload),
           largeSource: isLargeGenerationSource(payload),
         });
         setBuildStatus('idle', 'Generation canceled.');

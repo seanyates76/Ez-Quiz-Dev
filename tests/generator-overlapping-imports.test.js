@@ -35,6 +35,10 @@ function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function generatedTfLines(count) {
+  return Array.from({ length: count }, (_, index) => `TF|Generated fact ${index + 1}.|T`).join('\n');
+}
+
 describe('generator media import overlap regression', () => {
   let ImportController;
   let wireGenerator;
@@ -348,6 +352,8 @@ describe('generator media import overlap regression', () => {
     expect(card.hidden).toBe(false);
     expect(card.dataset.generationState).toBe('generating');
     expect(card.classList.contains('is-animating')).toBe(true);
+    expect(card.classList.contains('is-complete')).toBe(false);
+    expect(card.classList.contains('is-success-pulsing')).toBe(false);
     expect(card.getAttribute('aria-busy')).toBe('true');
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Building your quiz…');
     expect(document.getElementById('cancelGenerationBtn').hidden).toBe(false);
@@ -360,16 +366,124 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
     await flush();
+    await flush();
 
     expect(card.hidden).toBe(false);
     expect(card.dataset.generationState).toBe('success');
     expect(card.classList.contains('is-animating')).toBe(false);
+    expect(card.classList.contains('is-complete')).toBe(true);
+    expect(card.classList.contains('is-success-pulsing')).toBe(true);
     expect(card.getAttribute('aria-busy')).toBe('false');
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz ready.');
     expect(document.getElementById('generationStatusMeta').textContent).toBe('1 question');
     expect(document.getElementById('cancelGenerationBtn').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question.');
+  });
+
+  test('topic-only generation status avoids study-material and source wording', async () => {
+    const deferred = createDeferred();
+    generateWithAI.mockReturnValueOnce(deferred.promise);
+
+    document.getElementById('topicInput').value = 'routing basics';
+    document.getElementById('countInput').value = '20';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    const message = document.getElementById('generationStatusMessage').textContent;
+    expect(message).toBe('Planning the quiz.');
+    expect(message).not.toMatch(/study material|source|sections/i);
+
+    deferred.resolve({
+      title: 'Routing Basics',
+      lines: 'TF|Routing moves packets between networks.|T',
+    });
+    await flush();
+    await flush();
+    await flush();
+  });
+
+  test('source-backed generation status may use study-material wording', async () => {
+    const deferred = createDeferred();
+    generateWithAI.mockReturnValueOnce(deferred.promise);
+    state.media = {
+      sourceText: 'Important source notes about VLANs and trunks.',
+      sourceName: 'notes.txt',
+      sourceKind: 'txt',
+      sourceCharCount: 44,
+      sourceReport: null,
+    };
+
+    document.getElementById('topicInput').value = 'switching';
+    document.getElementById('countInput').value = '20';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    expect(document.getElementById('generationStatusMessage').textContent)
+      .toMatch(/study material/i);
+
+    deferred.resolve({
+      title: 'Switching',
+      lines: 'TF|Switches forward frames.|T',
+    });
+    await flush();
+    await flush();
+  });
+
+  test('partial batched output parses normally and shows the actual ready count', async () => {
+    const partialLines = generatedTfLines(5);
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
+    generateWithAI.mockResolvedValueOnce({
+      title: 'Partial Quiz',
+      lines: partialLines,
+      partial: true,
+      completedCount: 5,
+      requestedCount: 20,
+      warning: 'Quiz ready with 5 questions.',
+    });
+
+    document.getElementById('topicInput').value = 'routing basics';
+    document.getElementById('countInput').value = '20';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(parseEditorInput).toHaveBeenCalledWith(partialLines);
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 5 questions.');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('Quiz ready with 5 questions.');
+    expect(document.getElementById('generationStatusMeta').textContent).toBe('5 questions');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+  });
+
+  test('reduced motion skips the success pulse class while keeping completed state', async () => {
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = jest.fn(() => ({
+      matches: true,
+      media: '(prefers-reduced-motion: reduce)',
+      addEventListener: jest.fn(),
+      removeEventListener: jest.fn(),
+    }));
+
+    try {
+      document.getElementById('topicInput').value = 'routing basics';
+      document.getElementById('countInput').value = '5';
+      document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+      await flush();
+      await flush();
+      await flush();
+
+      const card = document.getElementById('generationStatusCard');
+      expect(card.dataset.generationState).toBe('success');
+      expect(card.classList.contains('is-complete')).toBe(true);
+      expect(card.classList.contains('is-success-pulsing')).toBe(false);
+    } finally {
+      window.matchMedia = originalMatchMedia;
+    }
   });
 
   test('cancel aborts active generation and leaves Start Quiz disabled without an existing quiz', async () => {
@@ -397,7 +511,10 @@ describe('generator media import overlap regression', () => {
     const card = document.getElementById('generationStatusCard');
     expect(card.dataset.generationState).toBe('canceled');
     expect(card.classList.contains('is-animating')).toBe(false);
+    expect(card.classList.contains('is-complete')).toBe(false);
+    expect(card.classList.contains('is-success-pulsing')).toBe(false);
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation canceled.');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('Your topic is still here.');
     expect(document.getElementById('status').textContent).toBe('Generation canceled.');
     expect(document.getElementById('generateBtn').disabled).toBe(false);
     expect(document.getElementById('startBtn').disabled).toBe(true);
@@ -513,6 +630,8 @@ describe('generator media import overlap regression', () => {
     const card = document.getElementById('generationStatusCard');
     expect(card.dataset.generationState).toBe('error');
     expect(card.classList.contains('is-animating')).toBe(false);
+    expect(card.classList.contains('is-complete')).toBe(false);
+    expect(card.classList.contains('is-success-pulsing')).toBe(false);
     expect(document.getElementById('status').textContent).toContain('Could not create a valid quiz: Generation returned 0 of 5 usable questions');
     expect(document.getElementById('startBtn').disabled).toBe(true);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('true');

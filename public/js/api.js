@@ -79,12 +79,14 @@ function normalizeEndpointSpecs(){
 
 const API_ENDPOINT_CANDIDATES = normalizeEndpointSpecs();
 const LARGE_SOURCE_MULTI_REQUEST_THRESHOLD = 20000;
-export const TOPIC_ONLY_BATCH_SIZE = 5;
+export const GENERATION_BATCH_SIZE = 5;
+export const TOPIC_ONLY_BATCH_SIZE = GENERATION_BATCH_SIZE;
 export const LARGE_SOURCE_CHUNK_TARGET_CHARS = 4000;
 export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
 export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
 const LARGE_SOURCE_SHORTFALL_RETRY_CAP = 2;
 const TOPIC_ONLY_SHORTFALL_RETRY_CAP = 2;
+const PARTIAL_RESULT_MIN_QUESTIONS = GENERATION_BATCH_SIZE;
 const SECTION_REQUEST_QUESTION_COUNT = 1;
 const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
 const SECTION_BASE_TYPE_SEQUENCE = ['MC', 'TF', 'YN'];
@@ -194,13 +196,14 @@ function collectUniqueQuizLines(rawLines, seenKeys, avoidStems){
 }
 
 function shouldUseLargeSourceBatching(count, opts){
-  const sourceText = opts && typeof opts.sourceText === 'string' ? opts.sourceText : '';
-  return sourceText.length >= LARGE_SOURCE_MULTI_REQUEST_THRESHOLD && count > 0;
+  const sourceText = opts && typeof opts.sourceText === 'string' ? opts.sourceText.trim() : '';
+  if(!sourceText) return false;
+  return count > GENERATION_BATCH_SIZE || sourceText.length >= LARGE_SOURCE_MULTI_REQUEST_THRESHOLD;
 }
 
 function shouldUseTopicOnlyBatching(count, opts){
   const sourceText = opts && typeof opts.sourceText === 'string' ? opts.sourceText.trim() : '';
-  return !sourceText && count > TOPIC_ONLY_BATCH_SIZE;
+  return !sourceText && count > GENERATION_BATCH_SIZE;
 }
 
 function stripClientOnlyOptions(opts = {}){
@@ -270,12 +273,14 @@ function selectSourceChunksForCount(chunks, count){
 
 function distributeQuestionCountAcrossChunks(chunks, count){
   const requested = Math.max(1, toPositiveCount(count));
-  const selectedChunks = selectSourceChunksForCount(chunks, requested);
+  const minimumRequestCount = Math.ceil(requested / GENERATION_BATCH_SIZE);
+  const selectedChunks = selectSourceChunksForCount(chunks, Math.max(1, requested));
   if(!selectedChunks.length) return [];
-  const base = Math.floor(requested / selectedChunks.length);
-  const extra = requested % selectedChunks.length;
-  return selectedChunks.map((chunk, index) => ({
-    sourceText: chunk,
+  const requestCount = Math.max(minimumRequestCount, selectedChunks.length);
+  const base = Math.floor(requested / requestCount);
+  const extra = requested % requestCount;
+  return Array.from({ length: requestCount }, (_, index) => ({
+    sourceText: selectedChunks[index % selectedChunks.length],
     count: base + (index < extra ? 1 : 0),
   })).filter((entry) => entry.count > 0);
 }
@@ -613,6 +618,20 @@ function generationUnderCountError(completed, requested, requestNo){
   return err;
 }
 
+function partialGenerationResult(collected, title, requested, requestNo){
+  if(collected.length < Math.min(PARTIAL_RESULT_MIN_QUESTIONS, requested)) return null;
+  return {
+    lines: collected.join('\n'),
+    title,
+    batched: true,
+    partial: true,
+    completedCount: collected.length,
+    requestedCount: requested,
+    failedBatch: requestNo,
+    warning: `Quiz ready with ${collected.length} questions.`,
+  };
+}
+
 async function generateSectionLargeSourceWithAI(topic, requested, opts, sectionPlan){
   const { seenKeys, avoidStems } = createCollectionState(opts);
   const pending = sectionPlan.requestPlan.slice();
@@ -642,6 +661,8 @@ async function generateSectionLargeSourceWithAI(topic, requested, opts, sectionP
         pending.unshift(retry);
         continue;
       }
+      const partial = partialGenerationResult(collected, title, requested, requestNo);
+      if(partial) return partial;
       throw batchFailureError(err, requestNo, collected.length, requested);
     }
 
@@ -696,6 +717,8 @@ async function generateChunkedLargeSourceWithAI(topic, requested, opts = {}){
     try{
       out = await postGenerate(topic, ask, { ...opts, sourceText, avoidStems: avoidStems.slice(-60) });
     }catch(err){
+      const partial = partialGenerationResult(collected, title, requested, requestNo);
+      if(partial) return partial;
       throw batchFailureError(err, requestNo, collected.length, requested);
     }
 
@@ -742,6 +765,8 @@ async function generateTopicOnlyWithAI(topic, count, opts = {}){
     try{
       out = await postGenerate(topic, ask, { ...opts, avoidStems: avoidStems.slice(-60) });
     }catch(err){
+      const partial = partialGenerationResult(collected, title, requested, requestNo);
+      if(partial) return partial;
       throw batchFailureError(err, requestNo, collected.length, requested);
     }
 

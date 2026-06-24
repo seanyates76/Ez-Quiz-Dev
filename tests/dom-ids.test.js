@@ -98,6 +98,9 @@ describe('public/index.html structure', () => {
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain('.generation-status-scan span');
     expect(css).toContain('.generation-status-card.is-animating .generation-status-scan span');
+    expect(css).toContain('.generation-status-card.is-complete .generation-status-scan span');
+    expect(css).toContain('.generation-status-card.is-success-pulsing .generation-status-scan span');
+    expect(css).toContain('@keyframes generationSuccessPulse');
   });
 
   test('landing intro exposes feature cards, roadmap, and tips styling hooks', () => {

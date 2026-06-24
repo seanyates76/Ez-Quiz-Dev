@@ -4,7 +4,13 @@
 const { loadBrowserModule } = require('./utils');
 
 function loadApi() {
-  return loadBrowserModule('public/js/api.js', ['generateWithAI', 'TOPIC_ONLY_BATCH_SIZE', 'LARGE_SOURCE_CHUNK_TARGET_CHARS', 'SECTION_PACKET_TEXT_MAX_CHARS']);
+  return loadBrowserModule('public/js/api.js', [
+    'generateWithAI',
+    'GENERATION_BATCH_SIZE',
+    'TOPIC_ONLY_BATCH_SIZE',
+    'LARGE_SOURCE_CHUNK_TARGET_CHARS',
+    'SECTION_PACKET_TEXT_MAX_CHARS',
+  ]);
 }
 
 describe('generateWithAI source-backed endpoint routing', () => {
@@ -167,6 +173,7 @@ describe('generateWithAI source-backed endpoint routing', () => {
 
     expect(bodies).toHaveLength(20);
     expect(bodies.every((body) => body.count === 1)).toBe(true);
+    expect(Math.max(...bodies.map((body) => body.count))).toBeLessThanOrEqual(5);
     expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(['TF']))).toBe(true);
     expect(bodies.every((body) => body.sourceText.length <= SECTION_PACKET_TEXT_MAX_CHARS + 120)).toBe(true);
     expect(bodies.every((body) => body.sourceText !== sourceText)).toBe(true);
@@ -208,6 +215,36 @@ describe('generateWithAI source-backed endpoint routing', () => {
       ['MT'],
     ]);
     expect(out.lines.split('\n')).toHaveLength(8);
+  });
+
+  test('small source with sourceReport still uses section-aware requests for count 20', async () => {
+    const { generateWithAI } = loadApi();
+    const sourceText = 'Short source notes.\n'.repeat(40);
+    const report = sectionReport(25);
+    const bodies = [];
+    let nextQuestion = 1;
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      const start = nextQuestion;
+      nextQuestion += body.count;
+      return okResponse(tfLines(start, body.count));
+    });
+
+    const out = await generateWithAI('Short Notes', 20, {
+      sourceText,
+      sourceReport: report,
+      types: ['TF'],
+    });
+
+    expect(sourceText.length).toBeLessThan(20000);
+    expect(bodies).toHaveLength(20);
+    expect(bodies.every((body) => body.count <= 5)).toBe(true);
+    expect(bodies.every((body) => body.count === 1)).toBe(true);
+    expect(bodies.every((body) => body.sourceText !== sourceText)).toBe(true);
+    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
+    expect(bodies.every((body) => !body.sourceReport)).toBe(true);
+    expect(out.lines.split('\n')).toHaveLength(20);
   });
 
   test('section-aware planning assigns MT only to strong term-definition sections', async () => {
@@ -543,7 +580,7 @@ describe('generateWithAI source-backed endpoint routing', () => {
   });
 
   test('topic-only count 20 uses batches of five without source text', async () => {
-    const { generateWithAI, TOPIC_ONLY_BATCH_SIZE } = loadApi();
+    const { generateWithAI, GENERATION_BATCH_SIZE, TOPIC_ONLY_BATCH_SIZE } = loadApi();
     const allTypes = ['MC', 'TF', 'YN', 'MT'];
     const bodies = [];
     let nextQuestion = 1;
@@ -557,7 +594,8 @@ describe('generateWithAI source-backed endpoint routing', () => {
 
     const out = await generateWithAI('Ports', 20, { types: allTypes });
 
-    expect(TOPIC_ONLY_BATCH_SIZE).toBe(5);
+    expect(GENERATION_BATCH_SIZE).toBe(5);
+    expect(TOPIC_ONLY_BATCH_SIZE).toBe(GENERATION_BATCH_SIZE);
     expect(bodies).toHaveLength(4);
     expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
     expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(allTypes))).toBe(true);
@@ -617,15 +655,18 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(lines.filter((line) => line === 'TF|Question 1.|T')).toHaveLength(1);
   });
 
-  test('small-source count 20 still makes one API request', async () => {
-    const { generateWithAI } = loadApi();
+  test('small source-backed count 20 uses four source requests of five or fewer', async () => {
+    const { generateWithAI, GENERATION_BATCH_SIZE, LARGE_SOURCE_CHUNK_TARGET_CHARS } = loadApi();
     const allTypes = ['MC', 'TF', 'YN', 'MT'];
-    const sourceText = 'Small source line.\n'.repeat(400);
+    const sourceText = 'Small source line.\n'.repeat(100);
     const bodies = [];
+    let nextQuestion = 1;
     global.fetch = jest.fn(async (_url, options = {}) => {
       const body = JSON.parse(options.body || '{}');
       bodies.push(body);
-      return okResponse(tfLines(1, body.count));
+      const start = nextQuestion;
+      nextQuestion += body.count;
+      return okResponse(tfLines(start, body.count));
     });
 
     const out = await generateWithAI('Short Notes', 20, {
@@ -633,10 +674,72 @@ describe('generateWithAI source-backed endpoint routing', () => {
       types: allTypes,
     });
 
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0].count).toBe(20);
-    expect(bodies[0].sourceText).toBe(sourceText);
-    expect(bodies[0].types).toEqual(allTypes);
+    expect(GENERATION_BATCH_SIZE).toBe(5);
+    expect(sourceText.length).toBeLessThan(LARGE_SOURCE_CHUNK_TARGET_CHARS);
+    expect(bodies).toHaveLength(4);
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
+    expect(bodies.every((body) => body.count <= GENERATION_BATCH_SIZE)).toBe(true);
+    expect(bodies.every((body) => body.sourceText === sourceText.trim())).toBe(true);
+    expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(allTypes))).toBe(true);
     expect(out.lines.split('\n')).toHaveLength(20);
+  });
+
+  test('source-backed one-chunk fallback never asks for more than five per request', async () => {
+    const { generateWithAI, GENERATION_BATCH_SIZE, LARGE_SOURCE_CHUNK_TARGET_CHARS } = loadApi();
+    const sourceText = 'One useful source paragraph. '.repeat(60);
+    const bodies = [];
+    let nextQuestion = 1;
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      const start = nextQuestion;
+      nextQuestion += body.count;
+      return okResponse(tfLines(start, body.count));
+    });
+
+    const out = await generateWithAI('Short Notes', 20, {
+      sourceText,
+      types: ['TF'],
+    });
+
+    expect(sourceText.length).toBeLessThan(LARGE_SOURCE_CHUNK_TARGET_CHARS);
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
+    expect(bodies.every((body) => body.count <= GENERATION_BATCH_SIZE)).toBe(true);
+    expect(bodies.every((body) => body.sourceText === sourceText.trim())).toBe(true);
+    expect(out.lines.split('\n')).toHaveLength(20);
+  });
+
+  test('batched generation returns collected lines when a later batch fails after five valid questions', async () => {
+    const { generateWithAI } = loadApi();
+    const bodies = [];
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      if(bodies.length === 1) return okResponse(tfLines(1, 5));
+      return errorResponse(504, { error: 'Timed out' });
+    });
+
+    const out = await generateWithAI('Ports', 20, { types: ['TF'] });
+
+    expect(bodies.map((body) => body.count)).toEqual([5, 5]);
+    expect(out.partial).toBe(true);
+    expect(out.completedCount).toBe(5);
+    expect(out.requestedCount).toBe(20);
+    expect(out.warning).toBe('Quiz ready with 5 questions.');
+    expect(out.lines.split('\n')).toEqual(tfLines(1, 5).split('\n'));
+  });
+
+  test('batched generation still fails when a batch fails before any valid questions are collected', async () => {
+    const { generateWithAI } = loadApi();
+    const bodies = [];
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      return errorResponse(504, { error: 'Timed out' });
+    });
+
+    await expect(generateWithAI('Ports', 20, { types: ['TF'] }))
+      .rejects.toThrow(/Generation batch 1 failed after 0 of 20 questions completed/);
+    expect(bodies.map((body) => body.count)).toEqual([5]);
   });
 });

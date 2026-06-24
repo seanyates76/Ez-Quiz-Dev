@@ -4343,6 +4343,9 @@ body[data-busy="true"] #interactiveEditor {
 
 .generation-status-card[data-generation-state="success"] {
   border-color: color-mix(in srgb, var(--success) 46%, var(--border));
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--success) 9%, transparent), color-mix(in srgb, var(--success) 3%, transparent)),
+    color-mix(in srgb, var(--panel) 86%, #081b14 14%);
   box-shadow: 0 0 0 1px rgba(52, 211, 153, .04), 0 12px 28px rgba(0, 0, 0, .2);
 }
 
@@ -4461,6 +4464,22 @@ body[data-busy="true"] #interactiveEditor {
   opacity: 1;
 }
 
+.generation-status-card.is-complete .generation-status-scan {
+  background: color-mix(in srgb, var(--success) 18%, rgba(255, 255, 255, .08));
+}
+
+.generation-status-card.is-complete .generation-status-scan span {
+  width: 100%;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--success) 66%, white), var(--success));
+  box-shadow: 0 0 14px color-mix(in srgb, var(--success) 46%, transparent);
+  opacity: .94;
+  transform: none;
+}
+
+.generation-status-card.is-success-pulsing .generation-status-scan span {
+  animation: generationSuccessPulse .72s ease-in-out 3;
+}
+
 .generation-status-meta {
   grid-area: meta;
   min-height: 18px;
@@ -4536,6 +4555,19 @@ body[data-busy="true"] #interactiveEditor {
   }
 }
 
+@keyframes generationSuccessPulse {
+  0%,
+  100% {
+    opacity: .76;
+    box-shadow: 0 0 10px color-mix(in srgb, var(--success) 34%, transparent);
+  }
+
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 20px color-mix(in srgb, var(--success) 62%, transparent);
+  }
+}
+
 @media (max-width: 640px) {
   .generation-status-card {
     grid-template-columns: 48px minmax(0, 1fr);
@@ -4600,6 +4632,10 @@ body[data-busy="true"] #interactiveEditor {
     width: 100%;
     opacity: .42;
     transform: none !important;
+  }
+
+  .generation-status-card.is-complete .generation-status-scan span {
+    opacity: .94;
   }
 }
 
