@@ -67,6 +67,37 @@ describe('generateWithAI source-backed endpoint routing', () => {
     return `TF|Question ${n}.|T`;
   }
 
+  test('threads caller abort signal to fetch without serializing control metadata', async () => {
+    const { generateWithAI } = loadApi();
+    const controller = new AbortController();
+    let fetchOptions;
+    global.fetch = jest.fn((_url, options = {}) => {
+      fetchOptions = options;
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        }, { once: true });
+      });
+    });
+
+    const pending = generateWithAI('Ports', 5, {
+      signal: controller.signal,
+      sourceReport: { sections: [] },
+    });
+    await Promise.resolve();
+
+    const body = JSON.parse(fetchOptions.body || '{}');
+    expect(body).not.toHaveProperty('signal');
+    expect(body).not.toHaveProperty('sourceReport');
+    expect(fetchOptions.signal.aborted).toBe(false);
+
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchOptions.signal.aborted).toBe(true);
+  });
+
   function sectionReport(count, overrides = {}) {
     const weakIndexes = new Set(overrides.weakIndexes || []);
     const lowScoreIndexes = new Set(overrides.lowScoreIndexes || []);

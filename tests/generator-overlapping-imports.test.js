@@ -335,6 +335,166 @@ describe('generator media import overlap regression', () => {
     expect(syncSettingsFromUI).not.toHaveBeenCalled();
   });
 
+  test('shows the generation card while active and keeps it ready after success', async () => {
+    const deferred = createDeferred();
+    generateWithAI.mockReturnValueOnce(deferred.promise);
+
+    document.getElementById('topicInput').value = 'routing basics';
+    document.getElementById('countInput').value = '5';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    const card = document.getElementById('generationStatusCard');
+    expect(card.hidden).toBe(false);
+    expect(card.dataset.generationState).toBe('generating');
+    expect(card.getAttribute('aria-busy')).toBe('true');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Building your quiz…');
+    expect(document.getElementById('cancelGenerationBtn').hidden).toBe(false);
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+
+    deferred.resolve({
+      title: 'Routing Basics',
+      lines: 'TF|Routing moves packets between networks.|T',
+    });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(card.hidden).toBe(false);
+    expect(card.dataset.generationState).toBe('success');
+    expect(card.getAttribute('aria-busy')).toBe('false');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz ready.');
+    expect(document.getElementById('generationStatusMeta').textContent).toBe('1 question');
+    expect(document.getElementById('cancelGenerationBtn').hidden).toBe(true);
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question.');
+  });
+
+  test('cancel aborts active generation and leaves Start Quiz disabled without an existing quiz', async () => {
+    let capturedSignal;
+    generateWithAI.mockImplementationOnce((_topic, _count, opts = {}) => {
+      capturedSignal = opts.signal;
+      return new Promise((_resolve, reject) => {
+        capturedSignal.addEventListener('abort', () => {
+          const err = new Error('Aborted');
+          err.name = 'AbortError';
+          reject(err);
+        }, { once: true });
+      });
+    });
+
+    document.getElementById('topicInput').value = 'ospf';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+
+    expect(capturedSignal.aborted).toBe(true);
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation canceled.');
+    expect(document.getElementById('status').textContent).toBe('Generation canceled.');
+    expect(document.getElementById('generateBtn').disabled).toBe(false);
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+    expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('true');
+    expect(parseEditorInput).not.toHaveBeenCalled();
+  });
+
+  test('late response after cancel cannot overwrite the editor or unlock Start Quiz', async () => {
+    const deferred = createDeferred();
+    generateWithAI.mockReturnValueOnce(deferred.promise);
+
+    document.getElementById('topicInput').value = 'stp';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    deferred.resolve({
+      title: 'Stale Quiz',
+      lines: 'TF|Stale generated line.|T',
+    });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
+    expect(document.getElementById('editor').value).toBe('');
+    expect(document.getElementById('mirror').value).toBe('');
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+    expect(parseEditorInput).not.toHaveBeenCalled();
+  });
+
+  test('a superseded generation response cannot overwrite the newer quiz', async () => {
+    const first = createDeferred();
+    const second = createDeferred();
+    generateWithAI
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise);
+
+    document.getElementById('topicInput').value = 'first';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    document.getElementById('topicInput').value = 'second';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    second.resolve({
+      title: 'Second Quiz',
+      lines: 'TF|Second fact.|T',
+    });
+    await flush();
+    await flush();
+    await flush();
+
+    first.resolve({
+      title: 'First Quiz',
+      lines: 'TF|First stale fact.|T',
+    });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(generateWithAI).toHaveBeenCalledTimes(2);
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('success');
+    expect(document.getElementById('editor').value).toBe('TF|Second fact.|T');
+    expect(document.getElementById('mirror').value).toBe('TF|Second fact.|T');
+    expect(parseEditorInput).toHaveBeenCalledWith('TF|Second fact.|T');
+    expect(parseEditorInput).not.toHaveBeenCalledWith('TF|First stale fact.|T');
+  });
+
+  test('canceling a replacement generation keeps an existing valid quiz startable', async () => {
+    document.getElementById('topicInput').value = 'ready quiz';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(document.getElementById('editor').value).toBe('TF|Imported fact.|T');
+
+    const deferred = createDeferred();
+    generateWithAI.mockReturnValueOnce(deferred.promise);
+    document.getElementById('topicInput').value = 'replacement';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    deferred.resolve({
+      title: 'Replacement',
+      lines: 'TF|Replacement stale fact.|T',
+    });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
+    expect(document.getElementById('editor').value).toBe('TF|Imported fact.|T');
+  });
+
   test('does not unlock Start Quiz when generation fails before valid lines return', async () => {
     generateWithAI.mockRejectedValueOnce(new Error('Generation returned 0 of 5 usable questions after 3 batches.'));
 

@@ -204,8 +204,18 @@ function shouldUseTopicOnlyBatching(count, opts){
 }
 
 function stripClientOnlyOptions(opts = {}){
-  const { sourceReport, ...safe } = opts || {};
+  const { sourceReport, signal, ...safe } = opts || {};
   return safe;
+}
+
+function generationAbortError(){
+  try {
+    return new DOMException('Aborted', 'AbortError');
+  } catch {
+    const err = new Error('Aborted');
+    err.name = 'AbortError';
+    return err;
+  }
 }
 
 function sourceChunkBoundary(windowText, target){
@@ -512,6 +522,7 @@ function isZeroQuestionUnderCountError(err, expected){
 }
 
 async function postGenerate(topic, count, opts = {}){
+  const upstreamSignal = opts && opts.signal;
   const requestOpts = stripClientOnlyOptions(opts);
   const payload = JSON.stringify({ topic, count, ...requestOpts });
   const attemptErrors = [];
@@ -522,8 +533,19 @@ async function postGenerate(topic, count, opts = {}){
 
   for (let i = 0; i < endpointCandidates.length; i++) {
     const { url: endpoint, allow404Fallback } = endpointCandidates[i];
+    if(upstreamSignal && upstreamSignal.aborted) throw generationAbortError();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 45000);
+    let timedOut = false;
+    const onUpstreamAbort = () => {
+      try{ controller.abort(); }catch{}
+    };
+    if(upstreamSignal){
+      upstreamSignal.addEventListener('abort', onUpstreamAbort, { once: true });
+    }
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 45000);
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -557,12 +579,18 @@ async function postGenerate(topic, count, opts = {}){
         throw err;
       }
       if (err && err.name === 'AbortError') {
+        if(upstreamSignal && upstreamSignal.aborted && !timedOut) {
+          throw err;
+        }
         const timeout = new Error('Generation timed out locally. Try fewer questions or retry.');
         timeout.name = 'GenerationTimeout';
         throw timeout;
       }
     } finally {
       clearTimeout(timer);
+      if(upstreamSignal){
+        try{ upstreamSignal.removeEventListener('abort', onUpstreamAbort); }catch{}
+      }
     }
   }
 

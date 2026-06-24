@@ -6,11 +6,11 @@
   <title>EZ Quiz</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=1.5.39"></script>
-  <link rel="stylesheet" href="styles.css?v=1.5.39" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.39">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.39">
-  <script src="js/boot-beta.js?v=1.5.39"></script>
+  <script src="js/theme-preload.js?v=1.5.40"></script>
+  <link rel="stylesheet" href="styles.css?v=1.5.40" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.40">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.40">
+  <script src="js/boot-beta.js?v=1.5.40"></script>
 </head>
 <body>
   <header class="site-header" role="banner">
@@ -135,8 +135,25 @@
           <button id="generateBtn" class="btn primary" type="button">Create Quiz</button>
           <button id="startToolbarBtn" class="btn" type="button" aria-describedby="startHelp" aria-disabled="true" data-start-disabled="true" tabindex="-1">Start Quiz</button>
           <button id="optionsBtn" class="btn btn-outline" aria-haspopup="true" aria-expanded="false" aria-controls="optionsPanel">Options ▾</button>
-        </div>
+      </div>
     </div>
+
+      <div id="generationStatusCard" class="generation-status-card" role="status" aria-live="polite" aria-busy="false" data-generation-state="idle" hidden>
+        <div class="generation-status-icon" aria-hidden="true">
+          <span class="generation-status-icon__orb"></span>
+          <span class="generation-status-icon__line"></span>
+        </div>
+        <div class="generation-status-head">
+          <div id="generationStatusTitle" class="generation-status-title">Building your quiz…</div>
+          <div id="generationStatusMessage" class="generation-status-message">Reading your study material.</div>
+        </div>
+        <div id="generationStatusScan" class="generation-status-scan" aria-hidden="true">
+          <span></span>
+        </div>
+        <div id="generationStatusMeta" class="generation-status-meta"></div>
+        <div id="generationStatusSecondary" class="generation-status-secondary" hidden>Counting to four. Repeatedly.</div>
+        <button id="cancelGenerationBtn" class="btn generation-status-cancel" type="button">Cancel generation</button>
+      </div>
 
       <!-- Subtle hint when inputs change after generation -->
       <div id="status" class="build-status" role="status" aria-live="polite" data-build-state="idle">
@@ -698,10 +715,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=1.5.39"></script>
-  <script type="module" src="js/auto-refresh.js?v=1.5.39"></script>
-  <script type="module" src="js/patches.js?v=1.5.39"></script>
-  <script type="module" src="js/editor.gui.js?v=1.5.39"></script>
+  <script type="module" src="js/main.js?v=1.5.40"></script>
+  <script type="module" src="js/auto-refresh.js?v=1.5.40"></script>
+  <script type="module" src="js/patches.js?v=1.5.40"></script>
+  <script type="module" src="js/editor.gui.js?v=1.5.40"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">

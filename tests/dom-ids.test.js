@@ -2,6 +2,7 @@
 'use strict';
 
 const { loadDocument } = require('./utils');
+const { readFile } = require('./utils');
 
 describe('public/index.html structure', () => {
   let document;
@@ -22,6 +23,13 @@ describe('public/index.html structure', () => {
       ['optionsBtn', 'BUTTON'],
       ['startBtn', 'BUTTON'],
       ['status', 'DIV'],
+      ['generationStatusCard', 'DIV'],
+      ['generationStatusTitle', 'DIV'],
+      ['generationStatusMessage', 'DIV'],
+      ['generationStatusScan', 'DIV'],
+      ['generationStatusMeta', 'DIV'],
+      ['generationStatusSecondary', 'DIV'],
+      ['cancelGenerationBtn', 'BUTTON'],
       ['editor', 'TEXTAREA'],
       ['mirror', 'TEXTAREA'],
       ['importBtn', 'BUTTON'],
@@ -61,5 +69,21 @@ describe('public/index.html structure', () => {
     const advancedBlock = document.getElementById('advancedBlock');
     expect(advancedBlock).not.toBeNull();
     expect(advancedBlock.hasAttribute('hidden')).toBe(true);
+  });
+
+  test('generation status card starts hidden and exposes mobile/reduced-motion hooks', () => {
+    const card = document.getElementById('generationStatusCard');
+    const cancel = document.getElementById('cancelGenerationBtn');
+    expect(card.hidden).toBe(true);
+    expect(card.dataset.generationState).toBe('idle');
+    expect(card.classList.contains('generation-status-card')).toBe(true);
+    expect(cancel.classList.contains('generation-status-cancel')).toBe(true);
+
+    const css = readFile('public/styles.css');
+    expect(css).toContain('@media (max-width: 640px)');
+    expect(css).toContain('.generation-status-card');
+    expect(css).toContain('grid-template-areas:');
+    expect(css).toContain('@media (prefers-reduced-motion: reduce)');
+    expect(css).toContain('.generation-status-scan span');
   });
 });
