@@ -190,6 +190,28 @@ describe('generator media import overlap regression', () => {
     delete global.FileReader;
   });
 
+  async function importLocalTextFile(name, text = 'Imported source text') {
+    const importInput = document.getElementById('importFile');
+    const readerIndex = readers.length;
+    const textFile = new File([text], name, { type: 'text/plain' });
+
+    sniffFileKind.mockResolvedValueOnce('txt');
+    Object.defineProperty(importInput, 'files', {
+      configurable: true,
+      get: () => [textFile],
+    });
+    importInput.dispatchEvent(new Event('change'));
+    await flush();
+
+    expect(readers).toHaveLength(readerIndex + 1);
+    readers[readerIndex].result = new TextEncoder().encode(text).buffer;
+    readers[readerIndex].onload();
+    await flush();
+    await flush();
+
+    return textFile;
+  }
+
   test('clears a stale import error before processing the next valid file', async () => {
     const importInput = document.getElementById('importFile');
     const hint = document.getElementById('regenHint');
@@ -269,6 +291,52 @@ describe('generator media import overlap regression', () => {
     expect(state.media.sourceText).toBe('Photosynthesis\nPlants use light.');
     expect(state.media.sourceReport.sectionCount).toBe(1);
     expect(document.getElementById('mediaSourceLabel').textContent).toContain('TXT ready: notes.txt');
+  });
+
+  test('empty topic plus successful file import sets cleaned source-derived topic', async () => {
+    await importLocalTextFile('04-Switching_CAM_ARP_STP.md', 'Switching notes');
+
+    expect(document.getElementById('topicInput').value).toBe('Switching CAM ARP STP');
+    expect(window.EZQ.ui.topicSourceDerived).toBe(true);
+    expect(window.EZQ.ui.topicSourceTopic).toBe('Switching CAM ARP STP');
+  });
+
+  test('source-derived topic plus successful second file import replaces topic', async () => {
+    await importLocalTextFile('04-Switching_CAM_ARP_STP.md', 'Switching notes');
+    await importLocalTextFile('The GSP System.pdf', 'GSP notes');
+
+    expect(document.getElementById('topicInput').value).toBe('The GSP System');
+    expect(window.EZQ.ui.topicSourceDerived).toBe(true);
+  });
+
+  test('manually edited topic plus successful file import preserves manual topic', async () => {
+    const topicInput = document.getElementById('topicInput');
+    await importLocalTextFile('04-Switching_CAM_ARP_STP.md', 'Switching notes');
+
+    topicInput.value = 'My custom switching review';
+    topicInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await importLocalTextFile('The GSP System.pdf', 'GSP notes');
+
+    expect(topicInput.value).toBe('My custom switching review');
+    expect(window.EZQ.ui.topicSourceDerived).toBe(false);
+  });
+
+  test('clearing a source-derived topic allows the next import to auto-fill again', async () => {
+    const topicInput = document.getElementById('topicInput');
+    await importLocalTextFile('04-Switching_CAM_ARP_STP.md', 'Switching notes');
+
+    topicInput.value = '';
+    topicInput.dispatchEvent(new Event('input', { bubbles: true }));
+    await importLocalTextFile('ccna_notes.txt', 'CCNA notes');
+
+    expect(topicInput.value).toBe('ccna notes');
+    expect(window.EZQ.ui.topicSourceDerived).toBe(true);
+  });
+
+  test('source name cleanup removes extension and separators', async () => {
+    await importLocalTextFile('ccna_notes.txt', 'CCNA notes');
+
+    expect(document.getElementById('topicInput').value).toBe('ccna notes');
   });
 
   test('reads only a bounded slice for large local text imports', async () => {

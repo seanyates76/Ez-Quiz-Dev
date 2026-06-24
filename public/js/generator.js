@@ -194,6 +194,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   let generationRequestSeq = 0;
   let activeGenerationSession = null;
   let generationStatusTimer = null;
+  let applyingSourceTopic = false;
   let countTipSeq = 0;
   const countSoftTargets = [];
 
@@ -579,9 +580,29 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     return !!mediaSourceId();
   }
   function sourceTopicLabel(name){
-    const raw = String(name || '').trim();
+    const raw = String(name || '').split(/[\\/]/).pop().trim();
     if(!raw) return 'Imported source';
-    return raw.replace(/\.[a-z0-9]{1,8}$/i, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Imported source';
+    return raw
+      .replace(/\.[a-z0-9]{1,12}$/i, '')
+      .replace(/^\s*\d{1,3}\s*[-_. ]+\s*/, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() || 'Imported source';
+  }
+  function setTopicFromSourceName(name){
+    if(!topicInput) return false;
+    const ui = uiState();
+    const current = String(topicInput.value || '').trim();
+    if(current && !ui.topicSourceDerived) return false;
+    const label = sourceTopicLabel(name);
+    topicInput.value = label;
+    ui.topicSourceDerived = true;
+    ui.topicSourceTopic = label;
+    applyingSourceTopic = true;
+    try{ topicInput.dispatchEvent(new Event('input', { bubbles: true })); }
+    catch{ markDirtyIfChanged(); }
+    finally{ applyingSourceTopic = false; }
+    return true;
   }
   function renderMediaSourceStatus(){
     const media = ensureMediaState();
@@ -617,10 +638,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     media.sourceSize = Number(size || 0);
     media.sourceCharCount = cleaned.length;
     media.sourceReport = report;
-    if(topicInput && !(topicInput.value || '').trim()){
-      topicInput.value = sourceTopicLabel(media.sourceName);
-      try{ topicInput.dispatchEvent(new Event('input', { bubbles: true })); }catch{}
-    }
+    setTopicFromSourceName(media.sourceName);
     renderMediaSourceStatus();
   }
   function clearImportedSource({ announceChange = false } = {}){
@@ -1143,7 +1161,17 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     setPrimaryAction();
   }
   // Mark dirty when topic, count, or difficulty changes after a generation
-  topicInput?.addEventListener('input', markDirtyIfChanged);
+  topicInput?.addEventListener('input', ()=>{
+    const ui = uiState();
+    if(applyingSourceTopic){
+      ui.topicSourceDerived = true;
+      ui.topicSourceTopic = String(topicInput?.value || '').trim();
+    } else {
+      ui.topicSourceDerived = false;
+      delete ui.topicSourceTopic;
+    }
+    markDirtyIfChanged();
+  });
   countInput?.addEventListener('input', ()=>{ markDirtyIfChanged(); updateCountAvailability(); });
   difficultySlider?.addEventListener('input', markDirtyIfChanged);
   countInput?.addEventListener('focus', updateCountAvailability);
