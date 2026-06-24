@@ -32,12 +32,36 @@ function makeCorsHeaders(origin) {
   return H;
 }
 
-function reply(statusCode, body, origin) {
-  const headers = makeCorsHeaders(origin);
+function normalizeHttpStatus(value, fallback = 500) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(numeric) || numeric < 100 || numeric > 599) return fallback;
+  return numeric;
+}
+
+function generationFailureStatus(err, { is429 = false, isTimeout = false, fallback = 502 } = {}) {
+  if (isTimeout) return 504;
+  if (is429) return 429;
+  const status = normalizeHttpStatus(err && err.status, fallback);
+  if (status === 404 || status >= 500) return 502;
+  return status;
+}
+
+function errorCode(err) {
+  const code = err && err.code ? String(err.code).trim() : '';
+  return code || undefined;
+}
+
+function reply(statusCode, body, origin, extraHeaders = {}) {
+  const isJson = typeof body !== 'string';
+  const headers = {
+    ...makeCorsHeaders(origin),
+    ...(isJson ? { 'Content-Type': 'application/json' } : {}),
+    ...extraHeaders,
+  };
   return {
-    statusCode,
+    statusCode: normalizeHttpStatus(statusCode),
     headers,
-    body: typeof body === 'string' ? body : JSON.stringify(body),
+    body: isJson ? JSON.stringify(body) : body,
   };
 }
 
@@ -146,7 +170,7 @@ function partialLegacyResult(result, actual, expected) {
   };
 }
 
-exports.handler = async (event) => {
+async function handleGenerateQuiz(event) {
   const allowedOrigins = parseAllowedOrigins();
   const origin = getOrigin(event.headers);
   const originAllowed = !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin);
@@ -190,18 +214,43 @@ exports.handler = async (event) => {
   if (count == null) { count = 10; }
   const parsedCount = parseInt(count, 10);
   if (!Number.isFinite(parsedCount)) {
-    return reply(400, { error: `Invalid count: must be a number between 1 and ${MAX_COUNT}` }, responseOrigin);
+    return reply(400, {
+      error: 'Invalid request',
+      code: 'INVALID_COUNT',
+      details: `count must be a number between 1 and ${MAX_COUNT}`,
+      field: 'count',
+    }, responseOrigin);
   }
   count = Math.max(1, Math.min(MAX_COUNT, parsedCount));
 
   let types = undefined;
   if (payload.types !== undefined) {
     if (!Array.isArray(payload.types)) {
-      return reply(400, { error: 'Invalid types: must be an array of MC|TF|YN|MT' }, responseOrigin);
+      return reply(400, {
+        error: 'Invalid request',
+        code: 'INVALID_TYPES',
+        details: 'types must be an array containing only MC, TF, YN, or MT',
+        field: 'types',
+      }, responseOrigin);
     }
-    const filtered = payload.types.filter(t => /^(MC|TF|YN|MT)$/i.test(String(t)));
-    if (payload.types.length && filtered.length === 0) {
-      return reply(400, { error: 'Invalid types: use MC, TF, YN, MT' }, responseOrigin);
+    const invalidTypes = [];
+    const filtered = [];
+    for (const rawType of payload.types) {
+      const type = String(rawType || '').trim().toUpperCase();
+      if (/^(MC|TF|YN|MT)$/.test(type)) {
+        filtered.push(type);
+      } else {
+        invalidTypes.push(String(rawType));
+      }
+    }
+    if (invalidTypes.length) {
+      return reply(400, {
+        error: 'Invalid request',
+        code: 'INVALID_TYPES',
+        details: 'types must contain only MC, TF, YN, or MT',
+        field: 'types',
+        invalidTypes,
+      }, responseOrigin);
     }
     types = filtered;
   }
@@ -320,8 +369,9 @@ exports.handler = async (event) => {
     };
   } catch (err) {
     const msg = String((err && err.message) || err || 'Error');
-    const is429 = msg.includes('429') || /quota|rate limit/i.test(msg) || (err && err.status === 429);
-    const isTimeout = err && (err.status === 504 || /timeout/i.test(msg));
+    const errStatus = normalizeHttpStatus(err && err.status, 0);
+    const is429 = msg.includes('429') || /quota|rate limit/i.test(msg) || errStatus === 429;
+    const isTimeout = err && (errStatus === 504 || /timeout/i.test(msg));
 
     // Fallback to Gemini if primary provider failed and Gemini credentials exist
     const primary = (provider || '').toLowerCase();
@@ -352,19 +402,17 @@ exports.handler = async (event) => {
         } catch (fallbackErr) {
           console.warn('[quiz-v2]', { reason: 'provider-fallback-failed', len: 0 });
           const fbMsg = String((fallbackErr && fallbackErr.message) || fallbackErr || 'Error');
-          return {
-            statusCode: isTimeout ? 504 : ((err && err.status) || (fallbackErr && fallbackErr.status) || (is429 ? 429 : 502)),
-            headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-            body: JSON.stringify({ error: 'Generation failed', details: msg, fallback: { tried: 'gemini', details: fbMsg } }),
-          };
+          const fallbackStatus = generationFailureStatus(fallbackErr);
+          return reply(
+            generationFailureStatus(err, { is429, isTimeout, fallback: fallbackStatus }),
+            { error: 'Generation failed', details: msg, provider, code: errorCode(err), fallback: { tried: 'gemini', details: fbMsg, code: errorCode(fallbackErr) } },
+            responseOrigin,
+            { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+          );
         }
       }
 
-      const statusFromError = err && err.status;
-      let statusCode = isTimeout ? 504 : (is429 ? 429 : statusFromError || 502);
-      if (statusCode === 404) {
-        statusCode = 502;
-      }
+      const statusCode = generationFailureStatus(err, { is429, isTimeout });
 
       // Structured path failed entirely; fall back to legacy generator so the UI still renders a quiz.
       try {
@@ -377,11 +425,12 @@ exports.handler = async (event) => {
         };
       } catch (legacyErr) {
         const legacyMsg = String((legacyErr && legacyErr.message) || legacyErr || 'Error');
-        return {
+        return reply(
           statusCode,
-          headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-          body: JSON.stringify({ error: isTimeout ? 'Generation timed out' : 'Generation failed', details: legacyMsg, provider }),
-        };
+          { error: isTimeout ? 'Generation timed out' : 'Generation failed', details: legacyMsg, provider, code: errorCode(legacyErr) || errorCode(err) },
+          responseOrigin,
+          { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+        );
       }
     }
 
@@ -395,24 +444,38 @@ exports.handler = async (event) => {
         };
       } catch (fallbackErr) {
         const fbMsg = String((fallbackErr && fallbackErr.message) || fallbackErr || 'Error');
-        return {
-          statusCode: isTimeout ? 504 : ((err && err.status) || (fallbackErr && fallbackErr.status) || (is429 ? 429 : 502)),
-          headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-          body: JSON.stringify({ error: 'Generation failed', details: msg, fallback: { tried: 'gemini', details: fbMsg } }),
-        };
+        const fallbackStatus = generationFailureStatus(fallbackErr);
+        return reply(
+          generationFailureStatus(err, { is429, isTimeout, fallback: fallbackStatus }),
+          { error: 'Generation failed', details: msg, provider, code: errorCode(err), fallback: { tried: 'gemini', details: fbMsg, code: errorCode(fallbackErr) } },
+          responseOrigin,
+          { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+        );
       }
     }
 
-    const statusFromError = err && err.status;
-    let statusCode = isTimeout ? 504 : (is429 ? 429 : statusFromError || 502);
-    if (statusCode === 404) {
-      statusCode = 502;
-    }
+    return reply(
+      generationFailureStatus(err, { is429, isTimeout }),
+      { error: isTimeout ? 'Generation timed out' : 'Generation failed', details: msg, provider, code: errorCode(err) },
+      responseOrigin,
+      { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+    );
+  }
+}
 
-    return {
-      statusCode,
-      headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-      body: JSON.stringify({ error: isTimeout ? 'Generation timed out' : 'Generation failed', details: msg, provider }),
-    };
+exports.handler = async (event) => {
+  try {
+    return await handleGenerateQuiz(event);
+  } catch (err) {
+    const allowedOrigins = parseAllowedOrigins();
+    const origin = getOrigin(event && event.headers);
+    const originAllowed = !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin);
+    const responseOrigin = originAllowed ? (origin || (allowedOrigins.length === 0 ? '*' : '')) : '';
+    const msg = String((err && err.message) || err || 'Unhandled error');
+    return reply(
+      normalizeHttpStatus(err && err.status, 500),
+      { error: 'Generation failed', details: msg, code: errorCode(err) || 'UNHANDLED_GENERATE_QUIZ_ERROR' },
+      responseOrigin
+    );
   }
 };

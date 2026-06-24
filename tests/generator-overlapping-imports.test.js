@@ -426,6 +426,17 @@ describe('generator media import overlap regression', () => {
     }));
   });
 
+  test('does not show the redundant idle status headline on the main screen', () => {
+    const status = document.getElementById('status');
+    const hint = document.getElementById('regenHint');
+
+    expect(status.dataset.buildState).toBe('idle');
+    expect(status.textContent).toBe('');
+    expect(status.textContent).not.toContain('Add a topic or study material, then create a quiz.');
+    expect(hint.hidden).toBe(false);
+    expect(hint.textContent).toBe('Enter a topic, choose length and difficulty, then create a quiz.');
+  });
+
   test('high-count source-backed narrow source shows warning before generation', async () => {
     setMediaSource({
       text: 'VLAN trunking notes for one small idea.',
@@ -701,6 +712,11 @@ describe('generator media import overlap regression', () => {
 
     expect(document.getElementById('generationStatusMessage').textContent)
       .toMatch(/study material/i);
+    expect(document.getElementById('generationStatusCard').hidden).toBe(false);
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('generating');
+    expect(document.getElementById('status').dataset.buildState).toBe('creating');
+    expect(document.getElementById('status').textContent).toBe('');
+    expect(document.getElementById('status').textContent).not.toBe('Creating quiz from study material...');
 
     deferred.resolve({
       title: 'Switching',

@@ -321,6 +321,7 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
     const e = new Error(String((err && err.message) || err));
     e.status = err && err.status;
     e.details = err && err.details;
+    e.code = err && err.code;
     throw e;
   }
 }

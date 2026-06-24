@@ -689,7 +689,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     renderMediaSourceStatus();
     markDirtyIfChanged();
     if(announceChange){
-      setBuildStatus('idle', 'Imported source removed. Add a topic or study material, then create a quiz.');
+      setBuildStatus('idle', 'Imported source removed.');
       setHint('Imported source removed.');
       try{ announce('Imported source removed.', 'polite'); }catch{}
     }
@@ -766,6 +766,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!statusBox) return;
     statusBox.setAttribute('data-build-state', state || 'idle');
     statusBox.textContent = String(message || '').trim();
+  }
+  if(statusBox && statusBox.textContent.trim() === 'Add a topic or study material, then create a quiz.'){
+    setBuildStatus('idle', '');
   }
   function withMediaSource(snapshot){
     const media = ensureMediaState();
@@ -1248,7 +1251,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     setEditorText('');
     clearImportedSource();
     setStartButtonsDisabled(true);
-    setBuildStatus('idle', 'Cleared. Add a topic or study material, then create a quiz.');
+    setBuildStatus('idle', 'Cleared.');
     try{
       const ui = (window.EZQ.ui = window.EZQ.ui || {});
       ui.lastGeneratedParams = null;
@@ -1329,7 +1332,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   async function runGenerationAttempt({ payload, types }){
     const session = beginGenerationSession(payload);
     try{
-      setBuildStatus('creating', payload.sourceText ? 'Creating quiz from study material...' : 'Creating quiz from topic...');
+      setBuildStatus('creating', '');
       generateBtn.disabled = true;
       const out = await generateWithAI(payload.topic, payload.count, {
         ...generationOptions(payload, types),

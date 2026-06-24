@@ -71,6 +71,53 @@ describe('generate-quiz count guarantees', () => {
     expect(body.source).toEqual({ name: 'lecture.pdf', charCount: 'Alpha fact.\nBeta fact.'.length });
   });
 
+  test('accepts source-backed batched requests with mixed planned types', async () => {
+    const sourceText = [
+      'Planned question 1 type: MC',
+      'Source name: CCNA_Notes.md',
+      'Heading path: Switching > VLANs',
+      'Section content: VLANs segment broadcast domains.',
+      '---',
+      'Planned question 2 type: TF',
+      'Source name: CCNA_Notes.md',
+      'Heading path: Routing > OSPF',
+      'Section content: OSPF uses cost and adjacencies.',
+      '---',
+      'Planned question 3 type: YN',
+      'Source name: CCNA_Notes.md',
+      'Heading path: IPv6',
+      'Section content: IPv6 neighbor discovery uses ICMPv6.',
+      '---',
+      'Planned question 4 type: MC',
+      'Source name: CCNA_Notes.md',
+      'Heading path: STP',
+      'Section content: STP blocks redundant paths.',
+      '---',
+      'Planned question 5 type: MT',
+      'Source name: CCNA_Notes.md',
+      'Heading path: Ports',
+      'Section content: SSH uses 22 and DNS uses 53.',
+    ].join('\n');
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({
+      topic: 'CCNA Notes',
+      count: 5,
+      types: ['MC', 'TF', 'YN', 'MC', 'MT'],
+      difficulty: 'hard',
+      provider: 'echo',
+      sourceName: 'CCNA_Notes.md',
+      sourceText,
+      avoidStems: [],
+    }));
+    const body = json(res);
+    const lines = String(body.lines || '').trim().split('\n');
+
+    expect(res.statusCode).toBe(200);
+    expect(lines).toHaveLength(5);
+    expect(lines.map((line) => line.split('|')[0])).toEqual(['MC', 'TF', 'YN', 'MC', 'MT']);
+    expect(body.source).toEqual({ name: 'CCNA_Notes.md', charCount: sourceText.length });
+  });
+
   test('reports the shared source material cap after server cleanup', async () => {
     const { handler } = require('../generate-quiz.js');
     const res = await handler(event({
@@ -113,6 +160,26 @@ describe('generate-quiz count guarantees', () => {
       'Alpha stem?',
       'Beta stem again',
     ]);
+  });
+
+  test('returns a structured 400 for invalid request types', async () => {
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({
+      topic: 'Ports',
+      count: 5,
+      provider: 'echo',
+      types: ['MC', 'ESSAY'],
+    }));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers['Content-Type']).toBe('application/json');
+    expect(body).toMatchObject({
+      error: 'Invalid request',
+      code: 'INVALID_TYPES',
+      field: 'types',
+      invalidTypes: ['ESSAY'],
+    });
   });
 
   test('returns partial legacy lines when generation cannot fill the requested count', async () => {
@@ -179,6 +246,44 @@ describe('generate-quiz count guarantees', () => {
       warning: 'Quiz ready with 1 of 2 questions.',
     });
     expect(body.lines).toBe('TF|Good one.|T');
+  });
+
+  test('returns JSON instead of a raw 500 body for handled provider failures', async () => {
+    const generateLines = jest.fn(async () => {
+      const err = new Error('Provider exploded while generating the batch');
+      err.status = '500';
+      err.code = 'PROVIDER_BATCH_FAILED';
+      throw err;
+    });
+    jest.doMock('../lib/providers.js', () => ({
+      generateLines,
+      generateInBatches: jest.fn(),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({
+      topic: 'CCNA Notes',
+      count: 5,
+      provider: 'mock',
+      types: ['MC', 'TF', 'YN', 'MC', 'MT'],
+      difficulty: 'hard',
+      sourceName: 'CCNA_Notes.md',
+      sourceText: 'Planned question 1 type: MC\nSection content: switching notes.',
+      avoidStems: [],
+    }));
+    const body = json(res);
+
+    expect(generateLines).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(502);
+    expect(res.headers['Content-Type']).toBe('application/json');
+    expect(res.body).not.toBe('500');
+    expect(body).toMatchObject({
+      error: 'Generation failed',
+      details: 'Provider exploded while generating the batch',
+      provider: 'mock',
+      code: 'PROVIDER_BATCH_FAILED',
+    });
   });
 
   test('fails explicitly when generation returns zero usable questions', async () => {
