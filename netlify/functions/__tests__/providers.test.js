@@ -44,8 +44,10 @@ function expectSourceHiddenFraming(out){
 function expectSharedDifficultyGuidance(out, level){
   expect(out).toContain(`Difficulty target: ${level}.`);
   expect(out).toContain('Difficulty should come from the thinking required, not from dense wording.');
-  expect(out).toContain('Use clear technician/instructor language.');
+  expect(out).toContain('Use clear subject-matter language.');
   expect(out).toContain('Keep stems concise unless the scenario genuinely needs detail.');
+  expect(out).toContain('Use technical terms when the topic requires them');
+  expect(out).toContain('do not make the wording artificially dense');
   expect(out).toContain('inflated phrasing');
   expect(out).toContain('vague abstractions');
   expect(out).toContain('excessive absolute traps');
@@ -68,7 +70,7 @@ describe('providers helpers', () => {
     expect(out).toMatch(/Task: Produce a quiz about Ports\./);
     expect(out).not.toMatch(/private instructor knowledge/i);
     expectSharedDifficultyGuidance(out, 'Easy');
-    expect(out).toContain('Easy: test one direct fact, definition, command purpose, or basic behavior.');
+    expect(out).toContain('Easy: test one direct fact, definition, purpose, command/function, or basic behavior.');
     expect(out).toContain('Use short stems. Avoid trick wording.');
   });
 
@@ -78,7 +80,7 @@ describe('providers helpers', () => {
 
     [legacy, structured].forEach((out) => {
       expectSharedDifficultyGuidance(out, 'Very Easy');
-      expect(out).toContain('Very Easy: test one obvious fact, term, command purpose, or basic behavior.');
+      expect(out).toContain('Very Easy: test one obvious fact, term, definition, purpose, command/function, or basic behavior.');
       expect(out).toContain('Use short direct stems and obvious distractors.');
     });
   });
@@ -97,19 +99,37 @@ describe('providers helpers', () => {
 
     [legacy, structured].forEach((out) => {
       expectSharedDifficultyGuidance(out, 'Hard');
-      expect(out).toContain('Hard: test troubleshooting judgment, design tradeoffs, route/device behavior, command-output interpretation, or multi-step reasoning.');
-      expect(out).toContain('Hard scenarios may include more context, but the wording should stay clean and practical.');
-      expect(out).toContain('Prefer realistic network situations over abstract verbal traps.');
+      expect(out).toContain('Hard: test applied judgment, important distinctions, cause/effect, classification, chronology, troubleshooting, design tradeoffs, or multi-step reasoning.');
+      expect(out).toContain("Use the subject's real context.");
+      expect(out).toContain('For technical topics, this may include device behavior, command output, configuration choices, protocols, procedures, or failure diagnosis.');
+      expect(out).toContain('For nontechnical topics, this may include meaningful comparisons, timeline/order relationships, role/status distinctions, evidence-based interpretation, or choosing the best action in a realistic scenario.');
+      expect(out).toContain('Prefer useful difficulty over obscure trivia.');
+      expect(out).toContain('niche names, one-off facts, or fan-lore minutiae');
       expect(out).toContain('do not make most questions hinge on one sneaky absolute word');
-      expect(out).toContain('networking knowledge, not legalistic reading');
     });
   });
 
   test('expert difficulty guidance emphasizes edge cases and clear language', () => {
     const out = buildPrompt('OSPF', 5, ['MC'], 'expert', [], '');
     expectSharedDifficultyGuidance(out, 'Expert');
-    expect(out).toContain('Expert: test edge cases, multi-step diagnosis, competing design tradeoffs, or subtle protocol/device behavior.');
-    expect(out).toContain('Keep the language clear even when the reasoning is demanding.');
+    expect(out).toContain('Expert: test edge cases, competing interpretations, multi-step diagnosis, subtle distinctions, or advanced subject-matter relationships.');
+    expect(out).toContain('For technical topics, protocol/device behavior and command-output interpretation are appropriate when relevant.');
+    expect(out).toContain('Keep language clear even when reasoning is demanding.');
+  });
+
+  test('hard guidance appears in topic-only and source-backed prompt builders', () => {
+    const topicOnly = buildPrompt('World History', 3, ['MC'], 'hard', [], '');
+    const sourceBacked = buildStructuredPrompt('Lecture Notes', 3, ['MC'], 'hard', 'Alpha caused Beta after the treaty.');
+
+    [topicOnly, sourceBacked].forEach((out) => {
+      expectSharedDifficultyGuidance(out, 'Hard');
+      expect(out).toContain('classification, chronology, troubleshooting, design tradeoffs, or multi-step reasoning');
+      expect(out).toContain('command output, configuration choices, protocols, procedures, or failure diagnosis');
+      expect(out).toContain('meaningful comparisons, timeline/order relationships, role/status distinctions');
+      expect(out).toContain('Prefer useful difficulty over obscure trivia.');
+    });
+    expect(topicOnly).not.toMatch(/PRIVATE INSTRUCTOR KNOWLEDGE START/);
+    expect(sourceBacked).toMatch(/PRIVATE INSTRUCTOR KNOWLEDGE START/);
   });
 
   test('buildPrompt treats source-backed generation as hidden instructor knowledge', () => {

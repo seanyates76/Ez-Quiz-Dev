@@ -40,7 +40,8 @@ function difficultyGuidance(difficulty){
 
   const shared = [
     `Difficulty target: ${prettyDiff}. Difficulty should come from the thinking required, not from dense wording.`,
-    `Use clear technician/instructor language. Keep stems concise unless the scenario genuinely needs detail.`,
+    `Use clear subject-matter language. Keep stems concise unless the scenario genuinely needs detail.`,
+    `Use technical terms when the topic requires them, but do not make the wording artificially dense.`,
     `Avoid making questions harder by using inflated phrasing, vague abstractions, or excessive absolute traps.`,
     `Do not overuse words like "solely", "exclusively", "guarantee", "inherently", "unequivocally", or "definitively" unless that exact absolute meaning is the concept being tested.`,
   ];
@@ -48,14 +49,14 @@ function difficultyGuidance(difficulty){
   if(diff === 'very easy'){
     return [
       ...shared,
-      `Very Easy: test one obvious fact, term, command purpose, or basic behavior. Use short direct stems and obvious distractors.`,
+      `Very Easy: test one obvious fact, term, definition, purpose, command/function, or basic behavior. Use short direct stems and obvious distractors.`,
     ].join('\n');
   }
 
   if(diff === 'easy'){
     return [
       ...shared,
-      `Easy: test one direct fact, definition, command purpose, or basic behavior. Use short stems. Avoid trick wording.`,
+      `Easy: test one direct fact, definition, purpose, command/function, or basic behavior. Use short stems. Avoid trick wording.`,
     ].join('\n');
   }
 
@@ -69,17 +70,21 @@ function difficultyGuidance(difficulty){
   if(diff === 'hard'){
     return [
       ...shared,
-      `Hard: test troubleshooting judgment, design tradeoffs, route/device behavior, command-output interpretation, or multi-step reasoning.`,
-      `Hard scenarios may include more context, but the wording should stay clean and practical.`,
-      `Prefer realistic network situations over abstract verbal traps.`,
-      `For TF/YN, do not make most questions hinge on one sneaky absolute word. The learner should need networking knowledge, not legalistic reading.`,
+      `Hard: test applied judgment, important distinctions, cause/effect, classification, chronology, troubleshooting, design tradeoffs, or multi-step reasoning.`,
+      `Use the subject's real context.`,
+      `For technical topics, this may include device behavior, command output, configuration choices, protocols, procedures, or failure diagnosis.`,
+      `For nontechnical topics, this may include meaningful comparisons, timeline/order relationships, role/status distinctions, evidence-based interpretation, or choosing the best action in a realistic scenario.`,
+      `Prefer useful difficulty over obscure trivia. Avoid making Hard depend mainly on niche names, one-off facts, or fan-lore minutiae unless the provided material clearly emphasizes them.`,
+      `For TF/YN, do not make most questions hinge on one sneaky absolute word.`,
     ].join('\n');
   }
 
   if(diff === 'expert'){
     return [
       ...shared,
-      `Expert: test edge cases, multi-step diagnosis, competing design tradeoffs, or subtle protocol/device behavior. Keep the language clear even when the reasoning is demanding.`,
+      `Expert: test edge cases, competing interpretations, multi-step diagnosis, subtle distinctions, or advanced subject-matter relationships.`,
+      `For technical topics, protocol/device behavior and command-output interpretation are appropriate when relevant.`,
+      `Keep language clear even when reasoning is demanding.`,
     ].join('\n');
   }
 

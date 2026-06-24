@@ -63,6 +63,12 @@ describe('public/index.html structure', () => {
     expect(toolbarStart.getAttribute('aria-describedby')).toBe('startHelp');
   });
 
+  test('landing intro headline includes the v3.6.0 release label', () => {
+    const title = document.getElementById('landingTitle');
+    expect(title).not.toBeNull();
+    expect(title.textContent.trim()).toBe('Welcome to EZ Quiz 3.6.0!');
+  });
+
   test('mirror textarea stays read-only and flagged empty by default', () => {
     const mirror = document.getElementById('mirror');
     expect(mirror).not.toBeNull();
