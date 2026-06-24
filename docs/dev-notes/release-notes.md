@@ -3,17 +3,20 @@ Release-Prep Notes
 
 Date: 2026-06-23
 
-EZ Quiz Web v3.6.0 release-prep notes
--------------------------------------
+EZ Quiz Web v3.6.0 release review notes
+---------------------------------------
 
 Current-state source of truth
 - Create Quiz builds a valid quiz; Start Quiz begins taking it.
+- A compact generation status card stays visible during generation and after success, cancellation, or errors.
 - Public quiz lengths are 5, 10, 15, 20, 30, and 50 questions.
 - Topic-only quizzes build in smaller batches for better quality while preserving requested count.
 - Larger study material uses section-aware planning when source reports are available.
-- Source-backed questions should read like normal quiz items and avoid mentioning notes, readings, passages, or source material.
+- Difficulty guidance is subject-agnostic while keeping technical examples when relevant.
+- Questions from study material should read like normal quiz items and avoid mentioning notes, readings, passages, or source material.
+- The landing intro has version-aware What's New behavior with compact feature cards; "Don't show again" remains unchanged.
 - Supported import formats: PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.
-- PDF/image extraction requires a configured media provider; DOCX and text-like formats are deterministic first.
+- PDF/image extraction requires a configured media provider; DOCX and text-like formats are deterministic first. If media extraction is unavailable, the app should show the provider-configuration message.
 
 Deferred BYOK plan
 - Add a Settings section for a user-provided Gemini API key.
@@ -28,6 +31,8 @@ Deferred BYOK plan
 
 Docs and media still needed
 - Screenshot/GIF: 50-question generation flow.
+- Screenshot/GIF: generation status card during generation and in ready/canceled/error states.
+- Screenshot/GIF: What's New feature cards in the landing intro.
 - Screenshot/GIF: supported import formats and source-ready message.
 - Screenshot/GIF: source too large/provider unavailable message.
 - Later, if BYOK ships: Settings key field, Remember on this device, Forget key, and Reset App behavior.

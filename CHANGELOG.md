@@ -1,14 +1,18 @@
 Changelog
 =========
 
-2026-06-23 — v3.6.0 release prep
+2026-06-23 — v3.6.0
 - Generation
+  - Public quiz lengths now include 30 and 50 questions.
   - Topic-only quizzes now build in smaller batches for better quality while preserving requested count.
   - Larger study material uses section-aware planning when source reports are available.
-  - Difficulty guidance is normalized across Very Easy, Easy, Medium, Hard, and Expert.
-  - Source-backed prompts keep learner-visible wording clean and avoid references to notes/source material.
+  - Difficulty guidance is subject-agnostic across Very Easy, Easy, Medium, Hard, and Expert while preserving technical examples when relevant.
+  - Questions from study material avoid references to notes, readings, passages, or source material.
+- UI
+  - Compact persistent generation status card shows build state, cancel support, and final success/canceled/error states.
+  - Version-aware What's New and landing intro polish adds compact feature cards while keeping "Don't show again" behavior.
 - Import
-  - Covered release import formats with focused tests: PDF provider path, DOCX, TXT, Markdown, and unsupported legacy `.doc`.
+  - Covered release import formats with focused tests: PDF provider path, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, images, and unsupported legacy `.doc`.
   - PDF import now reports a clearer provider-configuration message when Gemini media extraction is unavailable.
 - Update behavior
   - Landing intro dismissal and last-seen app version are tracked separately.
