@@ -424,6 +424,24 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
   </div>
 
 
+  <!-- Narrow Source Warning Modal -->
+  <div id="narrowSourceModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="narrowSourceTitle" aria-hidden="true">
+    <div class="modal__backdrop" data-close="narrowSourceModal"></div>
+    <div class="modal__dialog" role="document">
+      <header class="modal__header">
+        <h3 id="narrowSourceTitle">Narrow source warning</h3>
+        <button id="narrowSourceClose" class="icon-btn" title="Close">✕</button>
+      </header>
+      <div class="modal__body">
+        <p id="narrowSourceMessage">This source looks narrow for a 30-question quiz. EZ Quiz can still try, but some questions may feel repetitive. For more variety, add more study material or choose fewer questions.</p>
+      </div>
+      <footer class="modal__footer">
+        <button id="narrowSourceCancel" class="btn btn-ghost" type="button">Cancel</button>
+        <button id="narrowSourceConfirm" class="btn primary" type="button">Generate anyway</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Help Modal (filled FAQ) -->
   <div id="helpModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="helpTitle" aria-hidden="true">
     <div class="modal__backdrop" data-close="helpModal"></div>

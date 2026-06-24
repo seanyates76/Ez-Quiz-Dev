@@ -42,6 +42,11 @@ describe('public/index.html structure', () => {
       ['importFile', 'INPUT'],
       ['mediaSourceStatus', 'DIV'],
       ['clearMediaSourceBtn', 'BUTTON'],
+      ['narrowSourceModal', 'DIV'],
+      ['narrowSourceTitle', 'H3'],
+      ['narrowSourceMessage', 'P'],
+      ['narrowSourceConfirm', 'BUTTON'],
+      ['narrowSourceCancel', 'BUTTON'],
     ];
 
     expectedIds.forEach(([id, tag]) => {
@@ -101,6 +106,16 @@ describe('public/index.html structure', () => {
     expect(css).toContain('.generation-status-card.is-complete .generation-status-scan span');
     expect(css).toContain('.generation-status-card.is-success-pulsing .generation-status-scan span');
     expect(css).toContain('@keyframes generationSuccessPulse');
+  });
+
+  test('narrow source warning modal starts closed with confirm and cancel actions', () => {
+    const modal = document.getElementById('narrowSourceModal');
+    expect(modal.getAttribute('role')).toBe('dialog');
+    expect(modal.getAttribute('aria-modal')).toBe('true');
+    expect(modal.getAttribute('aria-hidden')).toBe('true');
+    expect(modal.classList.contains('is-open')).toBe(false);
+    expect(document.getElementById('narrowSourceConfirm').textContent.trim()).toBe('Generate anyway');
+    expect(document.getElementById('narrowSourceCancel').textContent.trim()).toBe('Cancel');
   });
 
   test('landing intro exposes feature cards, roadmap, and tips styling hooks', () => {

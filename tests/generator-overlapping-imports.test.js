@@ -160,11 +160,12 @@ describe('generator media import overlap regression', () => {
       analyzeSourceText,
       formatSourceSectionSummary,
       summarizeSourceReport,
-      buildGeneratorPayload: ({ topic, difficulty, count, sourceText, sourceName }) => {
+      buildGeneratorPayload: ({ topic, difficulty, count, sourceText, sourceName, sourceReport }) => {
         const payload = { topic, difficulty, count };
         if (sourceText) {
           payload.sourceText = sourceText;
           payload.sourceName = sourceName;
+          if (sourceReport) payload.sourceReport = sourceReport;
         }
         return payload;
       },
@@ -210,6 +211,50 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     return textFile;
+  }
+
+  function makeSourceReport({ charCount = 800, sectionCount = 1, quizWorthyCount = 1 } = {}) {
+    const perSection = Math.max(1, Math.floor(charCount / Math.max(1, sectionCount)));
+    const sections = Array.from({ length: sectionCount }, (_, index) => {
+      const quizWorthy = index < quizWorthyCount;
+      return {
+        id: `section-${String(index + 1).padStart(3, '0')}`,
+        heading: `Section ${index + 1}`,
+        text: 'source '.repeat(Math.max(1, Math.ceil(perSection / 7))).slice(0, perSection),
+        charCount: perSection,
+        score: quizWorthy ? 70 : 20,
+        flags: quizWorthy ? [] : ['weak'],
+      };
+    });
+    return {
+      version: 1,
+      sourceCharCount: charCount,
+      sectionCount,
+      quizWorthyCount,
+      weakCount: Math.max(0, sectionCount - quizWorthyCount),
+      largestSectionId: sections[0]?.id || '',
+      largestSectionHeading: sections[0]?.heading || '',
+      largestSectionCharCount: sections[0]?.charCount || 0,
+      detectedSignals: quizWorthyCount > 1 ? ['definitions', 'lists'] : ['definitions'],
+      flags: ['heading-based'],
+      sections,
+    };
+  }
+
+  function setMediaSource({
+    text = 'Short source notes about one narrow idea.',
+    name = 'narrow-notes.txt',
+    kind = 'txt',
+    charCount = text.length,
+    report = makeSourceReport({ charCount, sectionCount: 1, quizWorthyCount: 1 }),
+  } = {}) {
+    state.media = {
+      sourceText: text,
+      sourceName: name,
+      sourceKind: kind,
+      sourceCharCount: charCount,
+      sourceReport: report,
+    };
   }
 
   test('clears a stale import error before processing the next valid file', async () => {
@@ -379,6 +424,173 @@ describe('generator media import overlap regression', () => {
       difficulty: 'medium',
       types: ['MC', 'TF', 'YN', 'MT'],
     }));
+  });
+
+  test('high-count source-backed narrow source shows warning before generation', async () => {
+    setMediaSource({
+      text: 'VLAN trunking notes for one small idea.',
+      charCount: 700,
+      report: makeSourceReport({ charCount: 700, sectionCount: 1, quizWorthyCount: 1 }),
+    });
+
+    document.getElementById('topicInput').value = 'switching';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    const modal = document.getElementById('narrowSourceModal');
+    expect(modal.classList.contains('is-open')).toBe(true);
+    expect(modal.getAttribute('aria-hidden')).toBe('false');
+    expect(document.getElementById('narrowSourceMessage').textContent)
+      .toBe('This source looks narrow for a 50-question quiz. EZ Quiz can still try, but some questions may feel repetitive. For more variety, add more study material or choose fewer questions.');
+    expect(generateWithAI).not.toHaveBeenCalled();
+    expect(document.getElementById('generationStatusCard').hidden).toBe(true);
+  });
+
+  test('Generate anyway starts generation for a narrow source', async () => {
+    setMediaSource({
+      text: 'Subnet mask notes focused on one narrow scenario.',
+      charCount: 800,
+      report: makeSourceReport({ charCount: 800, sectionCount: 1, quizWorthyCount: 1 }),
+    });
+
+    document.getElementById('topicInput').value = 'subnetting';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    document.getElementById('narrowSourceConfirm').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('narrowSourceModal').classList.contains('is-open')).toBe(false);
+    expect(generateWithAI).toHaveBeenCalledWith('subnetting', 50, expect.objectContaining({
+      difficulty: 'medium',
+      sourceText: 'Subnet mask notes focused on one narrow scenario.',
+      sourceName: 'narrow-notes.txt',
+      sourceReport: expect.objectContaining({ quizWorthyCount: 1 }),
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+    expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
+  });
+
+  test('Cancel closes narrow source warning without starting generation', async () => {
+    setMediaSource({
+      text: 'One-page source notes.',
+      charCount: 500,
+      report: makeSourceReport({ charCount: 500, sectionCount: 1, quizWorthyCount: 1 }),
+    });
+
+    document.getElementById('topicInput').value = 'switching';
+    document.getElementById('countInput').value = '30';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    document.getElementById('narrowSourceCancel').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    const modal = document.getElementById('narrowSourceModal');
+    expect(modal.classList.contains('is-open')).toBe(false);
+    expect(modal.getAttribute('aria-hidden')).toBe('true');
+    expect(generateWithAI).not.toHaveBeenCalled();
+    expect(document.getElementById('generationStatusCard').hidden).toBe(true);
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+  });
+
+  test('topic-only 50-question generation does not show narrow source warning', async () => {
+    document.getElementById('topicInput').value = 'ccna practice';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('narrowSourceModal').classList.contains('is-open')).toBe(false);
+    expect(generateWithAI).toHaveBeenCalledWith('ccna practice', 50, expect.objectContaining({
+      difficulty: 'medium',
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+  });
+
+  test('broader high-count source-backed generation does not show narrow source warning', async () => {
+    setMediaSource({
+      text: 'Broad networking source notes.',
+      charCount: 6500,
+      report: makeSourceReport({ charCount: 6500, sectionCount: 6, quizWorthyCount: 5 }),
+    });
+
+    document.getElementById('topicInput').value = 'networking';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('narrowSourceModal').classList.contains('is-open')).toBe(false);
+    expect(generateWithAI).toHaveBeenCalledWith('networking', 50, expect.objectContaining({
+      sourceText: 'Broad networking source notes.',
+      sourceReport: expect.objectContaining({ quizWorthyCount: 5 }),
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+  });
+
+  test('dense single-section high-count source does not warn only because it has one section', async () => {
+    setMediaSource({
+      text: 'Dense subnetting source notes.',
+      charCount: 5200,
+      report: makeSourceReport({ charCount: 5200, sectionCount: 1, quizWorthyCount: 1 }),
+    });
+
+    document.getElementById('topicInput').value = 'subnetting';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('narrowSourceModal').classList.contains('is-open')).toBe(false);
+    expect(generateWithAI).toHaveBeenCalledWith('subnetting', 50, expect.objectContaining({
+      sourceText: 'Dense subnetting source notes.',
+      sourceReport: expect.objectContaining({ sectionCount: 1, quizWorthyCount: 1 }),
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+  });
+
+  test('changing source or count requires narrow source confirmation again', async () => {
+    setMediaSource({
+      text: 'First narrow source.',
+      name: 'first-source.txt',
+      charCount: 700,
+      report: makeSourceReport({ charCount: 700, sectionCount: 1, quizWorthyCount: 1 }),
+    });
+
+    document.getElementById('topicInput').value = 'first topic';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    document.getElementById('narrowSourceConfirm').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+    expect(generateWithAI).toHaveBeenCalledTimes(1);
+
+    generateWithAI.mockClear();
+    setMediaSource({
+      text: 'Second narrow source.',
+      name: 'second-source.txt',
+      charCount: 650,
+      report: makeSourceReport({ charCount: 650, sectionCount: 1, quizWorthyCount: 1 }),
+    });
+    document.getElementById('topicInput').value = 'second topic';
+    document.getElementById('countInput').value = '30';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    expect(document.getElementById('narrowSourceModal').classList.contains('is-open')).toBe(true);
+    expect(document.getElementById('narrowSourceMessage').textContent).toContain('30-question quiz');
+    expect(generateWithAI).not.toHaveBeenCalled();
   });
 
   test('creates a topic quiz without auto-starting and sends the expected payload', async () => {

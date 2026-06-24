@@ -179,6 +179,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const MAX_IMPORTED_SOURCE_CHARS = 60000;
   const MAX_LOCAL_TEXT_READ_BYTES = 128 * 1024;
   const QUESTION_COUNT_CHOICES = [5, 10, 15, 20, 30, 50];
+  const NARROW_SOURCE_WARNING_MIN_COUNT = 30;
+  const NARROW_SOURCE_VERY_LOW_CHARS = 900;
+  const NARROW_SOURCE_SINGLE_SECTION_MAX_CHARS = 2400;
   const toolbar = document.querySelector('.gen-toolbar');
   const topicAffix = document.querySelector('.topic-affix');
   const editor = $('editor');
@@ -190,10 +193,18 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const generationStatusMeta = $('generationStatusMeta');
   const generationStatusSecondary = $('generationStatusSecondary');
   const cancelGenerationBtn = $('cancelGenerationBtn');
+  const narrowSourceModal = $('narrowSourceModal');
+  const narrowSourceMessage = $('narrowSourceMessage');
+  const narrowSourceConfirm = $('narrowSourceConfirm');
+  const narrowSourceCancel = $('narrowSourceCancel');
+  const narrowSourceClose = $('narrowSourceClose');
 
   let generationRequestSeq = 0;
   let activeGenerationSession = null;
   let generationStatusTimer = null;
+  let pendingNarrowSourceGeneration = null;
+  let narrowSourceWarningConfirmedKey = '';
+  let narrowSourcePreviousFocus = null;
   let applyingSourceTopic = false;
   let countTipSeq = 0;
   const countSoftTargets = [];
@@ -219,6 +230,38 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(mediaCount > 0) return mediaCount;
     const sourceText = String(payload.sourceText || '');
     return sourceText.length;
+  }
+
+  function sourceReportForWarning(payload = {}){
+    const report = payload.sourceReport || S.media?.sourceReport || null;
+    return report && typeof report === 'object' ? report : null;
+  }
+
+  function narrowSourceWarningKey(payload = {}){
+    return JSON.stringify({
+      topic: String(payload.topic || '').trim(),
+      count: Number(payload.count || 0),
+      difficulty: String(payload.difficulty || '').trim(),
+      sourceId: mediaSourceId(),
+    });
+  }
+
+  function shouldWarnForNarrowSource(payload = {}){
+    const requestedCount = Number(payload.count || 0);
+    if(requestedCount < NARROW_SOURCE_WARNING_MIN_COUNT) return false;
+    if(!hasSourcePayload(payload)) return false;
+
+    const report = sourceReportForWarning(payload);
+    if(!report) return false;
+
+    const chars = sourceCharCount(payload);
+    if(chars > 0 && chars < NARROW_SOURCE_VERY_LOW_CHARS) return true;
+
+    const summary = summarizeSourceReport(report);
+    const quizWorthyCount = Number(summary.quizWorthyCount || 0);
+    return quizWorthyCount <= 1
+      && chars > 0
+      && chars < NARROW_SOURCE_SINGLE_SECTION_MAX_CHARS;
   }
 
   function isLargeGenerationSource(payload = {}){
@@ -1218,7 +1261,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   });
   loadLastBtn?.addEventListener('click', ()=>{ try{ const last = localStorage.getItem('ezq.last')||''; if(!last){ statusBox && (statusBox.textContent='No previous quiz found.'); return; } resetGenerationStatus({ abortActive: true }); setEditorText(last); try{ setMirrorVisible(true); }catch{}; runParseFlow(last, topicInput?.value||'Last', ''); statusBox && (statusBox.textContent = 'Loaded last quiz.'); }catch{} });
 
-  generateBtn?.addEventListener('click', async ()=>{
+  function createGenerationAttempt(){
     // Create never starts the quiz. The previous valid quiz remains available until
     // a new response validates successfully.
     const snap = getParamsSnapshot();
@@ -1231,6 +1274,59 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const types = [ qtMC?.checked ? 'MC':null, qtTF?.checked? 'TF':null, qtYN?.checked? 'YN':null, qtMT?.checked? 'MT':null ].filter(Boolean);
     const difficulty = getDifficultyKey();
     const payload = buildGeneratorPayload(withMediaSource({ topic, difficulty, count: snap.count }));
+    return { payload, types };
+  }
+
+  function onNarrowSourceWarningKeydown(evt){
+    if(evt && (evt.key === 'Escape' || evt.key === 'Esc')){
+      try{ evt.preventDefault(); }catch{}
+      closeNarrowSourceWarning();
+    }
+  }
+
+  function closeNarrowSourceWarning({ restoreFocus = true } = {}){
+    if(!narrowSourceModal) return;
+    narrowSourceModal.classList.remove('is-open');
+    narrowSourceModal.setAttribute('aria-hidden', 'true');
+    try{ document.removeEventListener('keydown', onNarrowSourceWarningKeydown, true); }catch{}
+    pendingNarrowSourceGeneration = null;
+    const focusTarget = narrowSourcePreviousFocus;
+    narrowSourcePreviousFocus = null;
+    if(restoreFocus && focusTarget && typeof focusTarget.focus === 'function'){
+      try{ focusTarget.focus(); }catch{}
+    }
+  }
+
+  function openNarrowSourceWarning(attempt){
+    if(!narrowSourceModal || !attempt || !attempt.payload) return false;
+    const count = Number(attempt.payload.count || 0);
+    pendingNarrowSourceGeneration = {
+      key: narrowSourceWarningKey(attempt.payload),
+    };
+    if(narrowSourceMessage){
+      narrowSourceMessage.textContent = `This source looks narrow for a ${count}-question quiz. EZ Quiz can still try, but some questions may feel repetitive. For more variety, add more study material or choose fewer questions.`;
+    }
+    narrowSourcePreviousFocus = document.activeElement;
+    narrowSourceModal.classList.add('is-open');
+    narrowSourceModal.setAttribute('aria-hidden', 'false');
+    try{ document.addEventListener('keydown', onNarrowSourceWarningKeydown, true); }catch{}
+    const focusTarget = narrowSourceClose || narrowSourceCancel || narrowSourceConfirm;
+    if(focusTarget && typeof focusTarget.focus === 'function'){
+      try{ focusTarget.focus(); }catch{}
+    }
+    return true;
+  }
+
+  async function startGenerationFromCurrentForm(){
+    const attempt = createGenerationAttempt();
+    const warningKey = narrowSourceWarningKey(attempt.payload);
+    if(shouldWarnForNarrowSource(attempt.payload) && narrowSourceWarningConfirmedKey !== warningKey){
+      if(openNarrowSourceWarning(attempt)) return;
+    }
+    await runGenerationAttempt(attempt);
+  }
+
+  async function runGenerationAttempt({ payload, types }){
     const session = beginGenerationSession(payload);
     try{
       setBuildStatus('creating', payload.sourceText ? 'Creating quiz from study material...' : 'Creating quiz from topic...');
@@ -1308,6 +1404,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       });
       setBuildStatus('failed', `Could not create a valid quiz: ${pretty}`);
     }finally{
+      narrowSourceWarningConfirmedKey = '';
       if(isActiveGeneration(session.id)){
         activeGenerationSession = null;
         generateBtn.disabled = false;
@@ -1316,7 +1413,28 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         updateCountAvailability();
       }
     }
+  }
+
+  narrowSourceConfirm?.addEventListener('click', ()=>{
+    const pending = pendingNarrowSourceGeneration;
+    if(!pending){
+      closeNarrowSourceWarning();
+      return;
+    }
+    narrowSourceWarningConfirmedKey = pending.key;
+    closeNarrowSourceWarning({ restoreFocus: false });
+    startGenerationFromCurrentForm();
   });
+  narrowSourceCancel?.addEventListener('click', ()=> closeNarrowSourceWarning());
+  narrowSourceClose?.addEventListener('click', ()=> closeNarrowSourceWarning());
+  narrowSourceModal?.addEventListener('click', (evt)=>{
+    const target = evt.target;
+    if(target && target.matches && target.matches('.modal__backdrop')){
+      closeNarrowSourceWarning();
+    }
+  });
+
+  generateBtn?.addEventListener('click', ()=>{ startGenerationFromCurrentForm(); });
 
   // Options drop-down toggle
   function reflectOptionsFromSettings(){
