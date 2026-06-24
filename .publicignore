@@ -21,6 +21,7 @@ files/
 # Docs heavy dirs to omit from mirror (keep key top-level meta files)
 docs/
 issues/
+public-mirror/
 tests/
 scripts/
 agents.md
