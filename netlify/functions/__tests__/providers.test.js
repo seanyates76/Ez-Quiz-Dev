@@ -175,7 +175,49 @@ describe('providers helpers', () => {
     expect(text.split('\n')).toHaveLength(3);
   });
 
-  test('callProvider aborts OpenAI requests at the configured provider timeout', async () => {
+  test('callProvider hard-times out Gemini requests when the SDK call never settles', async () => {
+    jest.useFakeTimers();
+    jest.resetModules();
+    const generateContent = jest.fn(() => new Promise(() => {}));
+    jest.doMock('@google/generative-ai', () => ({
+      __esModule: true,
+      GoogleGenerativeAI: jest.fn(() => ({
+        getGenerativeModel: jest.fn(() => ({ generateContent })),
+      })),
+    }));
+    const { callProvider: callProviderWithMockedGemini } = require('../lib/providers.js');
+
+    try {
+      const pending = callProviderWithMockedGemini({
+        provider: 'gemini',
+        topic: 'Routing',
+        count: 5,
+        env: {
+          GEMINI_API_KEY: 'test-key',
+          GEMINI_MODEL: 'test-model',
+          GENERATE_PROVIDER_TIMEOUT_MS: '1200',
+        },
+      });
+
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(generateContent).toHaveBeenCalledTimes(1);
+      expect(generateContent.mock.calls[0][1]).toMatchObject({ timeout: 1200 });
+      expect(generateContent.mock.calls[0][1].signal.aborted).toBe(false);
+      jest.advanceTimersByTime(1200);
+      await expect(pending).rejects.toMatchObject({
+        status: 504,
+        code: 'PROVIDER_TIMEOUT',
+        message: 'Gemini provider timed out after 1200ms',
+      });
+      expect(generateContent.mock.calls[0][1].signal.aborted).toBe(true);
+    } finally {
+      jest.dontMock('@google/generative-ai');
+      jest.useRealTimers();
+    }
+  });
+
+  test('callProvider hard-times out OpenAI requests when fetch never settles', async () => {
     jest.useFakeTimers();
     const originalFetch = global.fetch;
     let capturedSignal;

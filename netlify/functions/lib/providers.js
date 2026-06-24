@@ -5,13 +5,13 @@ const { cleanSourceText: cleanSourceMaterial } = require('./sourceMaterial.js');
 
 const PRIVATE_KNOWLEDGE_START = 'PRIVATE INSTRUCTOR KNOWLEDGE START';
 const PRIVATE_KNOWLEDGE_END = 'PRIVATE INSTRUCTOR KNOWLEDGE END';
-const DEFAULT_PROVIDER_TIMEOUT_MS = 24000;
+const DEFAULT_PROVIDER_TIMEOUT_MS = 22000;
 
 function providerTimeoutMs(env = process.env){
   const raw = env && (env.GENERATE_PROVIDER_TIMEOUT_MS || env.PROVIDER_TIMEOUT_MS);
   const parsed = parseInt(raw, 10);
   if(!Number.isFinite(parsed)) return DEFAULT_PROVIDER_TIMEOUT_MS;
-  return Math.max(1000, Math.min(28000, parsed));
+  return Math.max(1000, Math.min(26000, parsed));
 }
 
 function providerTimeoutError(provider, timeoutMs){
@@ -21,10 +21,51 @@ function providerTimeoutError(provider, timeoutMs){
   return err;
 }
 
+function isProviderTimeoutError(err){
+  return !!(err && (err.code === 'PROVIDER_TIMEOUT' || err.status === 504));
+}
+
 function isAbortLikeError(err){
   const name = String(err && err.name || '');
   const message = String(err && err.message || '');
   return /abort/i.test(name) || /aborted|abort/i.test(message);
+}
+
+function withTimeout(promiseFactory, timeoutMs, timeoutErrorFactory, onTimeout){
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if(settled) return;
+      settled = true;
+      try { if(typeof onTimeout === 'function') onTimeout(); } catch {}
+      reject(timeoutErrorFactory());
+    }, timeoutMs);
+
+    let promise;
+    try {
+      promise = promiseFactory();
+    } catch (err) {
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+      return;
+    }
+
+    Promise.resolve(promise).then(
+      (value) => {
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
 }
 
 function privateInstructorKnowledgeBlock(source){
@@ -222,16 +263,24 @@ function outputTokenBudget(count, kind = 'legacy'){
 
 async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
   if(!apiKey) throw new Error('Missing GEMINI_API_KEY');
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(apiKey);
   const m = genAI.getGenerativeModel({ model });
+  const controller = new AbortController();
+  const request = {
+    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens },
+  };
   try {
-    const result = await m.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens },
-    }, { timeout: timeoutMs });
+    const result = await withTimeout(
+      () => m.generateContent(request, { timeout: timeoutMs, signal: controller.signal }),
+      timeoutMs,
+      () => providerTimeoutError('Gemini', timeoutMs),
+      () => controller.abort()
+    );
     return (result?.response?.text?.() || '').trim();
   } catch (err) {
+    if(isProviderTimeoutError(err)) throw err;
     if(isAbortLikeError(err)) throw providerTimeoutError('Gemini', timeoutMs);
     throw err;
   }
@@ -240,31 +289,34 @@ async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-20
 async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
   if(!apiKey) throw new Error('Missing OPENAI_API_KEY');
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   let resp;
   try {
-    resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages: [
-          { role: 'system', content: 'You are a quiz line generator. Follow rules exactly.' },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.6,
-        max_tokens: maxTokens,
+    resp = await withTimeout(
+      () => fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a quiz line generator. Follow rules exactly.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.6,
+          max_tokens: maxTokens,
+        }),
+        signal: controller.signal,
       }),
-      signal: controller.signal,
-    });
+      timeoutMs,
+      () => providerTimeoutError('OpenAI', timeoutMs),
+      () => controller.abort()
+    );
   } catch (err) {
+    if(isProviderTimeoutError(err)) throw err;
     if(isAbortLikeError(err)) throw providerTimeoutError('OpenAI', timeoutMs);
     throw err;
-  } finally {
-    clearTimeout(timeout);
   }
   if(!resp.ok){
     let detail = await resp.text().catch(()=>String(resp.status));

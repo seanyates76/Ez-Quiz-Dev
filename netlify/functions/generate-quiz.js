@@ -42,6 +42,7 @@ function generationFailureStatus(err, { is429 = false, isTimeout = false, fallba
   if (isTimeout) return 504;
   if (is429) return 429;
   const status = normalizeHttpStatus(err && err.status, fallback);
+  if (status === 504) return 504;
   if (status === 404 || status >= 500) return 502;
   return status;
 }
@@ -370,8 +371,9 @@ async function handleGenerateQuiz(event) {
   } catch (err) {
     const msg = String((err && err.message) || err || 'Error');
     const errStatus = normalizeHttpStatus(err && err.status, 0);
+    const errCode = errorCode(err);
     const is429 = msg.includes('429') || /quota|rate limit/i.test(msg) || errStatus === 429;
-    const isTimeout = err && (errStatus === 504 || /timeout/i.test(msg));
+    const isTimeout = err && (errStatus === 504 || errCode === 'PROVIDER_TIMEOUT' || /timeout/i.test(msg));
 
     // Fallback to Gemini if primary provider failed and Gemini credentials exist
     const primary = (provider || '').toLowerCase();
@@ -413,6 +415,14 @@ async function handleGenerateQuiz(event) {
       }
 
       const statusCode = generationFailureStatus(err, { is429, isTimeout });
+      if (isTimeout) {
+        return reply(
+          statusCode,
+          { error: 'Generation timed out', details: msg, provider, code: errCode },
+          responseOrigin,
+          { 'Retry-After': '15' }
+        );
+      }
 
       // Structured path failed entirely; fall back to legacy generator so the UI still renders a quiz.
       try {

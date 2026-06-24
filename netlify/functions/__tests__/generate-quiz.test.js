@@ -298,7 +298,7 @@ describe('generate-quiz count guarantees', () => {
 
   test('returns structured timeout JSON for provider timeouts', async () => {
     const generateLines = jest.fn(async () => {
-      const err = new Error('Gemini provider timed out after 24000ms');
+      const err = new Error('Gemini provider timed out after 22000ms');
       err.status = 504;
       err.code = 'PROVIDER_TIMEOUT';
       throw err;
@@ -325,8 +325,44 @@ describe('generate-quiz count guarantees', () => {
     expect(res.body).not.toBe('500');
     expect(body).toMatchObject({
       error: 'Generation timed out',
-      details: 'Gemini provider timed out after 24000ms',
+      details: 'Gemini provider timed out after 22000ms',
       provider: 'mock',
+      code: 'PROVIDER_TIMEOUT',
+    });
+  });
+
+  test('does not attempt Gemini fallback after provider timeout', async () => {
+    process.env.GEMINI_API_KEY = 'fallback-key';
+    const generateLines = jest.fn(async () => {
+      const err = new Error('OpenAI provider timed out after 22000ms');
+      err.status = 504;
+      err.code = 'PROVIDER_TIMEOUT';
+      throw err;
+    });
+    jest.doMock('../lib/providers.js', () => ({
+      generateLines,
+      generateInBatches: jest.fn(),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({
+      topic: 'CCNA Notes',
+      count: 5,
+      provider: 'openai',
+      types: ['MC', 'TF', 'YN', 'MC', 'MT'],
+      sourceName: 'CCNA_Notes.md',
+      sourceText: 'Source name: CCNA_Notes.md\nPlanned question 1 type: MC\nHeading path: Switching\nSection excerpt:\nVLAN notes.',
+    }));
+    const body = json(res);
+
+    expect(generateLines).toHaveBeenCalledTimes(1);
+    expect(generateLines.mock.calls[0][0].provider).toBe('openai');
+    expect(res.statusCode).toBe(504);
+    expect(body).toMatchObject({
+      error: 'Generation timed out',
+      details: 'OpenAI provider timed out after 22000ms',
+      provider: 'openai',
       code: 'PROVIDER_TIMEOUT',
     });
   });
