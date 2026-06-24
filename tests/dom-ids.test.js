@@ -18,6 +18,12 @@ describe('public/index.html structure', () => {
       ['landingPreview', 'DIV'],
       ['landingIntroClose', 'BUTTON'],
       ['landingIntroDontShow', 'BUTTON'],
+      ['landingTabNew', 'BUTTON'],
+      ['landingTabSoon', 'BUTTON'],
+      ['landingTabTips', 'BUTTON'],
+      ['landingPanelNew', 'DIV'],
+      ['landingPanelSoon', 'DIV'],
+      ['landingPanelTips', 'DIV'],
       ['generateBtn', 'BUTTON'],
       ['startToolbarBtn', 'BUTTON'],
       ['optionsBtn', 'BUTTON'],
@@ -85,5 +91,30 @@ describe('public/index.html structure', () => {
     expect(css).toContain('grid-template-areas:');
     expect(css).toContain('@media (prefers-reduced-motion: reduce)');
     expect(css).toContain('.generation-status-scan span');
+    expect(css).toContain('.generation-status-card.is-animating .generation-status-scan span');
+  });
+
+  test('landing intro exposes feature cards, roadmap, and tips styling hooks', () => {
+    const featureCards = document.querySelectorAll('#landingPanelNew .landing-feature-card');
+    const roadmapItems = document.querySelectorAll('#landingPanelSoon .roadmap-list li');
+    const tips = document.querySelectorAll('#landingPanelTips .tips-list li');
+    expect(featureCards).toHaveLength(6);
+    expect(roadmapItems).toHaveLength(6);
+    expect(tips).toHaveLength(3);
+
+    featureCards.forEach((card) => {
+      const toggle = card.querySelector('[data-feature-card-toggle]');
+      const detailId = toggle && toggle.getAttribute('aria-controls');
+      expect(toggle).not.toBeNull();
+      expect(toggle.tagName).toBe('BUTTON');
+      expect(toggle.getAttribute('aria-expanded')).toBe('false');
+      expect(detailId).toBeTruthy();
+      expect(document.getElementById(detailId).hidden).toBe(true);
+    });
+
+    const css = readFile('public/styles.css');
+    expect(css).toContain('.landing-feature-card');
+    expect(css).toContain('.roadmap-list');
+    expect(css).toContain('.tips-list');
   });
 });

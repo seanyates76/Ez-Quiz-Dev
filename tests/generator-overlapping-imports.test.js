@@ -347,6 +347,7 @@ describe('generator media import overlap regression', () => {
     const card = document.getElementById('generationStatusCard');
     expect(card.hidden).toBe(false);
     expect(card.dataset.generationState).toBe('generating');
+    expect(card.classList.contains('is-animating')).toBe(true);
     expect(card.getAttribute('aria-busy')).toBe('true');
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Building your quiz…');
     expect(document.getElementById('cancelGenerationBtn').hidden).toBe(false);
@@ -362,6 +363,7 @@ describe('generator media import overlap regression', () => {
 
     expect(card.hidden).toBe(false);
     expect(card.dataset.generationState).toBe('success');
+    expect(card.classList.contains('is-animating')).toBe(false);
     expect(card.getAttribute('aria-busy')).toBe('false');
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz ready.');
     expect(document.getElementById('generationStatusMeta').textContent).toBe('1 question');
@@ -392,7 +394,9 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(capturedSignal.aborted).toBe(true);
-    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
+    const card = document.getElementById('generationStatusCard');
+    expect(card.dataset.generationState).toBe('canceled');
+    expect(card.classList.contains('is-animating')).toBe(false);
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation canceled.');
     expect(document.getElementById('status').textContent).toBe('Generation canceled.');
     expect(document.getElementById('generateBtn').disabled).toBe(false);
@@ -506,6 +510,9 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(parseEditorInput).not.toHaveBeenCalled();
+    const card = document.getElementById('generationStatusCard');
+    expect(card.dataset.generationState).toBe('error');
+    expect(card.classList.contains('is-animating')).toBe(false);
     expect(document.getElementById('status').textContent).toContain('Could not create a valid quiz: Generation returned 0 of 5 usable questions');
     expect(document.getElementById('startBtn').disabled).toBe(true);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('true');

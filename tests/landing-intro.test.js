@@ -2,6 +2,7 @@
 'use strict';
 
 const { loadBrowserModule } = require('./utils');
+const { loadDocument } = require('./utils');
 
 describe('landing intro shell', () => {
   let LANDING_INTRO_STORAGE_KEY;
@@ -35,8 +36,17 @@ describe('landing intro shell', () => {
         <div id="landingPreview">
           <button data-preview-tab="0" type="button" role="tab"></button>
           <button data-preview-tab="1" type="button" role="tab"></button>
-          <div data-preview-panel="0"></div>
+          <button data-preview-tab="2" type="button" role="tab"></button>
+          <div data-preview-panel="0">
+            <article class="landing-feature-card">
+              <button type="button" aria-expanded="false" aria-controls="featureHarness" data-feature-card-toggle>
+                Harness feature
+              </button>
+              <div id="featureHarness" data-feature-card-detail hidden>Harness detail</div>
+            </article>
+          </div>
           <div data-preview-panel="1"></div>
+          <div data-preview-panel="2"></div>
         </div>
         <button id="landingIntroDontShow" type="button"></button>
       </section>
@@ -77,6 +87,69 @@ describe('landing intro shell', () => {
     expect(tabs[1].getAttribute('aria-selected')).toBe('true');
     expect(panels[0].hidden).toBe(true);
     expect(panels[1].hidden).toBe(false);
+    expect(panels[2].hidden).toBe(true);
+  });
+
+  test('what’s new feature cards expand and collapse by click', () => {
+    wireLandingIntro();
+
+    const toggle = document.querySelector('[data-feature-card-toggle]');
+    const detail = document.getElementById('featureHarness');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(detail.hidden).toBe(true);
+
+    toggle.click();
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(detail.hidden).toBe(false);
+
+    toggle.click();
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(detail.hidden).toBe(true);
+  });
+
+  test('what’s new feature cards support keyboard activation without moving focus', () => {
+    wireLandingIntro();
+
+    const toggle = document.querySelector('[data-feature-card-toggle]');
+    const detail = document.getElementById('featureHarness');
+    toggle.focus();
+
+    toggle.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(detail.hidden).toBe(false);
+    expect(document.activeElement).toBe(toggle);
+
+    toggle.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', bubbles: true, cancelable: true }));
+
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(detail.hidden).toBe(true);
+    expect(document.activeElement).toBe(toggle);
+  });
+
+  test('landing intro copy keeps what’s new, roadmap, and tips separate', async () => {
+    const doc = await loadDocument('public/index.html');
+    const newPanel = doc.getElementById('landingPanelNew');
+    const soonPanel = doc.getElementById('landingPanelSoon');
+    const tipsPanel = doc.getElementById('landingPanelTips');
+
+    expect(newPanel.querySelectorAll('.landing-feature-card')).toHaveLength(6);
+    expect(newPanel.textContent).toContain('Up to 50 questions');
+    expect(newPanel.textContent).toContain('New generation status card');
+    expect(newPanel.textContent).not.toContain('Bring your own API key');
+
+    expect(soonPanel.textContent).toContain('Bring your own API key');
+    expect(soonPanel.textContent).toContain('Quiz sharing');
+    expect(soonPanel.textContent).not.toContain('Up to 50 questions');
+
+    const tips = Array.from(tipsPanel.querySelectorAll('.tips-list li')).map((item) => item.textContent.trim());
+    expect(tips).toEqual([
+      'Create builds the quiz. Start begins it.',
+      'Better study material makes better quizzes.',
+      'If a quiz feels too broad, use fewer questions or a smaller source.',
+    ]);
   });
 
   test('stored never preference hides the shell on init', () => {
@@ -115,6 +188,7 @@ describe('landing intro shell', () => {
     expect(intro.dataset.landingMode).toBe('update');
     expect(tabs[0].hidden).toBe(false);
     expect(tabs[1].hidden).toBe(true);
+    expect(tabs[2].hidden).toBe(true);
     expect(document.getElementById('landingIntroDontShow').hidden).toBe(true);
 
     document.getElementById('landingIntroClose').click();

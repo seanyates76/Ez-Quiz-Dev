@@ -50,24 +50,96 @@
           <button id="landingTabTips" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelTips" data-preview-tab="2" tabindex="-1">Tips</button>
         </div>
         <div id="landingPanelNew" class="preview-panel" role="tabpanel" aria-labelledby="landingTabNew" data-preview-panel="0">
-          <ul class="preview-list">
-            <li>Create up to 50 questions from a topic or study material.</li>
-            <li>Larger sources are planned by useful sections before questions are written.</li>
-            <li>Source-backed questions read like normal quiz items, not references to your notes.</li>
-          </ul>
+          <div class="feature-card-list" data-feature-cards>
+            <article class="landing-feature-card">
+              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureUpTo50" data-feature-card-toggle>
+                <span class="landing-feature-card__copy">
+                  <span class="landing-feature-card__title">Up to 50 questions</span>
+                  <span class="landing-feature-card__summary">Build longer practice quizzes for full study sessions.</span>
+                </span>
+                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
+              </button>
+              <div id="featureUpTo50" class="landing-feature-card__detail" data-feature-card-detail hidden>
+                <p>Choose 30 or 50 questions when you want more review in one quiz.</p>
+              </div>
+            </article>
+            <article class="landing-feature-card">
+              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureLongSources" data-feature-card-toggle>
+                <span class="landing-feature-card__copy">
+                  <span class="landing-feature-card__title">Better long-source quizzes</span>
+                  <span class="landing-feature-card__summary">Larger study material is split into useful sections before generation.</span>
+                </span>
+                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
+              </button>
+              <div id="featureLongSources" class="landing-feature-card__detail" data-feature-card-detail hidden>
+                <p>Big notes are grouped first, so questions can cover more of the material.</p>
+              </div>
+            </article>
+            <article class="landing-feature-card">
+              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureCleanerQuestions" data-feature-card-toggle>
+                <span class="landing-feature-card__copy">
+                  <span class="landing-feature-card__title">Cleaner questions from notes</span>
+                  <span class="landing-feature-card__summary">Questions should feel like quiz questions, not references to your document.</span>
+                </span>
+                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
+              </button>
+              <div id="featureCleanerQuestions" class="landing-feature-card__detail" data-feature-card-detail hidden>
+                <p>Questions now avoid document callouts and focus on the material itself.</p>
+              </div>
+            </article>
+            <article class="landing-feature-card">
+              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureTopicBatching" data-feature-card-toggle>
+                <span class="landing-feature-card__copy">
+                  <span class="landing-feature-card__title">Topic batching</span>
+                  <span class="landing-feature-card__summary">Topic-only quizzes now build in smaller batches for better quality.</span>
+                </span>
+                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
+              </button>
+              <div id="featureTopicBatching" class="landing-feature-card__detail" data-feature-card-detail hidden>
+                <p>Short topic prompts can stay focused while still reaching your chosen count.</p>
+              </div>
+            </article>
+            <article class="landing-feature-card">
+              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureStatusCard" data-feature-card-toggle>
+                <span class="landing-feature-card__copy">
+                  <span class="landing-feature-card__title">New generation status card</span>
+                  <span class="landing-feature-card__summary">Quiz building now has a clearer persistent status area with cancel support.</span>
+                </span>
+                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
+              </button>
+              <div id="featureStatusCard" class="landing-feature-card__detail" data-feature-card-detail hidden>
+                <p>The card stays in place while a quiz builds and after it finishes.</p>
+              </div>
+            </article>
+            <article class="landing-feature-card">
+              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureImportCoverage" data-feature-card-toggle>
+                <span class="landing-feature-card__copy">
+                  <span class="landing-feature-card__title">Better import coverage</span>
+                  <span class="landing-feature-card__summary">PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images are covered more clearly.</span>
+                </span>
+                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
+              </button>
+              <div id="featureImportCoverage" class="landing-feature-card__detail" data-feature-card-detail hidden>
+                <p>The supported formats are easier to see before you add study material.</p>
+              </div>
+            </article>
+          </div>
         </div>
         <div id="landingPanelSoon" class="preview-panel" role="tabpanel" aria-labelledby="landingTabSoon" data-preview-panel="1" hidden>
-          <ul class="preview-list">
-            <li>Bring-your-own-key mode for larger private source caps.</li>
-            <li>Clearer progress details for long-running imports and generation.</li>
-            <li>Flashcards and review tools for missed concepts.</li>
+          <ul class="roadmap-list">
+            <li><span>Bring your own API key</span><small>Use your own provider key for larger private study material.</small></li>
+            <li><span>Better PDF handling</span><small>Cleaner reads from messy or heavily formatted PDFs.</small></li>
+            <li><span>Quiz sharing</span><small>Send a quiz link to someone else.</small></li>
+            <li><span>Teacher-friendly builder</span><small>Faster editing for classroom-ready questions.</small></li>
+            <li><span>Separate pages for building, reviewing, and sharing</span><small>Clearer spaces for each part of quiz work.</small></li>
+            <li><span>Flashcards or missed-concept review</span><small>Practice the areas you missed after a quiz.</small></li>
           </ul>
         </div>
         <div id="landingPanelTips" class="preview-panel" role="tabpanel" aria-labelledby="landingTabTips" data-preview-panel="2" hidden>
-          <ul class="preview-list">
-            <li>Short topics now build in smaller batches for better quality.</li>
-            <li>Import PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, or images.</li>
-            <li>If a build fails, retry or use fewer questions.</li>
+          <ul class="tips-list">
+            <li>Create builds the quiz. Start begins it.</li>
+            <li>Better study material makes better quizzes.</li>
+            <li>If a quiz feels too broad, use fewer questions or a smaller source.</li>
           </ul>
         </div>
       </div>
@@ -436,7 +508,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
             <ul>
               <li><strong>Generation quality:</strong> Topic-only quizzes now build in smaller batches.</li>
               <li><strong>Source planning:</strong> Larger study material is split into useful sections before generation.</li>
-              <li><strong>Cleaner source-backed items:</strong> Questions avoid phrases like “according to the notes.”</li>
+              <li><strong>Cleaner question wording:</strong> Questions avoid phrases like “according to the notes.”</li>
               <li><strong>Import formats:</strong> PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.</li>
               <li><strong>Quiz size:</strong> Public quiz lengths now include 30 and 50 questions.</li>
             </ul>
@@ -556,7 +628,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <h4>v3.6.0</h4>
           <ul>
             <li>Topic-only quizzes now build in smaller batches while preserving the requested count.</li>
-            <li>Larger study material uses smarter source-section planning and cleaner source-backed wording.</li>
+            <li>Larger study material is planned in sections, with cleaner question wording.</li>
             <li>Public quiz lengths include 30 and 50 questions.</li>
             <li>Imports support PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.</li>
           </ul>

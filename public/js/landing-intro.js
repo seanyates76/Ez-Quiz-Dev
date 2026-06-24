@@ -64,6 +64,34 @@ export function dismissLandingIntro({ persist = false, version = currentAppVersi
   }
 }
 
+function wireFeatureCards(root){
+  const toggles = Array.from(root?.querySelectorAll('[data-feature-card-toggle]') || []);
+  toggles.forEach((toggle) => {
+    if(toggle.dataset.featureCardWired === 'true') return;
+    toggle.dataset.featureCardWired = 'true';
+    const card = toggle.closest('.landing-feature-card');
+    const detailId = toggle.getAttribute('aria-controls');
+    const detail = detailId ? document.getElementById(detailId) : card?.querySelector('[data-feature-card-detail]');
+
+    function setOpen(open){
+      const expanded = !!open;
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      if(detail) detail.hidden = !expanded;
+      card?.classList.toggle('is-open', expanded);
+    }
+
+    setOpen(toggle.getAttribute('aria-expanded') === 'true' && !!detail && detail.hidden === false);
+    toggle.addEventListener('click', () => {
+      setOpen(toggle.getAttribute('aria-expanded') !== 'true');
+    });
+    toggle.addEventListener('keydown', (event) => {
+      if(event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      setOpen(toggle.getAttribute('aria-expanded') !== 'true');
+    });
+  });
+}
+
 export function wireLandingIntro(){
   const intro = document.getElementById('landingIntro');
   if(!intro) return;
@@ -87,6 +115,7 @@ export function wireLandingIntro(){
   let current = 0;
 
   if(updateOnly && dontShow) dontShow.hidden = true;
+  wireFeatureCards(panel);
 
   function show(index){
     if(!panels.length) return;

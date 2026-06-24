@@ -1173,15 +1173,125 @@ textarea:focus,
   display: none !important;
 }
 
-.preview-list {
+.feature-card-list,
+.roadmap-list,
+.tips-list {
+  display: grid;
+  gap: 8px;
   margin: 0;
-  padding-left: 18px;
-  color: var(--muted);
-  font-size: .9rem;
+  padding: 0;
+  list-style: none;
 }
 
-.preview-list li {
-  margin: 5px 0;
+.landing-feature-card,
+.roadmap-list li,
+.tips-list li {
+  border: 1px solid color-mix(in srgb, var(--border) 72%, #82b7ff);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--panel) 58%, transparent);
+}
+
+.landing-feature-card {
+  overflow: hidden;
+}
+
+.landing-feature-card__toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 12px;
+  border: 0;
+  color: var(--text);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.landing-feature-card__toggle:hover,
+.landing-feature-card__toggle:focus-visible {
+  background: color-mix(in srgb, var(--brand) 9%, transparent);
+}
+
+.landing-feature-card__toggle:focus-visible {
+  outline: 2px solid var(--ezq-focus-ring);
+  outline-offset: -2px;
+}
+
+.landing-feature-card__copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.landing-feature-card__title,
+.roadmap-list span {
+  color: var(--text);
+  font-size: .92rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.landing-feature-card__summary,
+.roadmap-list small,
+.tips-list li {
+  color: var(--muted);
+  font-size: .86rem;
+  line-height: 1.35;
+}
+
+.landing-feature-card__chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid color-mix(in srgb, var(--border) 72%, var(--text));
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel-2) 72%, transparent);
+  transition: transform .16s ease, border-color .16s ease, background .16s ease;
+}
+
+.landing-feature-card.is-open .landing-feature-card__chevron {
+  transform: rotate(90deg);
+  border-color: color-mix(in srgb, var(--brand) 58%, var(--border));
+  background: color-mix(in srgb, var(--brand) 14%, var(--panel-2));
+}
+
+.landing-feature-card__detail {
+  padding: 0 12px 12px;
+}
+
+.landing-feature-card__detail p {
+  margin: 0;
+  color: var(--muted);
+  font-size: .84rem;
+  line-height: 1.4;
+}
+
+.landing-feature-card__detail[hidden] {
+  display: none !important;
+}
+
+.roadmap-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.roadmap-list li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.roadmap-list small {
+  display: block;
+}
+
+.tips-list li {
+  padding: 10px 12px;
 }
 
 .landing-intro-footer {
@@ -1229,6 +1339,10 @@ textarea:focus,
 
   .preview-tab {
     width: 100%;
+  }
+
+  .roadmap-list {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -4279,8 +4393,8 @@ body[data-busy="true"] #interactiveEditor {
   height: 11px;
   border-radius: 50%;
   background: var(--generation-cyan);
-  box-shadow: 0 0 12px rgba(103, 232, 249, .7);
-  animation: generationOrbPulse 2.4s ease-in-out infinite;
+  opacity: .68;
+  box-shadow: 0 0 10px rgba(103, 232, 249, .38);
 }
 
 .generation-status-icon__line {
@@ -4293,6 +4407,14 @@ body[data-busy="true"] #interactiveEditor {
   border-radius: 999px;
   background: color-mix(in srgb, var(--generation-cyan) 72%, transparent);
   box-shadow: 0 -8px 0 color-mix(in srgb, var(--generation-cyan) 28%, transparent), 0 -16px 0 color-mix(in srgb, var(--generation-cyan) 18%, transparent);
+  opacity: .48;
+}
+
+.generation-status-card.is-animating .generation-status-icon__orb {
+  animation: generationOrbPulse 2.4s ease-in-out infinite;
+}
+
+.generation-status-card.is-animating .generation-status-icon__line {
   animation: generationLineBlink 1.8s ease-in-out infinite;
 }
 
@@ -4330,13 +4452,13 @@ body[data-busy="true"] #interactiveEditor {
   border-radius: inherit;
   background: linear-gradient(90deg, transparent, var(--generation-cyan), transparent);
   box-shadow: 0 0 14px rgba(103, 232, 249, .45);
-  animation: generationScan 1.55s ease-in-out infinite;
-}
-
-.generation-status-card:not([data-generation-state="generating"]) .generation-status-scan span {
-  animation: none;
   opacity: .34;
   transform: translateX(72%);
+}
+
+.generation-status-card.is-animating .generation-status-scan span {
+  animation: generationScan 1.55s ease-in-out infinite;
+  opacity: 1;
 }
 
 .generation-status-meta {

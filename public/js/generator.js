@@ -233,6 +233,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!generationStatusCard) return;
     generationStatusCard.hidden = nextState === 'idle';
     generationStatusCard.dataset.generationState = nextState;
+    generationStatusCard.classList.toggle('is-animating', nextState === 'generating');
     generationStatusCard.setAttribute('aria-busy', nextState === 'generating' ? 'true' : 'false');
     if(options.largeSource) generationStatusCard.dataset.largeSource = 'true';
     else delete generationStatusCard.dataset.largeSource;
