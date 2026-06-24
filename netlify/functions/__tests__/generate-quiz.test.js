@@ -72,31 +72,33 @@ describe('generate-quiz count guarantees', () => {
   });
 
   test('accepts source-backed batched requests with mixed planned types', async () => {
+    const sectionExcerpt = (label) => `${label} ${'CCNA troubleshooting detail with terms, commands, and cause effect relationships. '.repeat(7)}`.slice(0, 520);
     const sourceText = [
-      'Planned question 1 type: MC',
       'Source name: CCNA_Notes.md',
+      'Planned question 1 type: MC',
       'Heading path: Switching > VLANs',
-      'Section content: VLANs segment broadcast domains.',
+      'Section excerpt:',
+      sectionExcerpt('VLANs segment broadcast domains.'),
       '---',
       'Planned question 2 type: TF',
-      'Source name: CCNA_Notes.md',
       'Heading path: Routing > OSPF',
-      'Section content: OSPF uses cost and adjacencies.',
+      'Section excerpt:',
+      sectionExcerpt('OSPF uses cost and adjacencies.'),
       '---',
       'Planned question 3 type: YN',
-      'Source name: CCNA_Notes.md',
       'Heading path: IPv6',
-      'Section content: IPv6 neighbor discovery uses ICMPv6.',
+      'Section excerpt:',
+      sectionExcerpt('IPv6 neighbor discovery uses ICMPv6.'),
       '---',
       'Planned question 4 type: MC',
-      'Source name: CCNA_Notes.md',
-      'Heading path: STP',
-      'Section content: STP blocks redundant paths.',
+      'Heading path: Switching > STP',
+      'Section excerpt:',
+      sectionExcerpt('STP blocks redundant paths.'),
       '---',
       'Planned question 5 type: MT',
-      'Source name: CCNA_Notes.md',
-      'Heading path: Ports',
-      'Section content: SSH uses 22 and DNS uses 53.',
+      'Heading path: Services > Ports',
+      'Section excerpt:',
+      sectionExcerpt('SSH uses 22 and DNS uses 53.'),
     ].join('\n');
     const { handler } = require('../generate-quiz.js');
     const res = await handler(event({
@@ -111,11 +113,19 @@ describe('generate-quiz count guarantees', () => {
     }));
     const body = json(res);
     const lines = String(body.lines || '').trim().split('\n');
+    const cleanedCharCount = sourceText
+      .split('\n')
+      .map((line) => line.trim().replace(/\s+/g, ' '))
+      .filter(Boolean)
+      .join('\n')
+      .length;
 
     expect(res.statusCode).toBe(200);
+    expect(sourceText.length).toBeLessThanOrEqual(3500);
+    expect((sourceText.match(/Source name:/g) || [])).toHaveLength(1);
     expect(lines).toHaveLength(5);
     expect(lines.map((line) => line.split('|')[0])).toEqual(['MC', 'TF', 'YN', 'MC', 'MT']);
-    expect(body.source).toEqual({ name: 'CCNA_Notes.md', charCount: sourceText.length });
+    expect(body.source).toEqual({ name: 'CCNA_Notes.md', charCount: cleanedCharCount });
   });
 
   test('reports the shared source material cap after server cleanup', async () => {
@@ -283,6 +293,41 @@ describe('generate-quiz count guarantees', () => {
       details: 'Provider exploded while generating the batch',
       provider: 'mock',
       code: 'PROVIDER_BATCH_FAILED',
+    });
+  });
+
+  test('returns structured timeout JSON for provider timeouts', async () => {
+    const generateLines = jest.fn(async () => {
+      const err = new Error('Gemini provider timed out after 24000ms');
+      err.status = 504;
+      err.code = 'PROVIDER_TIMEOUT';
+      throw err;
+    });
+    jest.doMock('../lib/providers.js', () => ({
+      generateLines,
+      generateInBatches: jest.fn(),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({
+      topic: 'CCNA Notes',
+      count: 5,
+      provider: 'mock',
+      types: ['MC', 'TF', 'YN', 'MC', 'MT'],
+      sourceName: 'CCNA_Notes.md',
+      sourceText: 'Source name: CCNA_Notes.md\nPlanned question 1 type: MC\nHeading path: Switching\nSection excerpt:\nVLAN notes.',
+    }));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(504);
+    expect(res.headers['Content-Type']).toBe('application/json');
+    expect(res.body).not.toBe('500');
+    expect(body).toMatchObject({
+      error: 'Generation timed out',
+      details: 'Gemini provider timed out after 24000ms',
+      provider: 'mock',
+      code: 'PROVIDER_TIMEOUT',
     });
   });
 

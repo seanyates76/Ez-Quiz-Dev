@@ -10,6 +10,7 @@ function loadApi() {
     'TOPIC_ONLY_BATCH_SIZE',
     'LARGE_SOURCE_CHUNK_TARGET_CHARS',
     'SECTION_PACKET_TEXT_MAX_CHARS',
+    'SECTION_BATCH_SOURCE_TEXT_MAX_CHARS',
   ]);
 }
 
@@ -117,6 +118,7 @@ describe('generateWithAI source-backed endpoint routing', () => {
     const mtEligibleIndexes = Array.isArray(overrides.mtEligibleIndexes)
       ? new Set(overrides.mtEligibleIndexes)
       : null;
+    const textChars = Number(overrides.textChars || 0);
     return {
       version: 1,
       sectionCount: count,
@@ -128,16 +130,20 @@ describe('generateWithAI source-backed endpoint routing', () => {
         const lowScore = lowScoreIndexes.has(n);
         const mtEligible = mtEligibleIndexes ? mtEligibleIndexes.has(n) : true;
         const score = lowScore ? 32 : 100 - index;
+        const baseText = [
+          `Topic ${n}: this section explains a quiz-worthy concept with definitions and comparisons.`,
+          `Term ${n}: a compact explanation used for certification study.`,
+          `Because this concept affects troubleshooting, learners should know the cause and effect.`,
+        ].join('\n');
+        const text = textChars > 0
+          ? `${baseText}\n${`Detailed section evidence ${n}. `.repeat(Math.ceil(textChars / 28))}`.slice(0, textChars)
+          : baseText;
         return {
           id: `section-${String(n).padStart(3, '0')}`,
           heading: `Topic ${n}`,
           headingPath: ['Domain', `Topic ${n}`],
-          text: [
-            `Topic ${n}: this section explains a quiz-worthy concept with definitions and comparisons.`,
-            `Term ${n}: a compact explanation used for certification study.`,
-            `Because this concept affects troubleshooting, learners should know the cause and effect.`,
-          ].join('\n'),
-          charCount: 220,
+          text,
+          charCount: text.length,
           lineCount: 3,
           bulletCount: n % 2 ? 4 : 0,
           codeBlockCount: n % 5 === 0 ? 1 : 0,
@@ -157,10 +163,10 @@ describe('generateWithAI source-backed endpoint routing', () => {
     };
   }
 
-  test('large source with sourceReport uses section-based requests instead of raw chunks', async () => {
-    const { generateWithAI, GENERATION_BATCH_SIZE, SECTION_PACKET_TEXT_MAX_CHARS } = loadApi();
+  test('large source with sourceReport uses compact section-based requests instead of raw chunks', async () => {
+    const { generateWithAI, GENERATION_BATCH_SIZE, SECTION_BATCH_SOURCE_TEXT_MAX_CHARS } = loadApi();
     const sourceText = 'A'.repeat(30000);
-    const report = sectionReport(25);
+    const report = sectionReport(25, { textChars: 1800 });
     const bodies = [];
     let nextQuestion = 1;
     global.fetch = jest.fn(async (_url, options = {}) => {
@@ -182,22 +188,23 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
     expect(Math.max(...bodies.map((body) => body.count))).toBeLessThanOrEqual(GENERATION_BATCH_SIZE);
     expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(['TF', 'TF', 'TF', 'TF', 'TF']))).toBe(true);
-    expect(bodies.every((body) => body.sourceText.length <= (SECTION_PACKET_TEXT_MAX_CHARS + 160) * body.count)).toBe(true);
+    expect(bodies.every((body) => body.sourceText.length <= SECTION_BATCH_SOURCE_TEXT_MAX_CHARS)).toBe(true);
     expect(bodies.every((body) => body.sourceText !== sourceText)).toBe(true);
     expect(bodies.every((body) => !body.sourceReport)).toBe(true);
+    expect((bodies[0].sourceText.match(/Source name:/g) || [])).toHaveLength(1);
     expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
     expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 5');
     expect(bodies[1].sourceText).toContain('Heading path: Domain > Topic 6');
     expect(bodies[3].sourceText).toContain('Heading path: Domain > Topic 20');
-    expect(bodies[0].sourceText).toContain('Section content:');
+    expect(bodies[0].sourceText).toContain('Section excerpt:');
     expect(bodies[0].sourceText).toContain('Topic 1: this section explains');
     expect(out.lines.split('\n')).toHaveLength(20);
   });
 
   test('section-aware sourceReport count 50 uses ten batches of five', async () => {
-    const { generateWithAI, GENERATION_BATCH_SIZE } = loadApi();
+    const { generateWithAI, GENERATION_BATCH_SIZE, SECTION_BATCH_SOURCE_TEXT_MAX_CHARS } = loadApi();
     const sourceText = 'A'.repeat(30000);
-    const report = sectionReport(60);
+    const report = sectionReport(60, { textChars: 1800 });
     const bodies = [];
     let nextQuestion = 1;
     global.fetch = jest.fn(async (_url, options = {}) => {
@@ -217,6 +224,8 @@ describe('generateWithAI source-backed endpoint routing', () => {
     const flatTypes = bodies.flatMap((body) => body.types);
     expect(bodies).toHaveLength(10);
     expect(bodies.every((body) => body.count === GENERATION_BATCH_SIZE)).toBe(true);
+    expect(bodies.every((body) => body.count <= GENERATION_BATCH_SIZE)).toBe(true);
+    expect(bodies.every((body) => body.sourceText.length <= SECTION_BATCH_SOURCE_TEXT_MAX_CHARS)).toBe(true);
     expect(Math.max(...bodies.map((body) => body.count))).toBe(GENERATION_BATCH_SIZE);
     expect(bodies[0].types).toEqual(['MC', 'TF', 'YN', 'MT', 'MC']);
     expect(bodies[1].types).toEqual(['TF', 'YN', 'MT', 'MC', 'TF']);

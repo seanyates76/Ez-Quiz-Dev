@@ -5,6 +5,27 @@ const { cleanSourceText: cleanSourceMaterial } = require('./sourceMaterial.js');
 
 const PRIVATE_KNOWLEDGE_START = 'PRIVATE INSTRUCTOR KNOWLEDGE START';
 const PRIVATE_KNOWLEDGE_END = 'PRIVATE INSTRUCTOR KNOWLEDGE END';
+const DEFAULT_PROVIDER_TIMEOUT_MS = 24000;
+
+function providerTimeoutMs(env = process.env){
+  const raw = env && (env.GENERATE_PROVIDER_TIMEOUT_MS || env.PROVIDER_TIMEOUT_MS);
+  const parsed = parseInt(raw, 10);
+  if(!Number.isFinite(parsed)) return DEFAULT_PROVIDER_TIMEOUT_MS;
+  return Math.max(1000, Math.min(28000, parsed));
+}
+
+function providerTimeoutError(provider, timeoutMs){
+  const err = new Error(`${provider} provider timed out after ${timeoutMs}ms`);
+  err.status = 504;
+  err.code = 'PROVIDER_TIMEOUT';
+  return err;
+}
+
+function isAbortLikeError(err){
+  const name = String(err && err.name || '');
+  const message = String(err && err.message || '');
+  return /abort/i.test(name) || /aborted|abort/i.test(message);
+}
 
 function privateInstructorKnowledgeBlock(source){
   return [
@@ -199,36 +220,52 @@ function outputTokenBudget(count, kind = 'legacy'){
   return Math.max(2500, Math.min(12000, 900 + (n * perQuestion)));
 }
 
-async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024 }){
+async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
   if(!apiKey) throw new Error('Missing GEMINI_API_KEY');
   const { GoogleGenerativeAI } = await import('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(apiKey);
   const m = genAI.getGenerativeModel({ model });
-  const result = await m.generateContent({
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens },
-  });
-  return (result?.response?.text?.() || '').trim();
+  try {
+    const result = await m.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens },
+    }, { timeout: timeoutMs });
+    return (result?.response?.text?.() || '').trim();
+  } catch (err) {
+    if(isAbortLikeError(err)) throw providerTimeoutError('Gemini', timeoutMs);
+    throw err;
+  }
 }
 
-async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800 }){
+async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
   if(!apiKey) throw new Error('Missing OPENAI_API_KEY');
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: 'You are a quiz line generator. Follow rules exactly.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.6,
-      max_tokens: maxTokens,
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let resp;
+  try {
+    resp = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: 'You are a quiz line generator. Follow rules exactly.' },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.6,
+        max_tokens: maxTokens,
+      }),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if(isAbortLikeError(err)) throw providerTimeoutError('OpenAI', timeoutMs);
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
   if(!resp.ok){
     let detail = await resp.text().catch(()=>String(resp.status));
     try { detail = JSON.parse(detail); } catch {}
@@ -299,17 +336,18 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
   const selected = (provider || (env.AI_PROVIDER || 'gemini')).toLowerCase();
   const normalizedCount = Math.max(1, Math.min(50, parseInt(count || 10, 10)));
   const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText);
+  const timeoutMs = providerTimeoutMs(env);
   // [quiz-v2: hook] provider call surface — swap prompt/response handling when structured default graduates.
 
   try {
     if (selected === 'gemini') {
       const resolvedModel = model || env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025';
-      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind) });
+      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind), timeoutMs });
       return { provider: 'gemini', model: resolvedModel, text };
     }
     if (selected === 'openai') {
       const resolvedModel = model || env.OPENAI_MODEL || 'gpt-4o-mini';
-      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind) });
+      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind), timeoutMs });
       return { provider: 'openai', model: resolvedModel, text };
     }
     if (selected === 'echo') {

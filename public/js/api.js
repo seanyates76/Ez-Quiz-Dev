@@ -84,12 +84,15 @@ export const TOPIC_ONLY_BATCH_SIZE = GENERATION_BATCH_SIZE;
 export const LARGE_SOURCE_CHUNK_TARGET_CHARS = 4000;
 export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
 export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
+export const SECTION_BATCH_SOURCE_TEXT_MAX_CHARS = 3500;
+export const SECTION_BATCH_EXCERPT_TARGET_CHARS = 520;
 const LARGE_SOURCE_SHORTFALL_RETRY_CAP = 2;
 const TOPIC_ONLY_SHORTFALL_RETRY_CAP = 2;
 const PARTIAL_RESULT_MIN_QUESTIONS = 1;
 const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
 const SECTION_BASE_TYPE_SEQUENCE = ['MC', 'TF', 'YN'];
 const SECTION_SAFE_FALLBACK_TYPE_SEQUENCE = ['TF', 'MC', 'YN'];
+const SECTION_BATCH_HEADING_MAX_CHARS = 180;
 
 function toPositiveCount(value, fallback = 10){
   const parsed = parseInt(value, 10);
@@ -233,6 +236,23 @@ function sourceChunkBoundary(windowText, target){
   const sentenceCut = Math.max(...sentenceCuts);
   if(sentenceCut >= minUsefulCut) return sentenceCut;
   return target;
+}
+
+function compactInline(raw, maxChars){
+  const text = String(raw || '').replace(/\s+/g, ' ').trim();
+  const limit = Math.max(20, parseInt(maxChars, 10) || 80);
+  if(text.length <= limit) return text;
+  return `${text.slice(0, Math.max(0, limit - 3)).trim()}...`;
+}
+
+function compactSectionExcerpt(raw, maxChars){
+  const text = String(raw || '').trim().replace(/\r\n?/g, '\n');
+  const limit = Math.max(0, parseInt(maxChars, 10) || 0);
+  if(!text || limit <= 0) return '';
+  if(text.length <= limit) return text;
+  const windowText = text.slice(0, limit);
+  const cut = sourceChunkBoundary(windowText, limit);
+  return text.slice(0, cut).trim().slice(0, limit).trim();
 }
 
 function splitSourceTextIntoChunks(sourceText, target = LARGE_SOURCE_CHUNK_TARGET_CHARS){
@@ -384,6 +404,10 @@ function buildSectionPacket(section, opts = {}){
   lines.push(trimSectionTextForPacket(section.text));
   return {
     sectionId: section.id,
+    sourceName,
+    headingPath: path,
+    sectionHeading: section.heading || '',
+    sectionText: section.text || '',
     sourceText: lines.join('\n').trim(),
   };
 }
@@ -432,15 +456,56 @@ function plannedTypeForEntry(entry){
   return VALID_QUESTION_TYPES.includes(type) ? type : '';
 }
 
+function fallbackSectionTextFromPacket(raw){
+  const text = String(raw || '').trim();
+  if(!text) return '';
+  const marker = 'Section content:';
+  const index = text.indexOf(marker);
+  if(index < 0) return text;
+  return text.slice(index + marker.length).trim();
+}
+
 function buildSectionBatchSourceText(entries){
-  return entries.map((entry, index) => {
+  const plannedEntries = Array.isArray(entries) ? entries.filter(Boolean).slice(0, GENERATION_BATCH_SIZE) : [];
+  if(!plannedEntries.length) return '';
+  const sourceName = compactInline(plannedEntries.find((entry) => entry && entry.sourceName)?.sourceName || '', 160);
+  const metas = plannedEntries.map((entry, index) => {
     const type = plannedTypeForEntry(entry);
-    const lines = [
-      `Planned question ${index + 1}${type ? ` type: ${type}` : ''}`,
-      entry && entry.sourceText,
-    ];
-    return lines.filter(Boolean).join('\n');
-  }).join('\n\n---\n\n').trim();
+    const headingPath = compactInline(entry && (entry.headingPath || entry.sectionHeading || ''), SECTION_BATCH_HEADING_MAX_CHARS);
+    const lines = [`Planned question ${index + 1}${type ? ` type: ${type}` : ''}`];
+    if(headingPath) lines.push(`Heading path: ${headingPath}`);
+    lines.push('Section excerpt:');
+    return {
+      lines,
+      text: entry && entry.sectionText ? entry.sectionText : fallbackSectionTextFromPacket(entry && entry.sourceText),
+    };
+  });
+  const render = (excerptMax) => {
+    const lines = [];
+    if(sourceName) lines.push(`Source name: ${sourceName}`);
+    metas.forEach((meta, index) => {
+      if(index > 0) lines.push('---');
+      lines.push(...meta.lines);
+      const excerpt = compactSectionExcerpt(meta.text, excerptMax);
+      if(excerpt) lines.push(excerpt);
+    });
+    return lines.join('\n').trim();
+  };
+
+  const empty = render(0);
+  const available = SECTION_BATCH_SOURCE_TEXT_MAX_CHARS - empty.length - plannedEntries.length;
+  let excerptMax = Math.max(0, Math.min(
+    SECTION_BATCH_EXCERPT_TARGET_CHARS,
+    Math.floor(available / plannedEntries.length)
+  ));
+  let out = render(excerptMax);
+  while(out.length > SECTION_BATCH_SOURCE_TEXT_MAX_CHARS && excerptMax > 0){
+    excerptMax = Math.max(0, excerptMax - 40);
+    out = render(excerptMax);
+  }
+  return out.length > SECTION_BATCH_SOURCE_TEXT_MAX_CHARS
+    ? out.slice(0, SECTION_BATCH_SOURCE_TEXT_MAX_CHARS).trim()
+    : out;
 }
 
 function buildSectionBatchRequestEntry(entries){

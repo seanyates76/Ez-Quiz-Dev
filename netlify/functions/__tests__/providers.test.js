@@ -175,6 +175,49 @@ describe('providers helpers', () => {
     expect(text.split('\n')).toHaveLength(3);
   });
 
+  test('callProvider aborts OpenAI requests at the configured provider timeout', async () => {
+    jest.useFakeTimers();
+    const originalFetch = global.fetch;
+    let capturedSignal;
+    global.fetch = jest.fn((_url, options = {}) => {
+      capturedSignal = options.signal;
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          const err = new Error('aborted');
+          err.name = 'AbortError';
+          reject(err);
+        }, { once: true });
+      });
+    });
+
+    try {
+      const pending = callProvider({
+        provider: 'openai',
+        topic: 'Routing',
+        count: 5,
+        env: {
+          OPENAI_API_KEY: 'test-key',
+          OPENAI_MODEL: 'test-model',
+          GENERATE_PROVIDER_TIMEOUT_MS: '1200',
+        },
+      });
+      await Promise.resolve();
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(capturedSignal.aborted).toBe(false);
+      jest.advanceTimersByTime(1200);
+      await expect(pending).rejects.toMatchObject({
+        status: 504,
+        code: 'PROVIDER_TIMEOUT',
+        message: 'OpenAI provider timed out after 1200ms',
+      });
+      expect(capturedSignal.aborted).toBe(true);
+    } finally {
+      global.fetch = originalFetch;
+      jest.useRealTimers();
+    }
+  });
+
   test('generateLines echo normalizes to requested count', async () => {
     const { title, lines, provider } = await generateLines({ provider: 'echo', topic: 'Chemistry', count: 5, env: {} });
     expect(provider).toBe('echo');
