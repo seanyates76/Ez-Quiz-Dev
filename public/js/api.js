@@ -87,7 +87,6 @@ export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
 const LARGE_SOURCE_SHORTFALL_RETRY_CAP = 2;
 const TOPIC_ONLY_SHORTFALL_RETRY_CAP = 2;
 const PARTIAL_RESULT_MIN_QUESTIONS = 1;
-const SECTION_REQUEST_QUESTION_COUNT = 1;
 const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
 const SECTION_BASE_TYPE_SEQUENCE = ['MC', 'TF', 'YN'];
 const SECTION_SAFE_FALLBACK_TYPE_SEQUENCE = ['TF', 'MC', 'YN'];
@@ -420,12 +419,59 @@ function buildSectionRequestEntry(section, opts, plannedType){
   const packet = buildSectionPacket(section, opts);
   return {
     ...packet,
-    count: SECTION_REQUEST_QUESTION_COUNT,
+    count: 1,
     plannedType,
     types: [plannedType],
     mtEligible: !!section.mtEligible,
     attemptedTypes: [plannedType],
   };
+}
+
+function plannedTypeForEntry(entry){
+  const type = String(entry && (entry.plannedType || (Array.isArray(entry.types) && entry.types[0]) || '')).toUpperCase();
+  return VALID_QUESTION_TYPES.includes(type) ? type : '';
+}
+
+function buildSectionBatchSourceText(entries){
+  return entries.map((entry, index) => {
+    const type = plannedTypeForEntry(entry);
+    const lines = [
+      `Planned question ${index + 1}${type ? ` type: ${type}` : ''}`,
+      entry && entry.sourceText,
+    ];
+    return lines.filter(Boolean).join('\n');
+  }).join('\n\n---\n\n').trim();
+}
+
+function buildSectionBatchRequestEntry(entries){
+  const plannedEntries = Array.isArray(entries) ? entries.filter(Boolean).slice(0, GENERATION_BATCH_SIZE) : [];
+  if(!plannedEntries.length) return null;
+  return {
+    count: plannedEntries.length,
+    sourceText: buildSectionBatchSourceText(plannedEntries),
+    types: plannedEntries.map(plannedTypeForEntry).filter(Boolean),
+    plannedEntries,
+  };
+}
+
+function chunkSectionRequestPlan(plan, batchSize = GENERATION_BATCH_SIZE){
+  const entries = Array.isArray(plan) ? plan.filter(Boolean) : [];
+  const size = Math.max(1, Math.min(GENERATION_BATCH_SIZE, toPositiveCount(batchSize, GENERATION_BATCH_SIZE)));
+  const chunks = [];
+  for(let i = 0; i < entries.length; i += size){
+    const batch = buildSectionBatchRequestEntry(entries.slice(i, i + size));
+    if(batch) chunks.push(batch);
+  }
+  return chunks;
+}
+
+function limitSectionRequestEntry(entry, maxCount){
+  const count = Math.max(1, Math.min(GENERATION_BATCH_SIZE, toPositiveCount(maxCount, GENERATION_BATCH_SIZE)));
+  const plannedEntries = Array.isArray(entry && entry.plannedEntries) ? entry.plannedEntries : [];
+  if(plannedEntries.length > count){
+    return buildSectionBatchRequestEntry(plannedEntries.slice(0, count));
+  }
+  return entry;
 }
 
 function distributeQuestionCountAcrossSections(sections, count, opts = {}){
@@ -478,7 +524,7 @@ function sameSectionRetryPacket(entry, sectionPlan){
   return retryPackets.find((packet) => packet && packet.sectionId === entry.sectionId) || null;
 }
 
-function buildSectionZeroLineRetry(entry, sectionPlan){
+function buildSectionZeroLineRetryEntry(entry, sectionPlan){
   const packet = sameSectionRetryPacket(entry, sectionPlan) || entry;
   if(!packet || !packet.sourceText) return null;
   const allowedTypes = Array.isArray(sectionPlan && sectionPlan.allowedTypes) ? sectionPlan.allowedTypes : [];
@@ -492,12 +538,45 @@ function buildSectionZeroLineRetry(entry, sectionPlan){
   if(!nextType) return null;
   return {
     ...packet,
-    count: SECTION_REQUEST_QUESTION_COUNT,
+    count: 1,
     plannedType: nextType,
     types: [nextType],
     attemptedTypes: Array.from(new Set([...attemptedTypes, nextType])),
     retryOfSectionId: entry && entry.sectionId || packet.sectionId,
   };
+}
+
+function buildSectionZeroLineRetry(entry, sectionPlan){
+  const entries = Array.isArray(entry && entry.plannedEntries) && entry.plannedEntries.length
+    ? entry.plannedEntries
+    : [entry];
+  const retryEntries = entries
+    .map((planned) => buildSectionZeroLineRetryEntry(planned, sectionPlan))
+    .filter(Boolean);
+  return buildSectionBatchRequestEntry(retryEntries);
+}
+
+function buildSectionShortfallRetryBatch(sectionPlan, remaining, cursor = 0){
+  const packets = Array.isArray(sectionPlan && sectionPlan.retryPackets) ? sectionPlan.retryPackets : [];
+  const allowedTypes = Array.isArray(sectionPlan && sectionPlan.allowedTypes) ? sectionPlan.allowedTypes : [];
+  const ask = Math.min(GENERATION_BATCH_SIZE, Math.max(0, toPositiveCount(remaining, 0)));
+  if(!packets.length || !allowedTypes.length || ask <= 0) return null;
+  const entries = [];
+  for(let index = 0; index < ask; index += 1){
+    const packet = packets[(cursor + index) % packets.length];
+    const order = sectionFallbackTypeOrder(allowedTypes, packet);
+    const type = order.length ? order[index % order.length] : allowedTypes[index % allowedTypes.length];
+    if(!packet || !packet.sourceText || !type) continue;
+    entries.push({
+      ...packet,
+      count: 1,
+      plannedType: type,
+      types: [type],
+      attemptedTypes: [type],
+      retryOfSectionId: packet.sectionId,
+    });
+  }
+  return buildSectionBatchRequestEntry(entries);
 }
 
 function readableGenerationError(err){
@@ -639,15 +718,22 @@ function partialGenerationResult(collected, title, requested, requestNo){
 
 async function generateSectionLargeSourceWithAI(topic, requested, opts, sectionPlan){
   const { seenKeys, avoidStems } = createCollectionState(opts);
-  const pending = sectionPlan.requestPlan.slice();
+  const pending = chunkSectionRequestPlan(sectionPlan.requestPlan);
   const collected = [];
   let title = '';
   let requestNo = 0;
-  const maxRequests = sectionPlan.requestPlan.length + Math.max(LARGE_SOURCE_SHORTFALL_RETRY_CAP, requested);
+  let retryCursor = 0;
+  const maxRequests = pending.length + LARGE_SOURCE_SHORTFALL_RETRY_CAP;
 
-  while(collected.length < requested && pending.length && requestNo < maxRequests){
-    const planned = pending.shift();
-    const ask = Math.min(SECTION_REQUEST_QUESTION_COUNT, requested - collected.length);
+  while(collected.length < requested && requestNo < maxRequests){
+    let planned = pending.shift();
+    if(!planned){
+      planned = buildSectionShortfallRetryBatch(sectionPlan, requested - collected.length, retryCursor);
+      retryCursor += planned && planned.count || 0;
+    }
+    if(!planned) break;
+    planned = limitSectionRequestEntry(planned, requested - collected.length);
+    const ask = Math.min(planned.count || GENERATION_BATCH_SIZE, requested - collected.length, GENERATION_BATCH_SIZE);
     requestNo += 1;
 
     let out;
