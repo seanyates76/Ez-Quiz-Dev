@@ -115,12 +115,15 @@ function authorize(event) {
 }
 
 function countQuizLines(lines) {
+  return usableQuizLines(lines).length;
+}
+
+function usableQuizLines(lines) {
   return String(lines || '')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => !!parseLegacyQuestion(line))
-    .length;
+    .filter((line) => !!parseLegacyQuestion(line));
 }
 
 function underCountError(actual, expected) {
@@ -130,6 +133,17 @@ function underCountError(actual, expected) {
   err.actual = actual;
   err.expected = expected;
   return err;
+}
+
+function partialLegacyResult(result, actual, expected) {
+  return {
+    ...result,
+    lines: usableQuizLines(result && result.lines).join('\n'),
+    partial: true,
+    completedCount: actual,
+    requestedCount: expected,
+    warning: `Quiz ready with ${actual} of ${expected} questions.`,
+  };
 }
 
 exports.handler = async (event) => {
@@ -230,6 +244,24 @@ exports.handler = async (event) => {
     return response;
   }
 
+  function buildLegacyResponse(result, meta = {}) {
+    const body = {
+      ...meta,
+      title: result.title,
+      lines: result.lines,
+      provider: result.provider,
+      model: result.model,
+    };
+    if (result.partial) {
+      body.partial = true;
+      body.completedCount = result.completedCount;
+      body.requestedCount = result.requestedCount;
+      body.warning = result.warning;
+    }
+    if (sourceText) body.source = { name: sourceName, charCount: sourceText.length };
+    return body;
+  }
+
   // Timeout guard so the function never hangs on upstream calls
   function withTimeout(promise, ms) {
     return new Promise((resolve, reject) => {
@@ -249,12 +281,19 @@ exports.handler = async (event) => {
     let generator = selectGenerator(args.provider);
     let result = await withTimeout(generator(args), TIMEOUT_MS);
     let actual = countQuizLines(result.lines);
+    let bestPartial = actual > 0 ? { result, actual } : null;
     if (actual < count && generator !== generateInBatches) {
       generator = generateInBatches;
       result = await withTimeout(generator(args), TIMEOUT_MS);
       actual = countQuizLines(result.lines);
+      if (actual > (bestPartial ? bestPartial.actual : 0)) {
+        bestPartial = { result, actual };
+      }
     }
-    if (actual < count) throw underCountError(actual, count);
+    if (actual < count) {
+      if (bestPartial) return partialLegacyResult(bestPartial.result, bestPartial.actual, count);
+      throw underCountError(actual, count);
+    }
     return result;
   };
 
@@ -273,11 +312,11 @@ exports.handler = async (event) => {
       };
     }
 
-    const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
+    const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
+      body: JSON.stringify(buildLegacyResponse(result, { fallbackUsed: false })),
     };
   } catch (err) {
     const msg = String((err && err.message) || err || 'Error');
@@ -329,12 +368,12 @@ exports.handler = async (event) => {
 
       // Structured path failed entirely; fall back to legacy generator so the UI still renders a quiz.
       try {
-        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
+        const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
         console.warn('[quiz-v2]', { reason: 'structured-fallback-legacy' });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
+          body: JSON.stringify(buildLegacyResponse(result, { fallbackUsed: false })),
         };
       } catch (legacyErr) {
         const legacyMsg = String((legacyErr && legacyErr.message) || legacyErr || 'Error');
@@ -348,11 +387,11 @@ exports.handler = async (event) => {
 
     if (canFallbackToGemini && !isTimeout) {
       try {
-        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
+        const result = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, avoidStems, env: process.env });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: true, fallbackFrom: primary, errorPrimary: msg, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
+          body: JSON.stringify(buildLegacyResponse(result, { fallbackUsed: true, fallbackFrom: primary, errorPrimary: msg })),
         };
       } catch (fallbackErr) {
         const fbMsg = String((fallbackErr && fallbackErr.message) || fallbackErr || 'Error');

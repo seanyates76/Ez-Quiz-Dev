@@ -707,6 +707,46 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(bodies.every((body) => body.count <= GENERATION_BATCH_SIZE)).toBe(true);
     expect(bodies.every((body) => body.sourceText === sourceText.trim())).toBe(true);
     expect(out.lines.split('\n')).toHaveLength(20);
+    expect(out.partial).toBeUndefined();
+    expect(out.warning).toBeUndefined();
+  });
+
+  test('source-backed batching returns 49 usable questions from a 50-question request', async () => {
+    const { generateWithAI } = loadApi();
+    const sourceText = 'One useful source paragraph. '.repeat(60);
+    const bodies = [];
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      if(bodies.length <= 9) {
+        return okResponse(tfLines(((bodies.length - 1) * 5) + 1, 5));
+      }
+      if(bodies.length === 10) {
+        return okResponse([
+          tfLines(46, 4),
+          'TF|Question 1.|T',
+        ].join('\n'));
+      }
+      return okResponse([
+        'TF|Question 1.|T',
+        'not a quiz line',
+      ].join('\n'));
+    });
+
+    const out = await generateWithAI('Short Notes', 50, {
+      sourceText,
+      types: ['TF'],
+    });
+
+    const lines = out.lines.split('\n');
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1]);
+    expect(bodies.every((body) => body.sourceText === sourceText.trim())).toBe(true);
+    expect(out.partial).toBe(true);
+    expect(out.completedCount).toBe(49);
+    expect(out.requestedCount).toBe(50);
+    expect(out.warning).toBe('Quiz ready with 49 of 50 questions.');
+    expect(lines).toHaveLength(49);
+    expect(lines.filter((line) => line === 'TF|Question 1.|T')).toHaveLength(1);
   });
 
   test('batched generation returns collected lines when a later batch fails after five valid questions', async () => {
@@ -725,8 +765,22 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(out.partial).toBe(true);
     expect(out.completedCount).toBe(5);
     expect(out.requestedCount).toBe(20);
-    expect(out.warning).toBe('Quiz ready with 5 questions.');
+    expect(out.warning).toBe('Quiz ready with 5 of 20 questions.');
     expect(out.lines.split('\n')).toEqual(tfLines(1, 5).split('\n'));
+  });
+
+  test('batched generation still fails when all batches return zero usable lines', async () => {
+    const { generateWithAI } = loadApi();
+    const bodies = [];
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      return okResponse('not a quiz line');
+    });
+
+    await expect(generateWithAI('Ports', 10, { types: ['TF'] }))
+      .rejects.toThrow(/Generation returned 0 of 10 usable questions after 4 batches/);
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
   });
 
   test('batched generation still fails when a batch fails before any valid questions are collected', async () => {

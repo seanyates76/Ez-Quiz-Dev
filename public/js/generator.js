@@ -1277,11 +1277,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const title = (out && out.title) ? out.title : '';
       runParseFlow(lines, payload.topic, title);
       setLastGen(payload);
+      const partialWarning = String(out && out.warning || '').trim();
       setGenerationStatusState('success', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload, { generatedCount: parsed.questions.length }),
         message: ((out && out.partial) || parsed.questions.length !== Number(payload.count || 0))
-          ? `Quiz ready with ${formatUnitCount(parsed.questions.length, 'question')}.`
+          ? (partialWarning || `Quiz ready with ${parsed.questions.length} of ${Number(payload.count || parsed.questions.length)} questions.`)
           : 'Start Quiz is ready when you are.',
         largeSource: isLargeGenerationSource(payload),
       });

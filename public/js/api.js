@@ -86,7 +86,7 @@ export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
 export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
 const LARGE_SOURCE_SHORTFALL_RETRY_CAP = 2;
 const TOPIC_ONLY_SHORTFALL_RETRY_CAP = 2;
-const PARTIAL_RESULT_MIN_QUESTIONS = GENERATION_BATCH_SIZE;
+const PARTIAL_RESULT_MIN_QUESTIONS = 1;
 const SECTION_REQUEST_QUESTION_COUNT = 1;
 const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
 const SECTION_BASE_TYPE_SEQUENCE = ['MC', 'TF', 'YN'];
@@ -576,7 +576,12 @@ async function postGenerate(topic, count, opts = {}){
       }
 
       const data = await res.json();
-      return { lines: String(data.lines || '').trim(), title: String(data.title || '') };
+      const out = { lines: String(data.lines || '').trim(), title: String(data.title || '') };
+      if(data && data.partial) out.partial = true;
+      if(data && Number.isFinite(Number(data.completedCount))) out.completedCount = Number(data.completedCount);
+      if(data && Number.isFinite(Number(data.requestedCount))) out.requestedCount = Number(data.requestedCount);
+      if(data && data.warning) out.warning = String(data.warning);
+      return out;
     } catch (err) {
       const message = err && err.message ? err.message : String(err);
       attemptErrors.push({ endpoint, error: message });
@@ -628,7 +633,7 @@ function partialGenerationResult(collected, title, requested, requestNo){
     completedCount: collected.length,
     requestedCount: requested,
     failedBatch: requestNo,
-    warning: `Quiz ready with ${collected.length} questions.`,
+    warning: `Quiz ready with ${collected.length} of ${requested} questions.`,
   };
 }
 
@@ -681,6 +686,8 @@ async function generateSectionLargeSourceWithAI(topic, requested, opts, sectionP
   }
 
   if(collected.length !== requested){
+    const partial = partialGenerationResult(collected, title, requested, requestNo);
+    if(partial) return partial;
     throw generationUnderCountError(collected.length, requested, requestNo);
   }
 
@@ -731,6 +738,8 @@ async function generateChunkedLargeSourceWithAI(topic, requested, opts = {}){
   }
 
   if(collected.length !== requested){
+    const partial = partialGenerationResult(collected, title, requested, requestNo);
+    if(partial) return partial;
     throw generationUnderCountError(collected.length, requested, requestNo);
   }
 
@@ -779,6 +788,8 @@ async function generateTopicOnlyWithAI(topic, count, opts = {}){
   }
 
   if(collected.length !== requested){
+    const partial = partialGenerationResult(collected, title, requested, requestNo);
+    if(partial) return partial;
     throw generationUnderCountError(collected.length, requested, requestNo);
   }
 

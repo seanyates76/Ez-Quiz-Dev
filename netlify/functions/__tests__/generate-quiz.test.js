@@ -115,7 +115,7 @@ describe('generate-quiz count guarantees', () => {
     ]);
   });
 
-  test('fails explicitly when generation cannot fill the requested count', async () => {
+  test('returns partial legacy lines when generation cannot fill the requested count', async () => {
     jest.doMock('../lib/providers.js', () => ({
       generateLines: jest.fn(async () => ({
         title: 'Short Quiz',
@@ -136,15 +136,19 @@ describe('generate-quiz count guarantees', () => {
     const res = await handler(event({ topic: 'Short', count: 5, provider: 'mock' }));
     const body = json(res);
 
-    expect(res.statusCode).toBe(502);
+    expect(res.statusCode).toBe(200);
     expect(body).toMatchObject({
-      error: 'Generation failed',
-      details: 'Only generated 3 of 5 requested questions',
+      title: 'Still Short',
       provider: 'mock',
+      partial: true,
+      completedCount: 3,
+      requestedCount: 5,
+      warning: 'Quiz ready with 3 of 5 questions.',
     });
+    expect(String(body.lines).trim().split('\n')).toHaveLength(3);
   });
 
-  test('does not count malformed prefixed lines toward requested total', async () => {
+  test('filters malformed prefixed lines out of partial legacy responses', async () => {
     jest.doMock('../lib/providers.js', () => ({
       generateLines: jest.fn(async () => ({
         title: 'Malformed Quiz',
@@ -165,10 +169,43 @@ describe('generate-quiz count guarantees', () => {
     const res = await handler(event({ topic: 'Malformed', count: 2, provider: 'mock' }));
     const body = json(res);
 
+    expect(res.statusCode).toBe(200);
+    expect(body).toMatchObject({
+      title: 'Malformed Quiz',
+      provider: 'mock',
+      partial: true,
+      completedCount: 1,
+      requestedCount: 2,
+      warning: 'Quiz ready with 1 of 2 questions.',
+    });
+    expect(body.lines).toBe('TF|Good one.|T');
+  });
+
+  test('fails explicitly when generation returns zero usable questions', async () => {
+    jest.doMock('../lib/providers.js', () => ({
+      generateLines: jest.fn(async () => ({
+        title: 'Empty Quiz',
+        lines: 'not a quiz line',
+        provider: 'mock',
+        model: 'mock',
+      })),
+      generateInBatches: jest.fn(async () => ({
+        title: 'Still Empty',
+        lines: 'MC|Bad|A) one|D\nnot a quiz line',
+        provider: 'mock',
+        model: 'mock',
+      })),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({ topic: 'Empty', count: 2, provider: 'mock' }));
+    const body = json(res);
+
     expect(res.statusCode).toBe(502);
     expect(body).toMatchObject({
       error: 'Generation failed',
-      details: 'Only generated 1 of 2 requested questions',
+      details: 'Only generated 0 of 2 requested questions',
       provider: 'mock',
     });
   });

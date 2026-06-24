@@ -499,7 +499,7 @@ describe('generator media import overlap regression', () => {
   });
 
   test('partial batched output parses normally and shows the actual ready count', async () => {
-    const partialLines = generatedTfLines(5);
+    const partialLines = generatedTfLines(49);
     parseEditorInput.mockImplementation((text) => ({
       questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
       errors: [],
@@ -509,23 +509,32 @@ describe('generator media import overlap regression', () => {
       title: 'Partial Quiz',
       lines: partialLines,
       partial: true,
-      completedCount: 5,
-      requestedCount: 20,
-      warning: 'Quiz ready with 5 questions.',
+      completedCount: 49,
+      requestedCount: 50,
+      warning: 'Quiz ready with 49 of 50 questions.',
     });
 
     document.getElementById('topicInput').value = 'routing basics';
-    document.getElementById('countInput').value = '20';
+    document.getElementById('countInput').value = '50';
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
     await flush();
     await flush();
 
     expect(parseEditorInput).toHaveBeenCalledWith(partialLines);
-    expect(document.getElementById('status').textContent).toBe('Quiz ready: 5 questions.');
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('Quiz ready with 5 questions.');
-    expect(document.getElementById('generationStatusMeta').textContent).toBe('5 questions');
+    expect(state.quiz.questions).toHaveLength(49);
+    expect(state.quiz.originalQuestions).toHaveLength(49);
+    expect(state.quiz.answers).toHaveLength(49);
+    expect(document.getElementById('status').textContent).toBe('Quiz ready: 49 questions.');
+    expect(document.getElementById('status').dataset.buildState).toBe('ready');
+    const card = document.getElementById('generationStatusCard');
+    expect(card.dataset.generationState).toBe('success');
+    expect(card.classList.contains('is-complete')).toBe(true);
+    expect(card.classList.contains('is-animating')).toBe(false);
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('Quiz ready with 49 of 50 questions.');
+    expect(document.getElementById('generationStatusMeta').textContent).toBe('49 questions');
     expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
   });
 
   test('reduced motion skips the success pulse class while keeping completed state', async () => {
