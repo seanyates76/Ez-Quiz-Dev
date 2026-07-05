@@ -241,6 +241,62 @@ function normalizeMatches(raw, leftLen, rightLen){
   return pairs;
 }
 
+function hasCompleteLeftCoverage(matches, leftLen){
+  if(!Array.isArray(matches) || matches.length !== leftLen) return false;
+  const seen = new Set();
+  for(const pair of matches){
+    if(!Array.isArray(pair) || pair.length < 2) return false;
+    const li = pair[0];
+    if(!Number.isInteger(li) || li < 0 || li >= leftLen || seen.has(li)) return false;
+    seen.add(li);
+  }
+  return seen.size === leftLen;
+}
+
+function parseLegacyIndex(raw, size){
+  const cleaned = sanitizeString(raw);
+  if(!/^\d+$/.test(cleaned)) return null;
+  const parsed = parseInt(cleaned, 10);
+  if(!Number.isInteger(parsed) || parsed < 1 || parsed > size) return null;
+  return parsed - 1;
+}
+
+function parseLegacyRightLetter(raw, size){
+  const cleaned = sanitizeString(raw);
+  if(!/^[A-Za-z]$/.test(cleaned)) return null;
+  const idx = letterToIndex(cleaned);
+  return Number.isInteger(idx) && idx >= 0 && idx < size ? idx : null;
+}
+
+function normalizeLegacyCorrectLetters(raw, optionsLen){
+  const parts = sanitizeString(raw).split(',').map(s=>s.trim()).filter(Boolean);
+  if(!parts.length) return [];
+  const out = [];
+  for(const part of parts){
+    const idx = parseLegacyRightLetter(part, optionsLen);
+    if(idx == null || out.includes(idx)) return [];
+    out.push(idx);
+  }
+  return out.sort((a,b)=>a-b);
+}
+
+function normalizeLegacyMatchPairs(raw, leftLen, rightLen){
+  const segments = sanitizeString(raw).split(',').map(s=>s.trim());
+  if(!segments.length || segments.some((segment)=>!segment) || segments.length !== leftLen) return null;
+  const pairs = [];
+  const seenLeft = new Set();
+  for(const segment of segments){
+    const parts = segment.split('-').map(s=>s.trim());
+    if(parts.length !== 2 || !parts[0] || !parts[1]) return null;
+    const li = parseLegacyIndex(parts[0], leftLen);
+    const ri = parseLegacyRightLetter(parts[1], rightLen);
+    if(li == null || ri == null || seenLeft.has(li)) return null;
+    seenLeft.add(li);
+    pairs.push([li, ri]);
+  }
+  return hasCompleteLeftCoverage(pairs, leftLen) ? pairs : null;
+}
+
 function resolveType(rawType){
   const t = sanitizeString(rawType).toUpperCase();
   if(!t) return '';
@@ -285,12 +341,13 @@ function normalizeStructuredQuestion(raw){
     const matchesRaw = raw.matches ?? raw.pairs ?? raw.mapping ?? raw.answers ?? raw.correct;
     const matches = normalizeMatches(matchesRaw, left.length, right.length);
     if(matches.length === 0) return null;
+    if(!hasCompleteLeftCoverage(matches, left.length)) return null;
     return { type: 'MT', prompt, left, right, matches };
   }
   return null;
 }
 
-const LEGACY_MC_RE = /^MC\|(.*)\|(.+?)\|(.+?)$/i;
+const LEGACY_MC_RE = /^MC\|(.*)\|(.+?)\|([A-Za-z](?:\s*,\s*[A-Za-z])*)$/i;
 const LEGACY_TF_RE = /^TF\|(.*)\|(T|F)$/i;
 const LEGACY_YN_RE = /^YN\|(.*)\|(Y|N)$/i;
 const LEGACY_MT_RE = /^MT\|(.*)\|(.+?)\|(.+?)\|(.+?)$/i;
@@ -302,7 +359,8 @@ function parseLegacyQuestion(line){
     const [, prompt, optsRaw, correctRaw] = trimmed.match(LEGACY_MC_RE);
     const options = optsRaw.split(';').map(s=>sanitizeString(s.replace(/^[A-D]\)\s*/i,''))).filter(Boolean);
     if(options.length < 2) return null;
-    const correct = normalizeCorrectIndexes(correctRaw, options);
+    const correct = normalizeLegacyCorrectLetters(correctRaw, options.length);
+    if(!correct.length) return null;
     return { type: 'MC', prompt: sanitizeString(prompt), options, correct };
   }
   if(LEGACY_TF_RE.test(trimmed)){
@@ -317,8 +375,8 @@ function parseLegacyQuestion(line){
     const [, prompt, leftRaw, rightRaw, pairsRaw] = trimmed.match(LEGACY_MT_RE);
     const left = leftRaw.split(';').map(s=>sanitizeString(s.replace(/^\d+\)\s*/,''))).filter(Boolean);
     const right = rightRaw.split(';').map(s=>sanitizeString(s.replace(/^[A-Z]\)\s*/i,''))).filter(Boolean);
-    const matches = normalizeMatches(pairsRaw, left.length, right.length);
-    if(left.length && right.length && matches.length){
+    const matches = normalizeLegacyMatchPairs(pairsRaw, left.length, right.length);
+    if(left.length && right.length && matches && matches.length){
       return { type: 'MT', prompt: sanitizeString(prompt), left, right, matches };
     }
   }

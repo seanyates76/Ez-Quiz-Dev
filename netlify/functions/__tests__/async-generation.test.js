@@ -21,6 +21,14 @@ function tfLine(n) {
   return `TF|Async fact ${n}.|T`;
 }
 
+function mtLine(n) {
+  return `MT|Async match ${n}.|1) Left ${n}A;2) Left ${n}B;3) Left ${n}C|A) Right ${n}A;B) Right ${n}B;C) Right ${n}C|1-A,2-B,3-C`;
+}
+
+function malformedMtLine(n) {
+  return `MT|Broken match ${n}.|1) Left ${n}A;2) Left ${n}B;3) Left ${n}C|A) Right ${n}A;B) Right ${n}B;C) Right ${n}C|1-B,2-A,3`;
+}
+
 function okLines(lines, title = 'Async Quiz') {
   return {
     statusCode: 200,
@@ -415,13 +423,55 @@ describe('async generation worker', () => {
       timeoutMode: 'async-worker',
       asyncWorker: true,
     });
-    expect(JSON.parse(handleGenerateQuiz.mock.calls[0][0].body)).toMatchObject({ count: 5 });
+    expect(JSON.parse(handleGenerateQuiz.mock.calls[0][0].body)).toMatchObject({ count: 8 });
   });
 
-  test('one failed batch is recorded and does not stop later batches', async () => {
+  test('oversampled response saves five valid questions from more than five candidates', async () => {
+    const lines = [1, 2, 3, 4, 5, 6, 7, 8].map(tfLine);
+    handleGenerateQuiz.mockResolvedValueOnce(okLines(lines));
+    const job = await createWorkerJob([
+      { batchId: 'batch-1', batchNo: 1, count: 5, sourceText: 'source 1', types: ['TF'] },
+    ], { requestedCount: 5 });
+
+    const done = await processGenerationJob(job.jobId, { store });
+
+    expect(done.status).toBe('complete');
+    expect(done.completedCount).toBe(5);
+    expect(done.questions).toEqual(lines.slice(0, 5));
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(handleGenerateQuiz.mock.calls[0][0].body).count).toBe(8);
+  });
+
+  test('malformed MT mapping is rejected before counting and valid MT is accepted', async () => {
+    handleGenerateQuiz
+      .mockResolvedValueOnce(okLines([malformedMtLine(1), mtLine(2)]))
+      .mockResolvedValueOnce(okLines([tfLine(3)]));
+    const job = await createWorkerJob([
+      { batchId: 'batch-1', batchNo: 1, count: 2, sourceText: 'source 1', types: ['MT', 'MT'] },
+    ], { requestedCount: 2 });
+
+    const done = await processGenerationJob(job.jobId, { store });
+
+    expect(done.status).toBe('complete');
+    expect(done.completedCount).toBe(done.questions.length);
+    expect(done.questions).toEqual([mtLine(2), tfLine(3)]);
+    expect(done.questions).not.toContain(malformedMtLine(1));
+    expect(done.failedBatches[0]).toMatchObject({
+      batchId: 'batch-1',
+      requestedCount: 2,
+      candidateCount: 2,
+      rawLineCount: 2,
+      acceptedCount: 1,
+      rejectedCount: 1,
+      rejectedReasons: { invalid_mt_mapping: 1 },
+    });
+  });
+
+  test('one failed batch is recorded and fill pass runs after later planned batches', async () => {
     handleGenerateQuiz
       .mockResolvedValueOnce(timeoutResponse())
-      .mockResolvedValueOnce(okLines(tfLine(2)));
+      .mockResolvedValueOnce(okLines(tfLine(2)))
+      .mockResolvedValueOnce(okLines(tfLine(1)));
     const job = await createWorkerJob([
       { batchId: 'batch-1', batchNo: 1, count: 1, sourceText: 'source 1', types: ['TF'] },
       { batchId: 'batch-2', batchNo: 2, count: 1, sourceText: 'source 2', types: ['TF'] },
@@ -429,56 +479,53 @@ describe('async generation worker', () => {
 
     const done = await processGenerationJob(job.jobId, { store });
 
-    expect(done.status).toBe('partial');
-    expect(done.completedCount).toBe(1);
-    expect(done.questions).toEqual([tfLine(2)]);
+    expect(done.status).toBe('complete');
+    expect(done.completedCount).toBe(2);
+    expect(done.questions).toEqual([tfLine(2), tfLine(1)]);
     expect(done.failedBatches).toHaveLength(1);
     expect(done.failedBatches[0]).toMatchObject({
       batchId: 'batch-1',
       message: 'A provider request timed out.',
+      candidateCount: 4,
     });
+    expect(JSON.parse(handleGenerateQuiz.mock.calls[1][0].body).sourceText).toBe('source 2');
+    expect(JSON.parse(handleGenerateQuiz.mock.calls[2][0].body).sourceText).toBe('source 1');
   });
 
-  test('failed multi-question batch retries as single-question calls and keeps successful retries', async () => {
+  test('fill pass saves only the missing count and stops when requested count is reached', async () => {
     handleGenerateQuiz
-      .mockResolvedValueOnce(timeoutResponse())
       .mockResolvedValueOnce(okLines(tfLine(1)))
-      .mockResolvedValueOnce(timeoutResponse())
-      .mockResolvedValueOnce(okLines(tfLine(3)));
+      .mockResolvedValueOnce(okLines([tfLine(2), tfLine(3)]))
+      .mockResolvedValueOnce(okLines([tfLine(4), tfLine(5), tfLine(6)]));
     const job = await createWorkerJob([
-      {
-        batchId: 'batch-1',
-        batchNo: 1,
-        count: 2,
-        sourceText: 'source 1',
-        types: ['TF', 'TF'],
-        plannedEntries: [
-          { sourceText: 'single source 1', types: ['TF'] },
-          { sourceText: 'single source 2', types: ['TF'] },
-        ],
-      },
-      { batchId: 'batch-2', batchNo: 2, count: 1, sourceText: 'source 3', types: ['TF'] },
-    ], { requestedCount: 3 });
+      { batchId: 'batch-1', batchNo: 1, count: 2, sourceText: 'source 1', types: ['TF'] },
+      { batchId: 'batch-2', batchNo: 2, count: 2, sourceText: 'source 2', types: ['TF'] },
+    ], { requestedCount: 4 });
 
     const done = await processGenerationJob(job.jobId, { store });
 
-    expect(done.status).toBe('partial');
-    expect(done.questions).toEqual([tfLine(1), tfLine(3)]);
-    expect(done.failedBatches.some((batch) => batch.retry)).toBe(true);
-    expect(handleGenerateQuiz).toHaveBeenCalledTimes(4);
+    expect(done.status).toBe('complete');
+    expect(done.completedCount).toBe(4);
+    expect(done.questions).toEqual([tfLine(1), tfLine(2), tfLine(3), tfLine(4)]);
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(3);
+    expect(JSON.parse(handleGenerateQuiz.mock.calls[2][0].body).count).toBe(4);
+    expect(done.questions).not.toContain(tfLine(5));
+    expect(done.questions).not.toContain(tfLine(6));
   });
 
   test('zero usable questions returns failed', async () => {
-    handleGenerateQuiz.mockResolvedValueOnce(okLines('not a quiz line'));
+    handleGenerateQuiz.mockResolvedValue(okLines('not a quiz line'));
     const job = await createWorkerJob([
-      { batchId: 'batch-1', batchNo: 1, count: 1, sourceText: 'source 1', types: ['TF'] },
-    ]);
+      { batchId: 'batch-1', batchNo: 1, count: 2, sourceText: 'source 1', types: ['TF'] },
+    ], { requestedCount: 2 });
 
     const done = await processGenerationJob(job.jobId, { store });
 
     expect(done.status).toBe('failed');
     expect(done.completedCount).toBe(0);
     expect(done.errors.some((err) => err.code === 'ZERO_USABLE_QUESTIONS')).toBe(true);
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(7);
+    expect(done.failedBatches).toHaveLength(7);
   });
 
   test('stopped job stops before future batches where possible', async () => {
@@ -520,5 +567,31 @@ describe('async generation worker', () => {
     expect(done.questions).toEqual(lines);
     expect(done.progressMessage).toBe('Generation stopped. 5 of 10 questions ready.');
     expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+  });
+
+  test('stop during fill preserves generated questions and ends the job', async () => {
+    const pendingFill = createDeferred();
+    handleGenerateQuiz
+      .mockResolvedValueOnce(okLines(tfLine(1)))
+      .mockReturnValueOnce(pendingFill.promise);
+    const job = await createWorkerJob([
+      { batchId: 'batch-1', batchNo: 1, count: 3, sourceText: 'source 1', types: ['TF'] },
+    ], { requestedCount: 3 });
+
+    const running = processGenerationJob(job.jobId, { store });
+    for (let i = 0; i < 12 && handleGenerateQuiz.mock.calls.length < 2; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(2);
+
+    await store.stopJob(job.jobId);
+    pendingFill.resolve(okLines([tfLine(2), tfLine(3)]));
+    const done = await running;
+
+    expect(done.status).toBe('stopped');
+    expect(done.stopped).toBe(true);
+    expect(done.completedCount).toBe(3);
+    expect(done.questions).toEqual([tfLine(1), tfLine(2), tfLine(3)]);
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(2);
   });
 });

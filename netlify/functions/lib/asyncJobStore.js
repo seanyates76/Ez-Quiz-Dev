@@ -102,12 +102,25 @@ function stoppedProgressMessage(completed, requested) {
 
 function safeBatchFailure(entry) {
   if (!entry || typeof entry !== 'object') return null;
+  const rejectedReasons = entry.rejectedReasons && typeof entry.rejectedReasons === 'object'
+    ? Object.fromEntries(Object.entries(entry.rejectedReasons)
+      .map(([key, value]) => [String(key).slice(0, 80), Number(value || 0)])
+      .filter(([key, value]) => key && value > 0))
+    : {};
   return {
     batchId: String(entry.batchId || '').slice(0, 80),
     batchNo: Number(entry.batchNo || 0),
     requestedCount: Number(entry.requestedCount || 0),
+    candidateCount: Number(entry.candidateCount || 0),
+    rawLineCount: Number(entry.rawLineCount || 0),
+    acceptedCount: Number(entry.acceptedCount || 0),
+    rejectedCount: Number(entry.rejectedCount || 0),
+    rejectedReasons,
+    unusedValidCount: Number(entry.unusedValidCount || 0),
     completedCount: Number(entry.completedCount || 0),
     retry: !!entry.retry,
+    fill: !!entry.fill,
+    kind: String(entry.kind || '').slice(0, 60),
     message: String(entry.message || 'A generation batch failed.').slice(0, 220),
   };
 }
