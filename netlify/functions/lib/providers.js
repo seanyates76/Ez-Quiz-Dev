@@ -233,6 +233,75 @@ function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
   ].filter(Boolean).join('\n');
 }
 
+function normalizeLaneContract(input = {}, count, types) {
+  input = input || {};
+  const quizLane = ['TRIVIA', 'EXACT_STUDY', 'ABSTRACT_STUDY'].includes(input.quizLane) ? input.quizLane : '';
+  if (!quizLane) return null;
+  const requestedType = String(input.questionType || (Array.isArray(types) && types[0]) || '').trim().toUpperCase();
+  const questionType = /^(MC|TF|YN|MT)$/.test(requestedType) ? requestedType : 'TF';
+  const requestedCount = Math.max(1, Math.min(50, parseInt(count || input.count || 1, 10) || 1));
+  return {
+    quizLane,
+    contractFlavor: String(input.contractFlavor || 'fact_recall').trim().slice(0, 80) || 'fact_recall',
+    questionType,
+    count: requestedCount,
+    scenario: !!input.scenario,
+    curveball: !!input.curveball,
+    curveballCount: Math.max(0, Math.min(requestedCount, parseInt(input.curveballCount || (input.curveball ? 1 : 0), 10) || 0)),
+  };
+}
+
+function lineFormatForType(type) {
+  if (type === 'MC') return 'MC|Question?|A) Option 1;B) Option 2;C) Option 3;D) Option 4|A';
+  if (type === 'TF') return 'TF|A true/false statement.|T';
+  if (type === 'YN') return 'YN|A yes/no question?|Y';
+  return 'MT|Match.|1) L1;2) L2;3) L3|A) R1;B) R2;C) R3|1-A,2-B,3-C';
+}
+
+function laneTaskLine(contract) {
+  if (contract.quizLane === 'TRIVIA') return 'Create recall questions that check facts, definitions, labels, commands, or acronyms.';
+  if (contract.quizLane === 'ABSTRACT_STUDY') return 'Create conceptual study questions that check principles, comparisons, tradeoffs, or conceptual application.';
+  return `Create deterministic study questions about ${contract.contractFlavor.replace(/_/g, ' ')}.`;
+}
+
+function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText, laneContract) {
+  const contract = normalizeLaneContract(laneContract, count, types);
+  if (!contract) return '';
+  const source = cleanSourceMaterial(sourceText);
+  const avoid = Array.isArray(avoidStems) && avoidStems.length
+    ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
+    : '';
+  const curveballLine = contract.curveball
+    ? `Curveball: create exactly ${Math.max(1, contract.curveballCount)} fair expert curveball in this batch. It must be source-grounded, test an edge case, exception, misleading assumption, or hidden dependency, and have one clearly correct answer.`
+    : 'Curveball: OFF';
+  return [
+    'You are generating an EZ Quiz batch.',
+    '',
+    `Quiz lane: ${contract.quizLane}`,
+    `Contract flavor: ${contract.contractFlavor}`,
+    `Question type: ${contract.questionType}`,
+    `Count: ${contract.count}`,
+    `Scenario framing: ${contract.scenario ? 'ON' : 'OFF'}`,
+    curveballLine,
+    '',
+    'Task:',
+    `${laneTaskLine(contract)} about ${topic}.`,
+    source ? 'Use only the source excerpts below.' : '',
+    contract.scenario ? 'Keep scenarios short and answerable.' : 'Do not add scenario framing; use direct standalone stems.',
+    `Return only valid EZ Quiz ${contract.questionType} lines.`,
+    'No explanations.',
+    'No markdown.',
+    'No extra text.',
+    avoid,
+    '',
+    'Output format:',
+    lineFormatForType(contract.questionType),
+    source ? '' : '',
+    source ? 'Source excerpts:' : '',
+    source || '',
+  ].filter((line) => line !== '').join('\n');
+}
+
 function splitNormalizedLines(lines){
   if(!lines) return [];
   return String(lines)
@@ -392,10 +461,11 @@ function echoGenerate({ topic, count, types, kind, avoidStems }){
   return out.join('\n');
 }
 
-async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems, timeoutMs }){
+async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems, timeoutMs, laneContract }){
   const selected = (provider || (env.AI_PROVIDER || 'gemini')).toLowerCase();
   const normalizedCount = Math.max(1, Math.min(50, parseInt(count || 10, 10)));
-  const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText);
+  const resolvedPrompt = prompt || buildLanePrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText, laneContract)
+    || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText);
   const resolvedTimeoutMs = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
     ? Number(timeoutMs)
     : providerTimeoutMs(env);
@@ -426,15 +496,16 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
   }
 }
 
-async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText, providerTimeoutMs: explicitProviderTimeoutMs }){
+async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract }){
   const n = Math.max(1, Math.min(50, parseInt(count||10,10)));
-  const prompt = buildPrompt(topic, n, types, difficulty, avoidStems, sourceText);
-  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems, timeoutMs: explicitProviderTimeoutMs });
+  const prompt = buildLanePrompt(topic, n, types, difficulty, avoidStems, sourceText, laneContract)
+    || buildPrompt(topic, n, types, difficulty, avoidStems, sourceText);
+  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems, timeoutMs: explicitProviderTimeoutMs, laneContract });
   const { title, lines } = normalizeLegacyLines(text, n);
   return { provider: usedProvider, model: usedModel, title, lines };
 }
 
-async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems, providerTimeoutMs: explicitProviderTimeoutMs }){
+async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems, providerTimeoutMs: explicitProviderTimeoutMs, laneContract }){
   const targetRaw = count == null ? 10 : count;
   let target = parseInt(targetRaw, 10);
   if(!Number.isFinite(target)) target = 10;
@@ -474,7 +545,7 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   for(let attempt = 0; attempt < passes && collected.length < target; attempt++){
     const remaining = target - collected.length;
     const ask = Math.min(batch, remaining);
-    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText, providerTimeoutMs: explicitProviderTimeoutMs });
+    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract });
 
     if(!resolvedTitle && title) resolvedTitle = title;
     if(usedProvider) resolvedProvider = usedProvider;
@@ -507,6 +578,7 @@ module.exports = {
   generateLines,
   generateInBatches,
   callProvider,
+  buildLanePrompt,
   buildPrompt,
   buildStructuredPrompt,
   cleanSourceMaterial,

@@ -4,6 +4,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { safeGenerationProfile } = require('./asyncGenerationPlanner.js');
 
 const STORE_NAME = 'async-generation-jobs';
 const DEFAULT_TTL_MS = 2 * 60 * 60 * 1000;
@@ -58,6 +59,7 @@ function expiredJob(jobId, job) {
     errors: [{ message: EXPIRED_MESSAGE }],
     progressMessage: EXPIRED_MESSAGE,
     stopped: false,
+    generationProfile: null,
     options: {},
     plannedBatches: [],
   };
@@ -87,6 +89,7 @@ function createJobRecord(input = {}, env = process.env) {
     errors: [],
     progressMessage: 'Generation job queued.',
     stopped: false,
+    generationProfile: input.generationProfile ? safeGenerationProfile(input.generationProfile) : null,
     options: clone(input.options || {}),
     plannedBatches: clone(input.plannedBatches || []),
   };
@@ -110,6 +113,11 @@ function safeBatchFailure(entry) {
   return {
     batchId: String(entry.batchId || '').slice(0, 80),
     batchNo: Number(entry.batchNo || 0),
+    quizLane: String(entry.quizLane || '').slice(0, 40),
+    contractFlavor: String(entry.contractFlavor || '').slice(0, 80),
+    questionType: String(entry.questionType || '').slice(0, 12),
+    scenario: !!entry.scenario,
+    curveball: !!entry.curveball,
     requestedCount: Number(entry.requestedCount || 0),
     rawLineCount: Number(entry.rawLineCount || 0),
     acceptedCount: Number(entry.acceptedCount || 0),
@@ -153,6 +161,7 @@ function publicJobStatus(job) {
     title: job && job.title || '',
     stopped: status === 'stopped' || !!(job && job.stopped),
     progressMessage: job && job.progressMessage || '',
+    generationProfile: job && job.generationProfile ? safeGenerationProfile(job.generationProfile) : null,
     failedBatches: (Array.isArray(job && job.failedBatches) ? job.failedBatches : [])
       .map(safeBatchFailure)
       .filter(Boolean),

@@ -4,6 +4,7 @@ const {
   DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS,
   DEFAULT_PROVIDER_TIMEOUT_MS,
   asyncProviderTimeoutMs,
+  buildLanePrompt,
   buildPrompt,
   buildStructuredPrompt,
   callProvider,
@@ -154,6 +155,51 @@ describe('providers helpers', () => {
     expect(out).toMatch(/Switches learn MAC addresses/);
     expectSourceHiddenFraming(out);
     expect(out).toMatch(/Include exactly 2 questions/);
+  });
+
+  test('buildLanePrompt uses compact assigned async batch contracts', () => {
+    const out = buildLanePrompt('CCNA Notes', 3, ['YN'], 'hard', ['Old config stem?'], 'interface g0/1 switchport mode access', {
+      quizLane: 'EXACT_STUDY',
+      contractFlavor: 'config_behavior',
+      questionType: 'YN',
+      scenario: true,
+      curveball: false,
+    });
+
+    expect(out).toContain('You are generating an EZ Quiz batch.');
+    expect(out).toContain('Quiz lane: EXACT_STUDY');
+    expect(out).toContain('Contract flavor: config_behavior');
+    expect(out).toContain('Question type: YN');
+    expect(out).toContain('Count: 3');
+    expect(out).toContain('Scenario framing: ON');
+    expect(out).toContain('Curveball: OFF');
+    expect(out).toContain('Create deterministic study questions about config behavior.');
+    expect(out).toContain('Use only the source excerpts below.');
+    expect(out).toContain('Return only valid EZ Quiz YN lines.');
+    expect(out).toContain('Avoid repeating these already-used question stems: Old config stem?.');
+    expect(out).toContain('YN|A yes/no question?|Y');
+    expect(out).not.toContain('Allowed question types');
+    expect(out).not.toContain('use scenarios where appropriate');
+  });
+
+  test('buildLanePrompt is skipped when no lane contract is assigned', () => {
+    expect(buildLanePrompt('Ports', 2, ['TF'], 'easy', [], '', null)).toBe('');
+  });
+
+  test('buildLanePrompt assigns one fair expert curveball when requested', () => {
+    const out = buildLanePrompt('OSPF', 3, ['MC'], 'expert', [], 'OSPF neighbor adjacency depends on matching area and timers.', {
+      quizLane: 'EXACT_STUDY',
+      contractFlavor: 'protocol_mechanics',
+      questionType: 'MC',
+      scenario: true,
+      curveball: true,
+      curveballCount: 1,
+    });
+
+    expect(out).toContain('Curveball: create exactly 1 fair expert curveball in this batch.');
+    expect(out).toContain('edge case, exception, misleading assumption, or hidden dependency');
+    expect(out).toContain('one clearly correct answer');
+    expect(out).toContain('MC|Question?|A) Option 1;B) Option 2;C) Option 3;D) Option 4|A');
   });
 
   test('buildPrompt keeps topic-only prompt behavior unchanged', () => {

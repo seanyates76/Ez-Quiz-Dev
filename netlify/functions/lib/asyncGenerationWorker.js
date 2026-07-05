@@ -2,7 +2,12 @@
 
 const { handleGenerateQuiz } = require('../generate-quiz.js');
 const { scrubStoredJobPayload, stoppedProgressMessage } = require('./asyncJobStore.js');
-const { buildSectionBatchSourceText } = require('./asyncGenerationPlanner.js');
+const {
+  buildProfiledBatches,
+  buildSectionBatchSourceText,
+  createDefaultGenerationProfile,
+  safeGenerationProfile,
+} = require('./asyncGenerationPlanner.js');
 const { parseLegacyQuestion } = require('./normalizer.js');
 
 const FILL_PASS_MAX_ATTEMPTS = 6;
@@ -160,10 +165,11 @@ function errorFromGenerateResponse(response) {
 async function runGenerateBatch(job, batch, state) {
   const options = job.options || {};
   const requestedCount = Math.max(1, parseInt(batch && batch.count || 1, 10) || 1);
+  const questionType = normalizeQuestionType(batch && batch.questionType || (Array.isArray(batch && batch.types) && batch.types[0]));
   const payload = {
     topic: job.topic,
     count: requestedCount,
-    types: Array.isArray(batch.types) && batch.types.length ? batch.types : options.types,
+    types: questionType ? Array.from({ length: requestedCount }, () => questionType) : (Array.isArray(batch.types) && batch.types.length ? batch.types : options.types),
     difficulty: options.difficulty,
     provider: options.provider,
     model: options.model,
@@ -171,10 +177,20 @@ async function runGenerateBatch(job, batch, state) {
     sourceText: batch.sourceText || '',
     avoidStems: state.avoidStems.slice(-60),
     format: 'legacy-lines',
+    quizLane: batch.quizLane,
+    contractFlavor: batch.contractFlavor,
+    questionType,
+    scenario: !!batch.scenario,
+    curveball: !!batch.curveball,
+    curveballCount: Number(batch.curveballCount || 0),
   };
   if (!payload.sourceText) delete payload.sourceText;
   if (!payload.sourceName) delete payload.sourceName;
   if (!payload.model) delete payload.model;
+  if (!payload.quizLane) delete payload.quizLane;
+  if (!payload.contractFlavor) delete payload.contractFlavor;
+  if (!payload.questionType) delete payload.questionType;
+  if (!payload.curveballCount) delete payload.curveballCount;
   const response = await handleGenerateQuiz({
     httpMethod: 'POST',
     headers: {},
@@ -255,8 +271,9 @@ function sourceTextForFillEntry(sourceBatch, sourceEntry) {
   ).trim();
 }
 
-function createFillPlannedEntries(sourceBatch, target) {
+function createFillPlannedEntries(sourceBatch, target, profile) {
   const requested = Math.max(1, Math.min(FILL_PASS_BATCH_TARGET, positiveBatchCount(target, 1)));
+  const safeProfile = profile ? safeGenerationProfile(profile) : null;
   const baseEntries = Array.isArray(sourceBatch && sourceBatch.plannedEntries) && sourceBatch.plannedEntries.length
     ? sourceBatch.plannedEntries.filter(Boolean)
     : [{
@@ -268,13 +285,27 @@ function createFillPlannedEntries(sourceBatch, target) {
 
   return Array.from({ length: requested }, (_, index) => {
     const sourceEntry = baseEntries[index % baseEntries.length] || {};
-    const plannedType = fillTypeForIndex(sourceBatch, sourceEntry, index);
+    const profileTypes = safeProfile && Array.isArray(safeProfile.allowedTypes) && safeProfile.allowedTypes.length
+      ? safeProfile.allowedTypes
+      : null;
+    const plannedType = profileTypes
+      ? normalizeQuestionType(sourceBatch && sourceBatch.questionType || profileTypes[index % profileTypes.length])
+      : fillTypeForIndex(sourceBatch, sourceEntry, index);
     const text = sourceTextForFillEntry(sourceBatch, sourceEntry);
+    const contractFlavor = sourceBatch && sourceBatch.contractFlavor
+      || (safeProfile && safeProfile.contractFlavors[index % safeProfile.contractFlavors.length])
+      || '';
     return {
       ...sourceEntry,
       count: 1,
       plannedType,
       types: [plannedType],
+      quizLane: sourceBatch && sourceBatch.quizLane || (safeProfile && safeProfile.quizLane) || '',
+      contractFlavor,
+      questionType: plannedType,
+      scenario: false,
+      curveball: false,
+      curveballCount: 0,
       sourceName: sourceEntry.sourceName || sourceBatch && sourceBatch.sourceName || '',
       headingPath: sourceEntry.headingPath || sourceEntry.sectionHeading || `Fill ${index + 1}`,
       sectionHeading: sourceEntry.sectionHeading || sourceEntry.headingPath || `Fill ${index + 1}`,
@@ -297,6 +328,8 @@ function alignPlannedBatchForProvider(batch, requestedCount) {
     sourceText: buildSectionBatchSourceText(plannedEntries) || String(batch && batch.sourceText || '').trim(),
     types: plannedEntries.map((entry) => normalizeQuestionType(entry && (entry.plannedType || (entry.types && entry.types[0])))),
     plannedEntries,
+    curveballCount: plannedEntries.reduce((sum, entry) => sum + (entry && entry.curveball ? 1 : 0), 0),
+    curveball: plannedEntries.some((entry) => entry && entry.curveball),
   };
 }
 
@@ -383,6 +416,11 @@ async function recordBatchFailure(store, jobId, batch, err, completedCount, retr
         {
           batchId: batch && batch.batchId || '',
           batchNo: Number(batch && batch.batchNo || 0),
+          quizLane: batch && batch.quizLane || '',
+          contractFlavor: batch && batch.contractFlavor || '',
+          questionType: batch && batch.questionType || '',
+          scenario: !!(batch && batch.scenario),
+          curveball: !!(batch && batch.curveball),
           requestedCount: Number(details && details.requestedCount != null ? details.requestedCount : batch && batch.count || 0),
           rawLineCount: diagnostics.rawLineCount,
           acceptedCount: diagnostics.acceptedCount,
@@ -526,14 +564,16 @@ async function processOneBatch(store, job, batch, state, options = {}) {
   }
 }
 
-function buildFillBatch(sourceEntry, attemptNo, missingCount) {
+function buildFillBatch(sourceEntry, attemptNo, missingCount, profile) {
   const sourceBatch = sourceEntry && sourceEntry.batch ? sourceEntry.batch : sourceEntry;
   const target = Math.max(1, Math.min(FILL_PASS_BATCH_TARGET, parseInt(missingCount, 10) || 1));
-  const plannedEntries = createFillPlannedEntries(sourceBatch, target);
+  const safeProfile = profile ? safeGenerationProfile(profile) : null;
+  const plannedEntries = createFillPlannedEntries(sourceBatch, target, safeProfile);
   const plannedCount = plannedEntries.length || target;
   const sourceText = plannedEntries.length
     ? buildSectionBatchSourceText(plannedEntries)
     : String(sourceBatch && sourceBatch.sourceText || '').trim();
+  const firstEntry = plannedEntries[0] || {};
   return {
     ...sourceBatch,
     batchId: `${sourceBatch && sourceBatch.batchId || 'batch'}-fill-${attemptNo}`,
@@ -545,6 +585,12 @@ function buildFillBatch(sourceEntry, attemptNo, missingCount) {
       ? plannedEntries.map((entry) => normalizeQuestionType(entry && entry.plannedType))
       : sourceBatch && sourceBatch.types,
     plannedEntries: plannedEntries.length ? plannedEntries : undefined,
+    quizLane: sourceBatch && sourceBatch.quizLane || firstEntry.quizLane || (safeProfile && safeProfile.quizLane) || '',
+    contractFlavor: firstEntry.contractFlavor || sourceBatch && sourceBatch.contractFlavor || '',
+    questionType: firstEntry.questionType || (plannedEntries.length ? normalizeQuestionType(plannedEntries[0].plannedType) : sourceBatch && sourceBatch.questionType),
+    scenario: !!firstEntry.scenario,
+    curveball: false,
+    curveballCount: 0,
     fill: true,
     retry: false,
   };
@@ -566,7 +612,7 @@ async function runFillPass(store, job, state) {
     const missing = Math.max(0, job.requestedCount - state.acceptedCount);
     if (missing <= 0) break;
     const source = sources[(attempt - 1) % sources.length];
-    const fillBatch = buildFillBatch(source, attempt, missing);
+    const fillBatch = buildFillBatch(source, attempt, missing, state.generationProfile);
     const result = await processOneBatch(store, job, fillBatch, state, { collectFillSource: false });
     if (result.stopped) return result;
   }
@@ -599,10 +645,33 @@ async function processGenerationJob(jobId, options = {}) {
   ));
   if (!job || isStopStatus(job.status)) return markFinal(store, jobId);
 
+  const sourceBacked = job.plannedBatches.some(isSourceBackedBatch);
+  if (sourceBacked) {
+    const generationProfile = safeGenerationProfile(job.generationProfile || createDefaultGenerationProfile({
+      requestedCount: job.requestedCount,
+      difficulty: job.options && job.options.difficulty,
+      sourceBacked: true,
+    }));
+    const profiledBatches = buildProfiledBatches(job.plannedBatches, generationProfile, job.requestedCount);
+    if (profiledBatches.length) {
+      job = await store.updateJob(job.jobId, (current) => (
+        isStopStatus(current.status)
+          ? current
+          : {
+              ...current,
+              generationProfile,
+              plannedBatches: profiledBatches,
+            }
+      ));
+      if (!job || isStopStatus(job.status)) return markFinal(store, jobId);
+    }
+  }
+
   const state = createCollectionState(job);
   state.acceptedCount = Array.isArray(job.questions) ? job.questions.length : Number(job.completedCount || 0);
   state.fillSources = [];
   state.fillSourceKeys = new Set();
+  state.generationProfile = job.generationProfile ? safeGenerationProfile(job.generationProfile) : null;
   for (const batch of job.plannedBatches) {
     if (state.acceptedCount >= job.requestedCount) break;
     const result = await processOneBatch(store, job, batch, state);

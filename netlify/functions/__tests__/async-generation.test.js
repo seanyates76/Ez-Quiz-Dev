@@ -189,6 +189,7 @@ describe('async generation endpoints and job store', () => {
 
   test('status endpoint returns safe queued, running, partial, complete, and failed states', async () => {
     const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
+    const { createDefaultGenerationProfile } = require('../lib/asyncGenerationPlanner.js');
     const { handler: status } = require('../generate-quiz-status.js');
     const store = createGenerationJobStore({ env: process.env });
     const job = await store.createJob({
@@ -207,6 +208,7 @@ describe('async generation endpoints and job store', () => {
         questions: state === 'queued' || state === 'running' || state === 'failed' ? [] : [tfLine(1)],
         completedCount: state === 'partial' || state === 'complete' || state === 'stopped' ? 1 : 0,
         errors: state === 'failed' ? [{ message: 'No usable quiz questions were generated.' }] : [],
+        generationProfile: createDefaultGenerationProfile({ requestedCount: 2, difficulty: 'hard', sourceBacked: true }),
       }));
       const res = await status({
         httpMethod: 'GET',
@@ -217,6 +219,11 @@ describe('async generation endpoints and job store', () => {
       expect(res.statusCode).toBe(200);
       expect(body.status).toBe(state);
       expect(body.stopped).toBe(state === 'stopped');
+      expect(body.generationProfile).toMatchObject({
+        quizLane: 'EXACT_STUDY',
+        scenarioRatio: 0.35,
+        curveballCount: 0,
+      });
       expect(JSON.stringify(body)).not.toContain('secret source text');
     }
   });
@@ -314,6 +321,49 @@ describe('async generation endpoints and job store', () => {
     expect(flatTypes.filter((type) => type === 'MT')).toHaveLength(12);
   });
 
+  test('default source-backed hard profile uses exact study lane without matching', () => {
+    const { createDefaultGenerationProfile } = require('../lib/asyncGenerationPlanner.js');
+
+    const profile = createDefaultGenerationProfile({ requestedCount: 50, difficulty: 'hard', sourceBacked: true });
+
+    expect(profile).toMatchObject({
+      quizLane: 'EXACT_STUDY',
+      batchSize: 3,
+      allowedTypes: ['MC', 'YN', 'TF'],
+      avoidTypes: ['MT'],
+      allowMatching: false,
+      scenarioRatio: 0.35,
+      scenarioBudget: 18,
+      curveballCount: 0,
+    });
+    expect(profile.contractFlavors).toEqual(expect.arrayContaining([
+      'calculation',
+      'config_behavior',
+      'protocol_mechanics',
+      'verification',
+      'troubleshooting',
+    ]));
+  });
+
+  test('expert profile uses scenario ratio 0.6 and assigns exactly one curveball', () => {
+    const {
+      buildProfiledBatches,
+      createDefaultGenerationProfile,
+    } = require('../lib/asyncGenerationPlanner.js');
+    const profile = createDefaultGenerationProfile({ requestedCount: 10, difficulty: 'expert', sourceBacked: true });
+    const batches = buildProfiledBatches([plannedSectionBatch(1, 10, ['MC', 'TF', 'YN', 'MT'])], profile, 10);
+    const entries = batches.flatMap((batch) => batch.plannedEntries || []);
+
+    expect(profile.scenarioRatio).toBe(0.6);
+    expect(profile.scenarioBudget).toBe(6);
+    expect(profile.curveballCount).toBe(1);
+    expect(new Set(batches.map((batch) => batch.quizLane))).toEqual(new Set(['EXACT_STUDY']));
+    expect(entries.filter((entry) => entry.scenario)).toHaveLength(6);
+    expect(entries.filter((entry) => entry.curveball)).toHaveLength(1);
+    expect(batches.reduce((sum, batch) => sum + Number(batch.curveballCount || 0), 0)).toBe(1);
+    expect(entries.some((entry) => entry.questionType === 'MT')).toBe(false);
+  });
+
   test('stop endpoint marks jobs stopped and keeps existing questions', async () => {
     const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
     const { handler: stop } = require('../generate-quiz-stop.js');
@@ -393,6 +443,53 @@ describe('async generation endpoints and job store', () => {
       jest.useRealTimers();
     }
   });
+
+  test('generate-quiz passes lane contract metadata into provider generation', async () => {
+    jest.resetModules();
+    process.env = { ...process.env, AI_PROVIDER: 'mock' };
+    const generateLines = jest.fn(async () => ({
+      title: 'Lane Quiz',
+      lines: tfLine(1),
+      provider: 'mock',
+      model: 'mock',
+    }));
+    jest.doMock('../lib/providers.js', () => ({
+      providerTimeoutMs: jest.fn(() => 22000),
+      asyncProviderTimeoutMs: jest.fn(() => 90000),
+      generateLines,
+      generateInBatches: jest.fn(),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+
+    try {
+      const { handleGenerateQuiz } = require('../generate-quiz.js');
+      const res = await handleGenerateQuiz(event({
+        topic: 'Lane',
+        count: 1,
+        provider: 'mock',
+        sourceText: 'Source excerpt.',
+        types: ['YN'],
+        quizLane: 'EXACT_STUDY',
+        contractFlavor: 'config_behavior',
+        questionType: 'YN',
+        scenario: true,
+        curveball: false,
+      }), { asyncWorker: true });
+
+      expect(res.statusCode).toBe(200);
+      expect(generateLines).toHaveBeenCalledTimes(1);
+      expect(generateLines.mock.calls[0][0].laneContract).toMatchObject({
+        quizLane: 'EXACT_STUDY',
+        contractFlavor: 'config_behavior',
+        questionType: 'YN',
+        scenario: true,
+        curveball: false,
+      });
+    } finally {
+      jest.dontMock('../lib/providers.js');
+    }
+  });
 });
 
 describe('async generation worker', () => {
@@ -420,19 +517,21 @@ describe('async generation worker', () => {
   });
 
   async function createWorkerJob(plannedBatches, overrides = {}) {
+    const defaultOptions = {
+      provider: 'mock',
+      difficulty: 'hard',
+      types: ['TF'],
+      sourceName: 'worker.md',
+      sourceText: 'private worker source',
+    };
+    const { options: overrideOptions, ...jobOverrides } = overrides;
     return store.createJob({
       topic: 'Worker',
       requestedCount: overrides.requestedCount || plannedBatches.reduce((sum, batch) => sum + Number(batch.count || 0), 0),
       sourceName: 'worker.md',
-      options: {
-        provider: 'mock',
-        difficulty: 'hard',
-        types: ['TF'],
-        sourceName: 'worker.md',
-        sourceText: 'private worker source',
-      },
+      options: { ...defaultOptions, ...(overrideOptions || {}) },
       plannedBatches,
-      ...overrides,
+      ...jobOverrides,
     });
   }
 
@@ -453,9 +552,11 @@ describe('async generation worker', () => {
     expect(adapter.saves.some((save) => save.completedCount === 2)).toBe(true);
   });
 
-  test('main source-backed batch with five planned entries requests five questions', async () => {
-    const lines = [1, 2, 3, 4, 5].map(tfLine);
-    handleGenerateQuiz.mockResolvedValueOnce(okLines(lines));
+  test('profiled hard source-backed batches use one lane and aligned planned entries', async () => {
+    handleGenerateQuiz
+      .mockResolvedValueOnce(okLines([tfLine(1), tfLine(2)]))
+      .mockResolvedValueOnce(okLines(tfLine(3)))
+      .mockResolvedValueOnce(okLines([tfLine(4), tfLine(5)]));
     const job = await createWorkerJob([
       plannedSectionBatch(1, 5, ['MC', 'TF', 'YN', 'MC', 'MT']),
     ], { requestedCount: 5 });
@@ -464,34 +565,69 @@ describe('async generation worker', () => {
     const bodies = requestBodies(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
-    expect(done.questions).toEqual(lines);
-    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+    expect(done.questions).toEqual([1, 2, 3, 4, 5].map(tfLine));
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(3);
     expect(handleGenerateQuiz.mock.calls[0][1]).toMatchObject({
       skipRateLimit: true,
       timeoutMode: 'async-worker',
       asyncWorker: true,
     });
-    expect(bodies[0].count).toBe(5);
-    expect(plannedMarkerCount(bodies[0].sourceText)).toBe(5);
-    expect(bodies[0].count).toBe(plannedMarkerCount(bodies[0].sourceText));
+    expect(bodies.map((body) => body.count)).toEqual([2, 1, 2]);
+    expect(new Set(bodies.map((body) => body.quizLane))).toEqual(new Set(['EXACT_STUDY']));
+    expect(bodies.map((body) => body.scenario)).toEqual([true, false, false]);
+    expect(bodies.every((body) => typeof body.curveball === 'boolean')).toBe(true);
+    expect(bodies.every((body) => body.count === plannedMarkerCount(body.sourceText))).toBe(true);
+    expect(bodies.every((body) => !body.types.includes('MT'))).toBe(true);
+    expect(done.generationProfile).toMatchObject({
+      quizLane: 'EXACT_STUDY',
+      scenarioRatio: 0.35,
+      curveballCount: 0,
+    });
   });
 
   test('main source-backed batch ignores extra returned lines without requesting extras', async () => {
     const lines = [1, 2, 3, 4, 5, 6, 7, 8].map(tfLine);
     handleGenerateQuiz.mockResolvedValueOnce(okLines(lines));
     const job = await createWorkerJob([
-      plannedSectionBatch(1, 5, ['TF']),
-    ], { requestedCount: 5 });
+      plannedSectionBatch(1, 3, ['TF']),
+    ], { requestedCount: 3, options: { difficulty: 'easy' } });
 
     const done = await processGenerationJob(job.jobId, { store });
     const bodies = requestBodies(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
-    expect(done.completedCount).toBe(5);
-    expect(done.questions).toEqual(lines.slice(0, 5));
+    expect(done.completedCount).toBe(3);
+    expect(done.questions).toEqual(lines.slice(0, 3));
     expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
-    expect(bodies[0].count).toBe(5);
-    expect(plannedMarkerCount(bodies[0].sourceText)).toBe(5);
+    expect(bodies[0].count).toBe(3);
+    expect(plannedMarkerCount(bodies[0].sourceText)).toBe(3);
+  });
+
+  test('expert lane sends one curveball contract and keeps scenario tags within budget', async () => {
+    handleGenerateQuiz
+      .mockResolvedValueOnce(okLines([tfLine(1), tfLine(2), tfLine(3)]))
+      .mockResolvedValueOnce(okLines([tfLine(4), tfLine(5), tfLine(6)]))
+      .mockResolvedValueOnce(okLines([tfLine(7), tfLine(8), tfLine(9)]))
+      .mockResolvedValueOnce(okLines(tfLine(10)));
+    const job = await createWorkerJob([
+      plannedSectionBatch(1, 10, ['MC', 'TF', 'YN', 'MT']),
+    ], { requestedCount: 10, options: { difficulty: 'expert' } });
+
+    const done = await processGenerationJob(job.jobId, { store });
+    const bodies = requestBodies(handleGenerateQuiz);
+
+    expect(done.status).toBe('complete');
+    expect(done.generationProfile).toMatchObject({
+      quizLane: 'EXACT_STUDY',
+      scenarioRatio: 0.6,
+      curveballCount: 1,
+    });
+    expect(new Set(bodies.map((body) => body.quizLane))).toEqual(new Set(['EXACT_STUDY']));
+    expect(bodies.filter((body) => body.curveball)).toHaveLength(1);
+    expect(bodies.reduce((sum, body) => sum + Number(body.curveballCount || 0), 0)).toBe(1);
+    expect(bodies.filter((body) => body.scenario).reduce((sum, body) => sum + body.count, 0)).toBeLessThanOrEqual(6);
+    expect(bodies.every((body) => body.count === plannedMarkerCount(body.sourceText))).toBe(true);
+    expect(bodies.every((body) => !body.types.includes('MT'))).toBe(true);
   });
 
   test('malformed MT mapping is rejected before counting and valid MT is accepted', async () => {
@@ -499,8 +635,8 @@ describe('async generation worker', () => {
       .mockResolvedValueOnce(okLines([malformedMtLine(1), mtLine(2)]))
       .mockResolvedValueOnce(okLines([tfLine(3)]));
     const job = await createWorkerJob([
-      { batchId: 'batch-1', batchNo: 1, count: 2, sourceText: 'source 1', types: ['MT', 'MT'] },
-    ], { requestedCount: 2 });
+      plannedSectionBatch(1, 2, ['MC']),
+    ], { requestedCount: 2, options: { difficulty: 'easy' } });
 
     const done = await processGenerationJob(job.jobId, { store });
 
@@ -509,7 +645,7 @@ describe('async generation worker', () => {
     expect(done.questions).toEqual([mtLine(2), tfLine(3)]);
     expect(done.questions).not.toContain(malformedMtLine(1));
     expect(done.failedBatches[0]).toMatchObject({
-      batchId: 'batch-1',
+      batchId: 'profile-batch-1',
       requestedCount: 2,
       rawLineCount: 2,
       acceptedCount: 1,
@@ -535,12 +671,13 @@ describe('async generation worker', () => {
     expect(done.questions).toEqual([tfLine(2), tfLine(1)]);
     expect(done.failedBatches).toHaveLength(1);
     expect(done.failedBatches[0]).toMatchObject({
-      batchId: 'batch-1',
+      batchId: 'profile-batch-1',
       message: 'A provider request timed out.',
       requestedCount: 1,
     });
     const bodies = requestBodies(handleGenerateQuiz);
-    expect(bodies[1].sourceText).toBe('source 2');
+    expect(bodies[1].sourceText).toContain('source 2');
+    expect(plannedMarkerCount(bodies[1].sourceText)).toBe(1);
     expect(bodies[2].sourceText).toContain('Planned question 1');
     expect(bodies[2].sourceText).toContain('source 1');
   });
@@ -549,12 +686,14 @@ describe('async generation worker', () => {
     handleGenerateQuiz
       .mockResolvedValueOnce(okLines([tfLine(1), tfLine(2)]))
       .mockResolvedValueOnce(okLines(tfLine(3)))
+      .mockResolvedValueOnce(okLines('not a quiz line'))
+      .mockResolvedValueOnce(okLines('not a quiz line'))
       .mockResolvedValueOnce(okLines([tfLine(4), tfLine(5), tfLine(6), tfLine(7), tfLine(8)]))
       .mockResolvedValueOnce(okLines([tfLine(9), tfLine(10), tfLine(11)]));
     const job = await createWorkerJob([
       plannedSectionBatch(1, 5, ['TF']),
       plannedSectionBatch(2, 5, ['TF']),
-    ], { requestedCount: 10 });
+    ], { requestedCount: 10, options: { difficulty: 'easy' } });
 
     const done = await processGenerationJob(job.jobId, { store });
     const bodies = requestBodies(handleGenerateQuiz);
@@ -562,15 +701,16 @@ describe('async generation worker', () => {
     expect(done.status).toBe('complete');
     expect(done.completedCount).toBe(10);
     expect(done.questions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(tfLine));
-    expect(handleGenerateQuiz).toHaveBeenCalledTimes(4);
-    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 2]);
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(6);
+    expect(bodies.map((body) => body.count)).toEqual([3, 3, 3, 1, 5, 2]);
     for (const body of bodies) {
       const plannedCount = plannedMarkerCount(body.sourceText);
       expect(plannedCount).toBeGreaterThan(0);
       expect(body.count).toBe(plannedCount);
+      expect(body.quizLane).toBe('EXACT_STUDY');
     }
-    expect(bodies[2].sourceText).toContain('batch-1 > Section 1-1');
-    expect(bodies[3].sourceText).toContain('batch-2 > Section 2-1');
+    expect(bodies[4].sourceText).toContain('batch-1 > Section 1-1');
+    expect(bodies[5].sourceText).toContain('batch-1 > Section 1-4');
     expect(done.questions).not.toContain(tfLine(11));
   });
 
@@ -585,8 +725,8 @@ describe('async generation worker', () => {
     expect(done.status).toBe('failed');
     expect(done.completedCount).toBe(0);
     expect(done.errors.some((err) => err.code === 'ZERO_USABLE_QUESTIONS')).toBe(true);
-    expect(handleGenerateQuiz).toHaveBeenCalledTimes(7);
-    expect(done.failedBatches).toHaveLength(7);
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(8);
+    expect(done.failedBatches).toHaveLength(8);
   });
 
   test('stopped job stops before future batches where possible', async () => {
@@ -624,9 +764,9 @@ describe('async generation worker', () => {
 
     expect(done.status).toBe('stopped');
     expect(done.stopped).toBe(true);
-    expect(done.completedCount).toBe(5);
-    expect(done.questions).toEqual(lines);
-    expect(done.progressMessage).toBe('Generation stopped. 5 of 10 questions ready.');
+    expect(done.completedCount).toBe(3);
+    expect(done.questions).toEqual(lines.slice(0, 3));
+    expect(done.progressMessage).toBe('Generation stopped. 3 of 10 questions ready.');
     expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
   });
 
@@ -637,7 +777,7 @@ describe('async generation worker', () => {
       .mockReturnValueOnce(pendingFill.promise);
     const job = await createWorkerJob([
       { batchId: 'batch-1', batchNo: 1, count: 3, sourceText: 'source 1', types: ['TF'] },
-    ], { requestedCount: 3 });
+    ], { requestedCount: 3, options: { difficulty: 'easy' } });
 
     const running = processGenerationJob(job.jobId, { store });
     for (let i = 0; i < 12 && handleGenerateQuiz.mock.calls.length < 2; i += 1) {

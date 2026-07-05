@@ -14,6 +14,12 @@ const SECTION_BATCH_EXCERPT_TARGET_CHARS = 520;
 const SECTION_BASE_TYPE_SEQUENCE = ['MC', 'TF', 'YN'];
 const SECTION_SAFE_FALLBACK_TYPE_SEQUENCE = ['TF', 'MC', 'YN'];
 const SECTION_BATCH_HEADING_MAX_CHARS = 180;
+const QUIZ_LANES = ['TRIVIA', 'EXACT_STUDY', 'ABSTRACT_STUDY'];
+const TRIVIA_CONTRACT_FLAVORS = ['definition_recall', 'fact_recall', 'command_recall', 'label_recognition'];
+const EXACT_STUDY_CONTRACT_FLAVORS = ['calculation', 'config_behavior', 'command_behavior', 'protocol_mechanics', 'verification', 'troubleshooting'];
+const ABSTRACT_STUDY_CONTRACT_FLAVORS = ['principle_reasoning', 'comparison', 'tradeoff', 'conceptual_application'];
+const DEFAULT_LANE_ALLOWED_TYPES = ['MC', 'YN', 'TF'];
+const DEFAULT_LANE_BATCH_SIZE = 3;
 
 function toPositiveCount(value, fallback = 10) {
   const parsed = parseInt(value, 10);
@@ -31,6 +37,69 @@ function normalizeQuestionTypesForPlanning(raw) {
     out.push(type);
   }
   return out.length ? out : VALID_QUESTION_TYPES.slice();
+}
+
+function normalizeDifficulty(raw) {
+  return String(raw || '').trim().toLowerCase().replace(/[-_\s]+/g, ' ');
+}
+
+function scenarioRatioForDifficulty(difficulty) {
+  const diff = normalizeDifficulty(difficulty);
+  if (diff === 'medium') return 0.15;
+  if (diff === 'hard') return 0.35;
+  if (diff === 'expert') return 0.6;
+  return 0;
+}
+
+function contractFlavorsForLane(quizLane) {
+  if (quizLane === 'TRIVIA') return TRIVIA_CONTRACT_FLAVORS.slice();
+  if (quizLane === 'ABSTRACT_STUDY') return ABSTRACT_STUDY_CONTRACT_FLAVORS.slice();
+  return EXACT_STUDY_CONTRACT_FLAVORS.slice();
+}
+
+function createDefaultGenerationProfile(input = {}) {
+  const requestedCount = Math.max(1, toPositiveCount(input.requestedCount || input.count, 10));
+  const difficulty = normalizeDifficulty(input.difficulty);
+  const scenarioRatio = scenarioRatioForDifficulty(difficulty);
+  const quizLane = QUIZ_LANES.includes(input.quizLane) ? input.quizLane : 'EXACT_STUDY';
+  const curveballCount = difficulty === 'expert' ? 1 : 0;
+  return {
+    quizLane,
+    batchSize: DEFAULT_LANE_BATCH_SIZE,
+    allowedTypes: DEFAULT_LANE_ALLOWED_TYPES.slice(),
+    avoidTypes: ['MT'],
+    allowMatching: false,
+    scenarioRatio,
+    scenarioBudget: Math.round(requestedCount * scenarioRatio),
+    curveballCount,
+    contractFlavors: contractFlavorsForLane(quizLane),
+  };
+}
+
+function safeGenerationProfile(profile = {}) {
+  const quizLane = QUIZ_LANES.includes(profile.quizLane) ? profile.quizLane : 'EXACT_STUDY';
+  const batchSize = Math.max(1, Math.min(5, toPositiveCount(profile.batchSize, DEFAULT_LANE_BATCH_SIZE)));
+  const allowedTypes = normalizeQuestionTypesForPlanning(profile.allowedTypes)
+    .filter((type) => type !== 'MT' || profile.allowMatching)
+    .filter((type, index, arr) => arr.indexOf(type) === index);
+  const safeAllowed = allowedTypes.length ? allowedTypes : DEFAULT_LANE_ALLOWED_TYPES.slice();
+  const avoidTypes = Array.isArray(profile.avoidTypes)
+    ? normalizeQuestionTypesForPlanning(profile.avoidTypes).filter((type, index, arr) => arr.indexOf(type) === index)
+    : [];
+  const flavors = Array.isArray(profile.contractFlavors)
+    ? profile.contractFlavors.map((flavor) => String(flavor || '').trim()).filter(Boolean).slice(0, 8)
+    : [];
+  return {
+    quizLane,
+    batchSize,
+    allowedTypes: safeAllowed,
+    avoidTypes,
+    allowMatching: !!profile.allowMatching,
+    scenarioRatio: Number.isFinite(Number(profile.scenarioRatio)) ? Number(profile.scenarioRatio) : 0,
+    scenarioBudget: Math.max(0, parseInt(profile.scenarioBudget || 0, 10) || 0),
+    curveballCount: Math.max(0, parseInt(profile.curveballCount || 0, 10) || 0),
+    contractFlavors: flavors.length ? flavors : contractFlavorsForLane(quizLane),
+  };
 }
 
 function sourceChunkBoundary(windowText, target) {
@@ -388,6 +457,132 @@ function makeBatch(entry, index, kind) {
   };
 }
 
+function sourceTextForSyntheticEntry(batch) {
+  return String(batch && batch.sourceText || '').trim();
+}
+
+function flattenBatchEntries(batches) {
+  const out = [];
+  for (const batch of Array.isArray(batches) ? batches : []) {
+    const plannedEntries = Array.isArray(batch && batch.plannedEntries) ? batch.plannedEntries.filter(Boolean) : [];
+    if (plannedEntries.length) {
+      plannedEntries.forEach((entry) => out.push({ ...entry, sourceBatchId: batch.batchId || '' }));
+      continue;
+    }
+    const count = Math.max(1, toPositiveCount(batch && batch.count, 1));
+    const batchTypes = Array.isArray(batch && batch.types) && batch.types.length ? batch.types : DEFAULT_LANE_ALLOWED_TYPES;
+    for (let index = 0; index < count; index += 1) {
+      const plannedType = plannedTypeForEntry({ plannedType: batchTypes[index % batchTypes.length] }) || DEFAULT_LANE_ALLOWED_TYPES[index % DEFAULT_LANE_ALLOWED_TYPES.length];
+      out.push({
+        count: 1,
+        plannedType,
+        types: [plannedType],
+        sourceText: sourceTextForSyntheticEntry(batch),
+        sectionText: sourceTextForSyntheticEntry(batch),
+        headingPath: batch && batch.kind ? `${batch.kind} ${batch.batchNo || index + 1}` : `Fill ${index + 1}`,
+        sectionHeading: batch && batch.kind ? `${batch.kind} ${batch.batchNo || index + 1}` : `Fill ${index + 1}`,
+        sourceBatchId: batch && batch.batchId || '',
+      });
+    }
+  }
+  return out;
+}
+
+function typeForProfileEntry(entry, profile, index) {
+  const rawType = plannedTypeForEntry(entry);
+  const allowed = Array.isArray(profile.allowedTypes) && profile.allowedTypes.length ? profile.allowedTypes : DEFAULT_LANE_ALLOWED_TYPES;
+  if (profile.allowMatching && rawType === 'MT' && allowed.includes('MT')) return 'MT';
+  const batchSize = Math.max(1, profile.batchSize || DEFAULT_LANE_BATCH_SIZE);
+  return allowed[Math.floor(index / batchSize) % allowed.length] || 'TF';
+}
+
+function contractFlavorForEntry(profile, index) {
+  const flavors = Array.isArray(profile.contractFlavors) && profile.contractFlavors.length
+    ? profile.contractFlavors
+    : contractFlavorsForLane(profile.quizLane);
+  const batchSize = Math.max(1, profile.batchSize || DEFAULT_LANE_BATCH_SIZE);
+  return flavors[Math.floor(index / batchSize) % flavors.length] || flavors[0] || 'fact_recall';
+}
+
+function tagEntriesForProfile(entries, profile, requestedCount) {
+  const safeProfile = safeGenerationProfile(profile);
+  const limit = Math.max(1, toPositiveCount(requestedCount, entries.length || 1));
+  const selected = entries.slice(0, limit);
+  const scenarioBudget = Math.max(0, Math.min(selected.length, safeProfile.scenarioBudget));
+  const curveballBudget = Math.max(0, Math.min(selected.length, safeProfile.curveballCount));
+  const curveballIndexes = new Set();
+  if (curveballBudget > 0) {
+    const preferredIndex = selected.findIndex((entry, index) => typeForProfileEntry(entry, safeProfile, index) === 'MC');
+    curveballIndexes.add(preferredIndex >= 0 ? preferredIndex : 0);
+  }
+
+  return selected.map((entry, index) => {
+    const curveball = curveballIndexes.has(index);
+    const questionType = curveball ? 'MC' : typeForProfileEntry(entry, safeProfile, index);
+    return {
+      ...entry,
+      count: 1,
+      plannedType: questionType,
+      types: [questionType],
+      quizLane: safeProfile.quizLane,
+      contractFlavor: contractFlavorForEntry(safeProfile, index),
+      questionType,
+      scenario: index < scenarioBudget,
+      curveball,
+      curveballCount: curveball ? 1 : 0,
+    };
+  });
+}
+
+function sameBatchContract(a, b) {
+  if (!a || !b) return false;
+  return a.quizLane === b.quizLane
+    && a.contractFlavor === b.contractFlavor
+    && a.questionType === b.questionType
+    && !!a.scenario === !!b.scenario;
+}
+
+function batchFromTaggedEntries(entries, batchNo) {
+  const safeEntries = Array.isArray(entries) ? entries.filter(Boolean) : [];
+  if (!safeEntries.length) return null;
+  const first = safeEntries[0];
+  const curveballCount = safeEntries.reduce((sum, entry) => sum + (entry && entry.curveball ? 1 : 0), 0);
+  return {
+    batchId: `profile-batch-${batchNo}`,
+    batchNo,
+    kind: 'profile-section',
+    count: safeEntries.length,
+    sourceText: buildSectionBatchSourceText(safeEntries),
+    types: safeEntries.map((entry) => entry.questionType).filter(Boolean),
+    plannedEntries: safeEntries,
+    quizLane: first.quizLane,
+    contractFlavor: first.contractFlavor,
+    questionType: first.questionType,
+    scenario: !!first.scenario,
+    curveball: curveballCount > 0,
+    curveballCount,
+  };
+}
+
+function buildProfiledBatches(plannedBatches, profile, requestedCount) {
+  const safeProfile = safeGenerationProfile(profile);
+  const taggedEntries = tagEntriesForProfile(flattenBatchEntries(plannedBatches), safeProfile, requestedCount);
+  const batches = [];
+  let current = [];
+  for (const entry of taggedEntries) {
+    const canAppend = current.length > 0
+      && current.length < safeProfile.batchSize
+      && sameBatchContract(current[0], entry);
+    if (!canAppend && current.length) {
+      batches.push(batchFromTaggedEntries(current, batches.length + 1));
+      current = [];
+    }
+    current.push(entry);
+  }
+  if (current.length) batches.push(batchFromTaggedEntries(current, batches.length + 1));
+  return batches.filter(Boolean);
+}
+
 function buildPlannedBatches(request = {}) {
   const requested = Math.max(1, toPositiveCount(request.count || request.requestedCount, 10));
   const sourceText = String(request.sourceText || '').trim();
@@ -432,9 +627,13 @@ module.exports = {
   SECTION_BATCH_SOURCE_TEXT_MAX_CHARS,
   SECTION_PACKET_TEXT_MAX_CHARS,
   TOPIC_ONLY_BATCH_SIZE,
+  buildProfiledBatches,
   buildPlannedBatches,
   buildSectionBatchSourceText,
   buildSectionRequestPlan,
+  createDefaultGenerationProfile,
+  safeGenerationProfile,
+  scenarioRatioForDifficulty,
   shouldPlanAsAsyncSource,
   splitSourceTextIntoChunks,
 };
