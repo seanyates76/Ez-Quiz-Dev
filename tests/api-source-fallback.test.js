@@ -6,6 +6,7 @@ const { loadBrowserModule } = require('./utils');
 function loadApi() {
   return loadBrowserModule('public/js/api.js', [
     'generateWithAI',
+    'ASYNC_GENERATION_POLL_MS',
     'GENERATION_BATCH_SIZE',
     'TOPIC_ONLY_BATCH_SIZE',
     'SECTION_AWARE_BATCH_SIZE',
@@ -111,6 +112,13 @@ describe('generateWithAI source-backed endpoint routing', () => {
     controller.abort();
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     expect(fetchOptions.signal.aborted).toBe(true);
+  });
+
+  test('async polling cadence is ten seconds while sync section fallback stays smaller', () => {
+    const { ASYNC_GENERATION_POLL_MS, SECTION_AWARE_BATCH_SIZE } = loadApi();
+
+    expect(ASYNC_GENERATION_POLL_MS).toBe(10000);
+    expect(SECTION_AWARE_BATCH_SIZE).toBe(3);
   });
 
   function sectionReport(count, overrides = {}) {

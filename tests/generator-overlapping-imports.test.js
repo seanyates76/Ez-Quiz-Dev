@@ -338,7 +338,9 @@ describe('generator media import overlap regression', () => {
 
     expect(hint.textContent).toBe('Imported good.pdf. Create a quiz from it.');
     expect(document.getElementById('mediaSourceStatus').hidden).toBe(false);
-    expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: good.pdf');
+    expect(document.getElementById('mediaSourceLabel').textContent).toBe('good.pdf');
+    expect(document.getElementById('mediaSourceLabel').getAttribute('aria-label')).toContain('chars extracted');
+    expect(document.getElementById('clearMediaSourceBtn').textContent.trim()).toBe('Remove');
     expect(state.media.sourceText).toBe('GOOD IMPORT TEXT');
     expect(state.media.sourceReport.sectionCount).toBe(1);
     expect(document.getElementById('mediaSourceStatus').dataset.sectionCount).toBe('1');
@@ -369,7 +371,7 @@ describe('generator media import overlap regression', () => {
     expect(hint.textContent).toBe('Imported notes.txt. Create a quiz from it.');
     expect(state.media.sourceText).toBe('Photosynthesis\nPlants use light.');
     expect(state.media.sourceReport.sectionCount).toBe(1);
-    expect(document.getElementById('mediaSourceLabel').textContent).toContain('TXT ready: notes.txt');
+    expect(document.getElementById('mediaSourceLabel').textContent).toBe('notes.txt');
   });
 
   test('empty topic plus successful file import sets cleaned source-derived topic', async () => {
@@ -440,7 +442,8 @@ describe('generator media import overlap regression', () => {
 
     expect(fetchCalls).toHaveLength(0);
     expect(state.media.sourceText).toHaveLength(60000);
-    expect(document.getElementById('mediaSourceLabel').textContent).toContain('60,000 chars extracted');
+    expect(document.getElementById('mediaSourceLabel').textContent).toBe('large-notes.txt');
+    expect(document.getElementById('mediaSourceLabel').getAttribute('aria-label')).toContain('60,000 chars extracted');
   });
 
   test('makes 50-question generation selectable and requestable', async () => {
@@ -652,7 +655,8 @@ describe('generator media import overlap regression', () => {
     }));
     expect(generateWithAI.mock.calls[0][2]).not.toHaveProperty('sourceText');
     expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
-    expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question.');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('1 of 5 questions ready.');
+    expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
@@ -700,10 +704,11 @@ describe('generator media import overlap regression', () => {
     expect(card.classList.contains('is-success-pulsing')).toBe(true);
     expect(card.getAttribute('aria-busy')).toBe('false');
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz ready.');
-    expect(document.getElementById('generationStatusMeta').textContent).toBe('1 question');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('1 of 5 questions ready.');
+    expect(document.getElementById('generationStatusMeta').hidden).toBe(true);
     expect(document.getElementById('cancelGenerationBtn').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
-    expect(document.getElementById('status').textContent).toBe('Quiz ready: 1 question.');
+    expect(document.getElementById('status').hidden).toBe(true);
   });
 
   test('topic-only generation status avoids study-material and source wording', async () => {
@@ -787,14 +792,14 @@ describe('generator media import overlap regression', () => {
     expect(state.quiz.questions).toHaveLength(49);
     expect(state.quiz.originalQuestions).toHaveLength(49);
     expect(state.quiz.answers).toHaveLength(49);
-    expect(document.getElementById('status').textContent).toBe('Quiz ready: 49 questions.');
+    expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('status').dataset.buildState).toBe('ready');
     const card = document.getElementById('generationStatusCard');
     expect(card.dataset.generationState).toBe('success');
     expect(card.classList.contains('is-complete')).toBe(true);
     expect(card.classList.contains('is-animating')).toBe(false);
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('Quiz ready with 49 of 50 questions.');
-    expect(document.getElementById('generationStatusMeta').textContent).toBe('49 questions');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('49 of 50 questions ready.');
+    expect(document.getElementById('generationStatusMeta').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
   });
@@ -885,7 +890,7 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(parseEditorInput).toHaveBeenCalledWith(lines);
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('Quiz ready with 12 of 50 questions.');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('12 of 50 questions ready.');
     expect(document.getElementById('startBtn').disabled).toBe(false);
   });
 
@@ -915,6 +920,51 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('error');
     expect(document.getElementById('generationStatusMessage').textContent).toBe('No usable quiz questions were returned.');
     expect(document.getElementById('startBtn').disabled).toBe(true);
+  });
+
+  test.each([
+    ['complete', 'success'],
+    ['partial', 'success'],
+    ['failed', 'error'],
+    ['canceled', 'canceled'],
+    ['expired', 'error'],
+  ])('async polling stops on %s status', async (terminalStatus, expectedCardState) => {
+    const lines = terminalStatus === 'partial'
+      ? generatedTfLines(12)
+      : generatedTfLines(50);
+    setMediaSource({
+      text: 'S'.repeat(25000),
+      name: `${terminalStatus}-notes.md`,
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
+    getAsyncGenerationStatus.mockResolvedValueOnce({
+      status: terminalStatus,
+      completedCount: terminalStatus === 'partial' ? 12 : (terminalStatus === 'complete' ? 50 : 0),
+      requestedCount: 50,
+      questions: terminalStatus === 'complete' || terminalStatus === 'partial' ? lines.split('\n') : [],
+      progressMessage: terminalStatus === 'complete'
+        ? 'Quiz ready with 50 of 50 questions.'
+        : terminalStatus === 'partial'
+          ? 'Quiz ready with 12 of 50 questions.'
+          : '',
+    });
+
+    document.getElementById('topicInput').value = `${terminalStatus} async`;
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+    await delay(5);
+
+    expect(getAsyncGenerationStatus).toHaveBeenCalledTimes(1);
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe(expectedCardState);
   });
 
   test('async cancel stops polling and marks the server job canceled', async () => {
@@ -1019,7 +1069,7 @@ describe('generator media import overlap regression', () => {
     expect(card.classList.contains('is-success-pulsing')).toBe(false);
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation canceled.');
     expect(document.getElementById('generationStatusMessage').textContent).toBe('Your topic is still here.');
-    expect(document.getElementById('status').textContent).toBe('Generation canceled.');
+    expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('generateBtn').disabled).toBe(false);
     expect(document.getElementById('startBtn').disabled).toBe(true);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('true');
@@ -1136,6 +1186,7 @@ describe('generator media import overlap regression', () => {
     expect(card.classList.contains('is-animating')).toBe(false);
     expect(card.classList.contains('is-complete')).toBe(false);
     expect(card.classList.contains('is-success-pulsing')).toBe(false);
+    expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('status').textContent).toContain('Could not create a valid quiz: Generation returned 0 of 5 usable questions');
     expect(document.getElementById('startBtn').disabled).toBe(true);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('true');
@@ -1157,7 +1208,8 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(document.getElementById('status').textContent).toBe('Quiz ready: 10 questions.');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('10 questions ready.');
+    expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('startToolbarBtn').classList.contains('start-primary')).toBe(true);
   });
 
@@ -1217,7 +1269,7 @@ describe('generator media import overlap regression', () => {
     expect(editor.value).toBe('');
     expect(mirror.value).toBe('');
     expect(hint.textContent).toBe('Imported second.pdf. Create a quiz from it.');
-    expect(document.getElementById('mediaSourceLabel').textContent).toContain('PDF ready: second.pdf');
+    expect(document.getElementById('mediaSourceLabel').textContent).toBe('second.pdf');
     expect(state.media.sourceText).toBe('SECOND IMPORT TEXT');
     expect(importBtn.hasAttribute('disabled')).toBe(false);
 

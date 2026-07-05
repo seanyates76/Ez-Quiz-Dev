@@ -195,6 +195,57 @@ describe('async generation endpoints and job store', () => {
     expect(body.status).toBe('expired');
     expect(JSON.stringify(body)).not.toContain('private source text');
   });
+
+  test('async source-backed planner uses five-question section batches', () => {
+    const {
+      SECTION_AWARE_BATCH_SIZE,
+      SECTION_BATCH_SOURCE_TEXT_MAX_CHARS,
+      buildPlannedBatches,
+    } = require('../lib/asyncGenerationPlanner.js');
+    const sourceReport = {
+      sectionCount: 50,
+      quizWorthyCount: 50,
+      sections: Array.from({ length: 50 }, (_, index) => ({
+        id: `section-${index + 1}`,
+        heading: `Topic ${index + 1}`,
+        headingPath: ['CCNA', `Topic ${index + 1}`],
+        text: [
+          `Topic ${index + 1} explains a useful CCNA concept with definitions.`,
+          `Term ${index + 1}: definition ${index + 1}.`,
+          'The section includes comparisons and troubleshooting cues.',
+        ].join('\n'),
+        charCount: 220,
+        lineCount: 3,
+        bulletCount: 3,
+        listCount: 1,
+        definitionSignal: true,
+        termSignal: true,
+        score: 100 - index,
+        reasons: ['definitions', 'terms', 'comparison'],
+        flags: [],
+      })),
+    };
+
+    const batches = buildPlannedBatches({
+      topic: 'CCNA Notes',
+      count: 50,
+      sourceName: 'CCNA_Notes.md',
+      sourceText: 'A'.repeat(60000),
+      sourceReport,
+      types: ['MC', 'TF', 'YN', 'MT'],
+    });
+    const flatTypes = batches.flatMap((batch) => batch.types || []);
+
+    expect(SECTION_AWARE_BATCH_SIZE).toBe(5);
+    expect(batches).toHaveLength(10);
+    expect(batches.every((batch) => batch.kind === 'section')).toBe(true);
+    expect(batches.map((batch) => batch.count)).toEqual(Array(10).fill(5));
+    expect(batches.every((batch) => batch.sourceText.length <= SECTION_BATCH_SOURCE_TEXT_MAX_CHARS)).toBe(true);
+    expect(flatTypes.filter((type) => type === 'MC')).toHaveLength(13);
+    expect(flatTypes.filter((type) => type === 'TF')).toHaveLength(13);
+    expect(flatTypes.filter((type) => type === 'YN')).toHaveLength(12);
+    expect(flatTypes.filter((type) => type === 'MT')).toHaveLength(12);
+  });
 });
 
 describe('async generation worker', () => {

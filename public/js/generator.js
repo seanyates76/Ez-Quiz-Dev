@@ -67,6 +67,13 @@ function shouldReduceMotion(){
   }
 }
 
+function syncBuildStatusVisibility(statusBox = $('status'), generationStatusCard = $('generationStatusCard')){
+  if(!statusBox) return;
+  const hasMessage = !!String(statusBox.textContent || '').trim();
+  const cardVisible = !!(generationStatusCard && !generationStatusCard.hidden && generationStatusCard.dataset.generationState !== 'idle');
+  statusBox.hidden = cardVisible || !hasMessage;
+}
+
 function hasStartableQuiz(){
   const startBtn = $('startBtn');
   return !!(Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0 && startBtn && !startBtn.disabled);
@@ -141,6 +148,7 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
   if(statusBox) {
     statusBox.textContent = statusMessage;
     statusBox.setAttribute('data-build-state', limitError ? 'failed' : (questions.length ? 'ready' : 'idle'));
+    syncBuildStatusVisibility(statusBox);
   }
   try {
     const pe = document.getElementById('parseErrors');
@@ -276,14 +284,14 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     return sourceCharCount(payload) >= 20000 || sourceSectionCount(payload) >= 50;
   }
 
-  function formatGenerationMetadata(payload = {}, { generatedCount } = {}){
+  function formatGenerationMetadata(payload = {}){
     const items = [];
+    const sourceName = String(payload.sourceName || S.media?.sourceName || '').trim();
     const chars = sourceCharCount(payload);
     const sections = sourceSectionCount(payload);
-    const questionCount = Number(generatedCount || payload.count || 0);
+    if(sourceName) items.push(sourceName);
     if(chars > 0) items.push(`${chars.toLocaleString()} chars`);
     if(sections > 0) items.push(`${sections.toLocaleString()} sections`);
-    if(questionCount > 0) items.push(formatUnitCount(questionCount, 'question'));
     return items.join(' • ');
   }
 
@@ -307,7 +315,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       metadata,
     };
 
-    if(!generationStatusCard) return;
+    if(!generationStatusCard) {
+      syncBuildStatusVisibility(statusBox, generationStatusCard);
+      return;
+    }
     generationStatusCard.hidden = nextState === 'idle';
     generationStatusCard.dataset.generationState = nextState;
     generationStatusCard.classList.toggle('is-animating', nextState === 'generating');
@@ -343,6 +354,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       cancelGenerationBtn.hidden = !canCancel;
       cancelGenerationBtn.disabled = !canCancel;
     }
+    syncBuildStatusVisibility(statusBox, generationStatusCard);
   }
 
   function startGenerationStatusRotation(session){
@@ -666,6 +678,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!mediaSourceStatus || !mediaSourceLabel) return;
     if(!text.trim()){
       mediaSourceLabel.textContent = '';
+      mediaSourceLabel.removeAttribute('title');
+      mediaSourceLabel.removeAttribute('aria-label');
+      mediaSourceStatus.removeAttribute('title');
       delete mediaSourceStatus.dataset.sectionCount;
       delete mediaSourceStatus.dataset.quizWorthyCount;
       delete mediaSourceStatus.dataset.weakSectionCount;
@@ -681,7 +696,16 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     mediaSourceStatus.dataset.sectionCount = String(summary.sectionCount || 0);
     mediaSourceStatus.dataset.quizWorthyCount = String(summary.quizWorthyCount || 0);
     mediaSourceStatus.dataset.weakSectionCount = String(summary.weakCount || 0);
-    mediaSourceLabel.textContent = `${kind} ready: ${name} · ${chars.toLocaleString()} chars extracted${sectionSummary ? ` · ${sectionSummary}` : ''}`;
+    const details = [
+      kind ? `${kind} file` : '',
+      `${chars.toLocaleString()} chars extracted`,
+      sectionSummary,
+    ].filter(Boolean).join(' • ');
+    const fullDetails = details ? `${name} • ${details}` : name;
+    mediaSourceLabel.textContent = name;
+    mediaSourceLabel.title = fullDetails;
+    mediaSourceLabel.setAttribute('aria-label', fullDetails);
+    mediaSourceStatus.title = fullDetails;
     mediaSourceStatus.hidden = false;
   }
   function setImportedSource({ text, name, kind, size, charCount } = {}){
@@ -743,14 +767,20 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const state = String(status.status || '').toLowerCase();
     const completed = Number(status.completedCount || 0);
     const requested = Number(status.requestedCount || 0);
-    if(status.progressMessage) return String(status.progressMessage);
+    if(state === 'partial' || state === 'complete') return formatGenerationReadyMessage(completed, requested);
     if(state === 'queued') return 'Starting generation job.';
-    if(state === 'running') return `${completed} of ${requested} questions ready.`;
-    if(state === 'partial') return `Quiz ready with ${completed} of ${requested} questions.`;
-    if(state === 'complete') return `Quiz ready with ${completed} of ${requested} questions.`;
+    if(state === 'running') return status.progressMessage ? String(status.progressMessage) : `${completed} of ${requested} questions ready.`;
     if(state === 'canceled') return 'Generation canceled.';
     if(state === 'failed') return 'Generation failed before any usable questions were created.';
+    if(status.progressMessage) return String(status.progressMessage);
     return 'Checking generation status.';
+  }
+
+  function formatGenerationReadyMessage(completed, requested){
+    const ready = Math.max(0, Number(completed || 0));
+    const wanted = Math.max(0, Number(requested || 0));
+    if(wanted > ready) return `${ready.toLocaleString()} of ${wanted.toLocaleString()} questions ready.`;
+    return `${formatUnitCount(ready, 'question')} ready.`;
   }
 
   function asyncStatusToOutput(status = {}){
@@ -766,7 +796,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       completedCount: completed,
       requestedCount: requested,
       warning: completed > 0 && requested > 0 && completed < requested
-        ? `Quiz ready with ${completed} of ${requested} questions.`
+        ? formatGenerationReadyMessage(completed, requested)
         : '',
     };
   }
@@ -801,7 +831,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const requested = Number(status && status.requestedCount || payload.count || 0);
       setGenerationStatusState('generating', {
         requestId: session.id,
-        metadata: formatGenerationMetadata(payload, { generatedCount: completed || requested }),
+        metadata: formatGenerationMetadata(payload),
         message: asyncProgressMessage(status),
         largeSource: isLargeGenerationSource(payload),
       });
@@ -925,6 +955,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!statusBox) return;
     statusBox.setAttribute('data-build-state', state || 'idle');
     statusBox.textContent = String(message || '').trim();
+    syncBuildStatusVisibility(statusBox, generationStatusCard);
   }
   if(statusBox && statusBox.textContent.trim() === 'Add a topic or study material, then create a quiz.'){
     setBuildStatus('idle', '');
@@ -1102,7 +1133,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         });
         setPrimaryAction();
         updatePrimaryHint();
-        setBuildStatus('source-ready', `Study material ready: ${file.name || 'source text'}.`);
+        setBuildStatus('source-ready', '');
         setHint(`Imported ${file.name || 'source text'}. Create a quiz from it.`);
         try { announce('Imported source ready. Create a quiz from it.', 'polite'); } catch {}
         return;
@@ -1133,7 +1164,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
           });
           setPrimaryAction();
           updatePrimaryHint();
-          setBuildStatus('source-ready', `Study material ready: ${file.name || 'media'}.`);
+          setBuildStatus('source-ready', '');
           setHint(`Imported ${file.name || 'media'}. Create a quiz from it.`);
           try { announce('Imported source ready. Create a quiz from it.', 'polite'); } catch {}
         }
@@ -1560,13 +1591,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const title = (out && out.title) ? out.title : '';
       runParseFlow(lines, payload.topic, title);
       setLastGen(payload);
-      const partialWarning = String(out && out.warning || '').trim();
       setGenerationStatusState('success', {
         requestId: session.id,
-        metadata: formatGenerationMetadata(payload, { generatedCount: parsed.questions.length }),
-        message: ((out && out.partial) || parsed.questions.length !== Number(payload.count || 0))
-          ? (partialWarning || `Quiz ready with ${parsed.questions.length} of ${Number(payload.count || parsed.questions.length)} questions.`)
-          : 'Start Quiz is ready when you are.',
+        metadata: formatGenerationMetadata(payload),
+        message: formatGenerationReadyMessage(parsed.questions.length, Number(payload.count || parsed.questions.length)),
         largeSource: isLargeGenerationSource(payload),
       });
       setPrimaryAction();
