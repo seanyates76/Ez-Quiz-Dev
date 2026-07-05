@@ -81,6 +81,7 @@ const API_ENDPOINT_CANDIDATES = normalizeEndpointSpecs();
 const LARGE_SOURCE_MULTI_REQUEST_THRESHOLD = 20000;
 export const GENERATION_BATCH_SIZE = 5;
 export const TOPIC_ONLY_BATCH_SIZE = GENERATION_BATCH_SIZE;
+export const SECTION_AWARE_BATCH_SIZE = 3;
 export const LARGE_SOURCE_CHUNK_TARGET_CHARS = 4000;
 export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
 export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
@@ -466,7 +467,7 @@ function fallbackSectionTextFromPacket(raw){
 }
 
 function buildSectionBatchSourceText(entries){
-  const plannedEntries = Array.isArray(entries) ? entries.filter(Boolean).slice(0, GENERATION_BATCH_SIZE) : [];
+  const plannedEntries = Array.isArray(entries) ? entries.filter(Boolean).slice(0, SECTION_AWARE_BATCH_SIZE) : [];
   if(!plannedEntries.length) return '';
   const sourceName = compactInline(plannedEntries.find((entry) => entry && entry.sourceName)?.sourceName || '', 160);
   const metas = plannedEntries.map((entry, index) => {
@@ -509,7 +510,7 @@ function buildSectionBatchSourceText(entries){
 }
 
 function buildSectionBatchRequestEntry(entries){
-  const plannedEntries = Array.isArray(entries) ? entries.filter(Boolean).slice(0, GENERATION_BATCH_SIZE) : [];
+  const plannedEntries = Array.isArray(entries) ? entries.filter(Boolean).slice(0, SECTION_AWARE_BATCH_SIZE) : [];
   if(!plannedEntries.length) return null;
   return {
     count: plannedEntries.length,
@@ -519,9 +520,9 @@ function buildSectionBatchRequestEntry(entries){
   };
 }
 
-function chunkSectionRequestPlan(plan, batchSize = GENERATION_BATCH_SIZE){
+function chunkSectionRequestPlan(plan, batchSize = SECTION_AWARE_BATCH_SIZE){
   const entries = Array.isArray(plan) ? plan.filter(Boolean) : [];
-  const size = Math.max(1, Math.min(GENERATION_BATCH_SIZE, toPositiveCount(batchSize, GENERATION_BATCH_SIZE)));
+  const size = Math.max(1, Math.min(SECTION_AWARE_BATCH_SIZE, toPositiveCount(batchSize, SECTION_AWARE_BATCH_SIZE)));
   const chunks = [];
   for(let i = 0; i < entries.length; i += size){
     const batch = buildSectionBatchRequestEntry(entries.slice(i, i + size));
@@ -531,7 +532,7 @@ function chunkSectionRequestPlan(plan, batchSize = GENERATION_BATCH_SIZE){
 }
 
 function limitSectionRequestEntry(entry, maxCount){
-  const count = Math.max(1, Math.min(GENERATION_BATCH_SIZE, toPositiveCount(maxCount, GENERATION_BATCH_SIZE)));
+  const count = Math.max(1, Math.min(SECTION_AWARE_BATCH_SIZE, toPositiveCount(maxCount, SECTION_AWARE_BATCH_SIZE)));
   const plannedEntries = Array.isArray(entry && entry.plannedEntries) ? entry.plannedEntries : [];
   if(plannedEntries.length > count){
     return buildSectionBatchRequestEntry(plannedEntries.slice(0, count));
@@ -624,7 +625,7 @@ function buildSectionZeroLineRetry(entry, sectionPlan){
 function buildSectionShortfallRetryBatch(sectionPlan, remaining, cursor = 0){
   const packets = Array.isArray(sectionPlan && sectionPlan.retryPackets) ? sectionPlan.retryPackets : [];
   const allowedTypes = Array.isArray(sectionPlan && sectionPlan.allowedTypes) ? sectionPlan.allowedTypes : [];
-  const ask = Math.min(GENERATION_BATCH_SIZE, Math.max(0, toPositiveCount(remaining, 0)));
+  const ask = Math.min(SECTION_AWARE_BATCH_SIZE, Math.max(0, toPositiveCount(remaining, 0)));
   if(!packets.length || !allowedTypes.length || ask <= 0) return null;
   const entries = [];
   for(let index = 0; index < ask; index += 1){
@@ -798,7 +799,7 @@ async function generateSectionLargeSourceWithAI(topic, requested, opts, sectionP
     }
     if(!planned) break;
     planned = limitSectionRequestEntry(planned, requested - collected.length);
-    const ask = Math.min(planned.count || GENERATION_BATCH_SIZE, requested - collected.length, GENERATION_BATCH_SIZE);
+    const ask = Math.min(planned.count || SECTION_AWARE_BATCH_SIZE, requested - collected.length, SECTION_AWARE_BATCH_SIZE);
     requestNo += 1;
 
     let out;

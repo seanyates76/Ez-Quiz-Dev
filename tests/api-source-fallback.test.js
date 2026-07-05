@@ -8,6 +8,7 @@ function loadApi() {
     'generateWithAI',
     'GENERATION_BATCH_SIZE',
     'TOPIC_ONLY_BATCH_SIZE',
+    'SECTION_AWARE_BATCH_SIZE',
     'LARGE_SOURCE_CHUNK_TARGET_CHARS',
     'SECTION_PACKET_TEXT_MAX_CHARS',
     'SECTION_BATCH_SOURCE_TEXT_MAX_CHARS',
@@ -164,7 +165,7 @@ describe('generateWithAI source-backed endpoint routing', () => {
   }
 
   test('large source with sourceReport uses compact section-based requests instead of raw chunks', async () => {
-    const { generateWithAI, GENERATION_BATCH_SIZE, SECTION_BATCH_SOURCE_TEXT_MAX_CHARS } = loadApi();
+    const { generateWithAI, SECTION_AWARE_BATCH_SIZE, SECTION_BATCH_SOURCE_TEXT_MAX_CHARS } = loadApi();
     const sourceText = 'A'.repeat(30000);
     const report = sectionReport(25, { textChars: 1800 });
     const bodies = [];
@@ -184,25 +185,34 @@ describe('generateWithAI source-backed endpoint routing', () => {
       types: ['TF'],
     });
 
-    expect(bodies).toHaveLength(4);
-    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
-    expect(Math.max(...bodies.map((body) => body.count))).toBeLessThanOrEqual(GENERATION_BATCH_SIZE);
-    expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(['TF', 'TF', 'TF', 'TF', 'TF']))).toBe(true);
+    expect(SECTION_AWARE_BATCH_SIZE).toBe(3);
+    expect(bodies).toHaveLength(7);
+    expect(bodies.map((body) => body.count)).toEqual([3, 3, 3, 3, 3, 3, 2]);
+    expect(Math.max(...bodies.map((body) => body.count))).toBeLessThanOrEqual(SECTION_AWARE_BATCH_SIZE);
+    expect(bodies.map((body) => body.types)).toEqual([
+      ['TF', 'TF', 'TF'],
+      ['TF', 'TF', 'TF'],
+      ['TF', 'TF', 'TF'],
+      ['TF', 'TF', 'TF'],
+      ['TF', 'TF', 'TF'],
+      ['TF', 'TF', 'TF'],
+      ['TF', 'TF'],
+    ]);
     expect(bodies.every((body) => body.sourceText.length <= SECTION_BATCH_SOURCE_TEXT_MAX_CHARS)).toBe(true);
     expect(bodies.every((body) => body.sourceText !== sourceText)).toBe(true);
     expect(bodies.every((body) => !body.sourceReport)).toBe(true);
     expect((bodies[0].sourceText.match(/Source name:/g) || [])).toHaveLength(1);
     expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
-    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 5');
-    expect(bodies[1].sourceText).toContain('Heading path: Domain > Topic 6');
-    expect(bodies[3].sourceText).toContain('Heading path: Domain > Topic 20');
+    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 3');
+    expect(bodies[1].sourceText).toContain('Heading path: Domain > Topic 4');
+    expect(bodies[6].sourceText).toContain('Heading path: Domain > Topic 20');
     expect(bodies[0].sourceText).toContain('Section excerpt:');
     expect(bodies[0].sourceText).toContain('Topic 1: this section explains');
     expect(out.lines.split('\n')).toHaveLength(20);
   });
 
-  test('section-aware sourceReport count 50 uses ten batches of five', async () => {
-    const { generateWithAI, GENERATION_BATCH_SIZE, SECTION_BATCH_SOURCE_TEXT_MAX_CHARS } = loadApi();
+  test('section-aware sourceReport count 50 uses seventeen batches of three or fewer', async () => {
+    const { generateWithAI, SECTION_AWARE_BATCH_SIZE, SECTION_BATCH_SOURCE_TEXT_MAX_CHARS } = loadApi();
     const sourceText = 'A'.repeat(30000);
     const report = sectionReport(60, { textChars: 1800 });
     const bodies = [];
@@ -222,25 +232,30 @@ describe('generateWithAI source-backed endpoint routing', () => {
     });
 
     const flatTypes = bodies.flatMap((body) => body.types);
-    expect(bodies).toHaveLength(10);
-    expect(bodies.every((body) => body.count === GENERATION_BATCH_SIZE)).toBe(true);
-    expect(bodies.every((body) => body.count <= GENERATION_BATCH_SIZE)).toBe(true);
+    expect(SECTION_AWARE_BATCH_SIZE).toBe(3);
+    expect(bodies).toHaveLength(17);
+    expect(bodies.map((body) => body.count)).toEqual([
+      3, 3, 3, 3, 3, 3, 3, 3, 3,
+      3, 3, 3, 3, 3, 3, 3, 2,
+    ]);
+    expect(bodies.every((body) => body.count <= SECTION_AWARE_BATCH_SIZE)).toBe(true);
     expect(bodies.every((body) => body.sourceText.length <= SECTION_BATCH_SOURCE_TEXT_MAX_CHARS)).toBe(true);
-    expect(Math.max(...bodies.map((body) => body.count))).toBe(GENERATION_BATCH_SIZE);
-    expect(bodies[0].types).toEqual(['MC', 'TF', 'YN', 'MT', 'MC']);
-    expect(bodies[1].types).toEqual(['TF', 'YN', 'MT', 'MC', 'TF']);
+    expect(Math.max(...bodies.map((body) => body.count))).toBe(SECTION_AWARE_BATCH_SIZE);
+    expect(bodies[0].types).toEqual(['MC', 'TF', 'YN']);
+    expect(bodies[1].types).toEqual(['MT', 'MC', 'TF']);
+    expect(bodies[16].types).toEqual(['MC', 'TF']);
     expect(flatTypes.filter((type) => type === 'MC')).toHaveLength(13);
     expect(flatTypes.filter((type) => type === 'TF')).toHaveLength(13);
     expect(flatTypes.filter((type) => type === 'YN')).toHaveLength(12);
     expect(flatTypes.filter((type) => type === 'MT')).toHaveLength(12);
     expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
-    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 5');
-    expect(bodies[9].sourceText).toContain('Heading path: Domain > Topic 50');
+    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 3');
+    expect(bodies[16].sourceText).toContain('Heading path: Domain > Topic 50');
     expect(bodies.every((body) => !body.sourceReport)).toBe(true);
     expect(out.lines.split('\n')).toHaveLength(50);
   });
 
-  test('section-aware planning sends one exact planned question type per request', async () => {
+  test('section-aware planning preserves planned type order across batches', async () => {
     const { generateWithAI } = loadApi();
     const sourceText = 'T'.repeat(30000);
     const report = sectionReport(12);
@@ -260,15 +275,17 @@ describe('generateWithAI source-backed endpoint routing', () => {
       types: ['MC', 'TF', 'YN', 'MT'],
     });
 
-    expect(bodies).toHaveLength(2);
-    expect(bodies.map((body) => body.count)).toEqual([5, 3]);
+    expect(bodies).toHaveLength(3);
+    expect(bodies.map((body) => body.count)).toEqual([3, 3, 2]);
     expect(bodies.map((body) => body.types)).toEqual([
-      ['MC', 'TF', 'YN', 'MT', 'MC'],
-      ['TF', 'YN', 'MT'],
+      ['MC', 'TF', 'YN'],
+      ['MT', 'MC', 'TF'],
+      ['YN', 'MT'],
     ]);
     expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
-    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 5');
-    expect(bodies[1].sourceText).toContain('Heading path: Domain > Topic 8');
+    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 3');
+    expect(bodies[1].sourceText).toContain('Heading path: Domain > Topic 6');
+    expect(bodies[2].sourceText).toContain('Heading path: Domain > Topic 8');
     expect(out.lines.split('\n')).toHaveLength(8);
   });
 
@@ -293,13 +310,13 @@ describe('generateWithAI source-backed endpoint routing', () => {
     });
 
     expect(sourceText.length).toBeLessThan(20000);
-    expect(bodies).toHaveLength(4);
-    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
-    expect(bodies.every((body) => body.count <= 5)).toBe(true);
+    expect(bodies).toHaveLength(7);
+    expect(bodies.map((body) => body.count)).toEqual([3, 3, 3, 3, 3, 3, 2]);
+    expect(bodies.every((body) => body.count <= 3)).toBe(true);
     expect(bodies.every((body) => body.sourceText !== sourceText)).toBe(true);
     expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
-    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 5');
-    expect(bodies[3].sourceText).toContain('Heading path: Domain > Topic 20');
+    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 3');
+    expect(bodies[6].sourceText).toContain('Heading path: Domain > Topic 20');
     expect(bodies.every((body) => !body.sourceReport)).toBe(true);
     expect(out.lines.split('\n')).toHaveLength(20);
   });
@@ -324,10 +341,13 @@ describe('generateWithAI source-backed endpoint routing', () => {
       types: ['MC', 'TF', 'YN', 'MT'],
     });
 
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0].count).toBe(5);
-    expect(bodies[0].types).toEqual(['MC', 'TF', 'YN', 'MT', 'MC']);
-    expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 4');
+    expect(bodies).toHaveLength(2);
+    expect(bodies.map((body) => body.count)).toEqual([3, 2]);
+    expect(bodies.map((body) => body.types)).toEqual([
+      ['MC', 'TF', 'YN'],
+      ['MT', 'MC'],
+    ]);
+    expect(bodies[1].sourceText).toContain('Heading path: Domain > Topic 4');
   });
 
   test('section-aware count 10 and count 5 distribute across selected sections', async () => {
@@ -355,16 +375,17 @@ describe('generateWithAI source-backed endpoint routing', () => {
       runs.push({ requested, bodies, out });
     }
 
-    expect(runs[0].bodies).toHaveLength(2);
-    expect(runs[0].bodies.map((body) => body.count)).toEqual([5, 5]);
+    expect(runs[0].bodies).toHaveLength(4);
+    expect(runs[0].bodies.map((body) => body.count)).toEqual([3, 3, 3, 1]);
     expect(runs[0].bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
-    expect(runs[0].bodies[0].sourceText).toContain('Heading path: Domain > Topic 5');
-    expect(runs[0].bodies[1].sourceText).toContain('Heading path: Domain > Topic 10');
+    expect(runs[0].bodies[0].sourceText).toContain('Heading path: Domain > Topic 3');
+    expect(runs[0].bodies[3].sourceText).toContain('Heading path: Domain > Topic 10');
     expect(runs[0].out.lines.split('\n')).toHaveLength(10);
-    expect(runs[1].bodies).toHaveLength(1);
-    expect(runs[1].bodies[0].count).toBe(5);
+    expect(runs[1].bodies).toHaveLength(2);
+    expect(runs[1].bodies.map((body) => body.count)).toEqual([3, 2]);
     expect(runs[1].bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
-    expect(runs[1].bodies[0].sourceText).toContain('Heading path: Domain > Topic 5');
+    expect(runs[1].bodies[0].sourceText).toContain('Heading path: Domain > Topic 3');
+    expect(runs[1].bodies[1].sourceText).toContain('Heading path: Domain > Topic 5');
     expect(runs[1].out.lines.split('\n')).toHaveLength(5);
   });
 
@@ -394,8 +415,8 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(requestText).not.toContain('Topic 3:');
     expect(requestText).toContain('Topic 4:');
     expect(requestText).toContain('Topic 5:');
-    expect(bodies).toHaveLength(1);
-    expect(bodies[0].count).toBe(5);
+    expect(bodies).toHaveLength(2);
+    expect(bodies.map((body) => body.count)).toEqual([3, 2]);
   });
 
   test('section-aware retries backend zero-under-count errors with a safer fallback type', async () => {
@@ -672,6 +693,30 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(out.lines.split('\n')).toHaveLength(20);
   });
 
+  test('topic-only count 50 still uses ten batches of five', async () => {
+    const { generateWithAI, GENERATION_BATCH_SIZE, TOPIC_ONLY_BATCH_SIZE } = loadApi();
+    const allTypes = ['MC', 'TF', 'YN', 'MT'];
+    const bodies = [];
+    let nextQuestion = 1;
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      const start = nextQuestion;
+      nextQuestion += body.count;
+      return okResponse(tfLines(start, body.count));
+    });
+
+    const out = await generateWithAI('Ports', 50, { types: allTypes });
+
+    expect(GENERATION_BATCH_SIZE).toBe(5);
+    expect(TOPIC_ONLY_BATCH_SIZE).toBe(GENERATION_BATCH_SIZE);
+    expect(bodies).toHaveLength(10);
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5, 5, 5, 5, 5, 5, 5]);
+    expect(bodies.every((body) => JSON.stringify(body.types) === JSON.stringify(allTypes))).toBe(true);
+    expect(bodies.every((body) => !Object.prototype.hasOwnProperty.call(body, 'sourceText'))).toBe(true);
+    expect(out.lines.split('\n')).toHaveLength(50);
+  });
+
   test('topic-only batching preserves exact requested count with a short final batch', async () => {
     const { generateWithAI } = loadApi();
     const bodies = [];
@@ -780,12 +825,12 @@ describe('generateWithAI source-backed endpoint routing', () => {
     global.fetch = jest.fn(async (_url, options = {}) => {
       const body = JSON.parse(options.body || '{}');
       bodies.push(body);
-      if(bodies.length <= 9) {
-        return okResponse(tfLines(((bodies.length - 1) * 5) + 1, 5));
+      if(bodies.length <= 16) {
+        return okResponse(tfLines(((bodies.length - 1) * 3) + 1, 3));
       }
-      if(bodies.length === 10) {
+      if(bodies.length === 17) {
         return okResponse([
-          tfLines(46, 4),
+          'TF|Question 49.|T',
           'TF|Question 1.|T',
         ].join('\n'));
       }
@@ -802,11 +847,14 @@ describe('generateWithAI source-backed endpoint routing', () => {
     });
 
     const lines = out.lines.split('\n');
-    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 1, 1]);
-    expect(bodies.every((body) => body.count <= 5)).toBe(true);
+    expect(bodies.map((body) => body.count)).toEqual([
+      3, 3, 3, 3, 3, 3, 3, 3, 3,
+      3, 3, 3, 3, 3, 3, 3, 2, 1, 1,
+    ]);
+    expect(bodies.every((body) => body.count <= 3)).toBe(true);
     expect(bodies.every((body) => body.sourceText !== sourceText.trim())).toBe(true);
     expect(bodies[0].sourceText).toContain('Heading path: Domain > Topic 1');
-    expect(bodies[9].sourceText).toContain('Heading path: Domain > Topic 50');
+    expect(bodies[16].sourceText).toContain('Heading path: Domain > Topic 50');
     expect(out.partial).toBe(true);
     expect(out.completedCount).toBe(49);
     expect(out.requestedCount).toBe(50);
@@ -847,9 +895,9 @@ describe('generateWithAI source-backed endpoint routing', () => {
     });
 
     await expect(generateWithAI('Ports', 10, { sourceText, sourceReport: report, types: ['TF'] }))
-      .rejects.toThrow(/Generation returned 0 of 10 usable questions after 4 batches/);
-    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 5]);
-    expect(bodies.every((body) => body.count <= 5)).toBe(true);
+      .rejects.toThrow(/Generation returned 0 of 10 usable questions after 6 batches/);
+    expect(bodies.map((body) => body.count)).toEqual([3, 3, 3, 3, 3, 3]);
+    expect(bodies.every((body) => body.count <= 3)).toBe(true);
     expect(bodies.every((body) => body.sourceText !== sourceText.trim())).toBe(true);
   });
 
