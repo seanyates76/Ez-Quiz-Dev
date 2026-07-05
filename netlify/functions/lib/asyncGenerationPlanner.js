@@ -433,6 +433,7 @@ module.exports = {
   SECTION_PACKET_TEXT_MAX_CHARS,
   TOPIC_ONLY_BATCH_SIZE,
   buildPlannedBatches,
+  buildSectionBatchSourceText,
   buildSectionRequestPlan,
   shouldPlanAsAsyncSource,
   splitSourceTextIntoChunks,

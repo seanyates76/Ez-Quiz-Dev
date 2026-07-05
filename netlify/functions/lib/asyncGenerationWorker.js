@@ -2,10 +2,9 @@
 
 const { handleGenerateQuiz } = require('../generate-quiz.js');
 const { scrubStoredJobPayload, stoppedProgressMessage } = require('./asyncJobStore.js');
+const { buildSectionBatchSourceText } = require('./asyncGenerationPlanner.js');
 const { parseLegacyQuestion } = require('./normalizer.js');
 
-const SOURCE_BATCH_OVERSAMPLE_EXTRA = 3;
-const SOURCE_BATCH_MAX_CANDIDATES = 8;
 const FILL_PASS_MAX_ATTEMPTS = 6;
 const FILL_PASS_BATCH_TARGET = 5;
 
@@ -91,7 +90,6 @@ function collectUniqueQuizLines(rawLines, state, limit) {
   const acceptedRecords = [];
   const localSeen = new Set(state.seenKeys);
   const rejectedReasons = [];
-  let unusedValidCount = 0;
   const max = Math.max(0, parseInt(limit, 10) || 0);
 
   for (const line of raw) {
@@ -111,7 +109,6 @@ function collectUniqueQuizLines(rawLines, state, limit) {
       continue;
     }
     if (accepted.length >= max) {
-      unusedValidCount += 1;
       continue;
     }
     localSeen.add(key);
@@ -127,12 +124,10 @@ function collectUniqueQuizLines(rawLines, state, limit) {
   return {
     accepted,
     diagnostics: {
-      candidateCount: raw.length,
       rawLineCount: raw.length,
       acceptedCount: accepted.length,
       rejectedCount: rejectedReasons.length,
       rejectedReasons: summarizeRejections(rejectedReasons),
-      unusedValidCount,
     },
   };
 }
@@ -164,10 +159,10 @@ function errorFromGenerateResponse(response) {
 
 async function runGenerateBatch(job, batch, state) {
   const options = job.options || {};
-  const providerCount = Math.max(1, parseInt(batch && (batch.providerCount || batch.candidateCount || batch.count) || 1, 10) || 1);
+  const requestedCount = Math.max(1, parseInt(batch && batch.count || 1, 10) || 1);
   const payload = {
     topic: job.topic,
-    count: providerCount,
+    count: requestedCount,
     types: Array.isArray(batch.types) && batch.types.length ? batch.types : options.types,
     difficulty: options.difficulty,
     provider: options.provider,
@@ -196,29 +191,28 @@ function positiveBatchCount(value, fallback = 1) {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function plannedEntryCount(batch) {
+  return Array.isArray(batch && batch.plannedEntries)
+    ? batch.plannedEntries.filter(Boolean).length
+    : 0;
+}
+
 function isSourceBackedBatch(batch) {
   return !!String(batch && batch.sourceText || '').trim();
 }
 
 function acceptedTargetForBatch(batch, remaining) {
-  const requested = positiveBatchCount(batch && batch.count, 1);
+  const planned = plannedEntryCount(batch);
+  const requested = planned > 0
+    ? Math.min(positiveBatchCount(batch && batch.count, planned), planned)
+    : positiveBatchCount(batch && batch.count, 1);
   const left = Math.max(0, parseInt(remaining, 10) || 0);
   return Math.max(0, Math.min(requested, left));
 }
 
-function providerCandidateCountForBatch(batch, remaining) {
+function providerRequestedCountForBatch(batch, remaining) {
   const target = acceptedTargetForBatch(batch, remaining);
-  if (target <= 0) return 0;
-  if (!isSourceBackedBatch(batch)) return target;
-  return Math.max(target, Math.min(SOURCE_BATCH_MAX_CANDIDATES, target + SOURCE_BATCH_OVERSAMPLE_EXTRA));
-}
-
-function createProviderBatch(batch, candidateCount) {
-  return {
-    ...batch,
-    candidateCount,
-    providerCount: candidateCount,
-  };
+  return target > 0 ? target : 0;
 }
 
 function fillSourceKey(batch) {
@@ -238,6 +232,72 @@ function rememberFillSource(state, batch, reason) {
     batch,
     reason: String(reason || 'shortfall'),
   });
+}
+
+function normalizeQuestionType(raw, fallback = 'TF') {
+  const type = String(raw || '').trim().toUpperCase();
+  return /^(MC|TF|YN|MT)$/.test(type) ? type : fallback;
+}
+
+function fillTypeForIndex(sourceBatch, sourceEntry, index) {
+  const batchTypes = Array.isArray(sourceBatch && sourceBatch.types) ? sourceBatch.types : [];
+  if (batchTypes.length) return normalizeQuestionType(batchTypes[index % batchTypes.length]);
+  const entryTypes = Array.isArray(sourceEntry && sourceEntry.types) ? sourceEntry.types : [];
+  if (entryTypes.length) return normalizeQuestionType(entryTypes[0]);
+  return normalizeQuestionType(sourceEntry && sourceEntry.plannedType);
+}
+
+function sourceTextForFillEntry(sourceBatch, sourceEntry) {
+  return String(
+    sourceEntry && (sourceEntry.sectionText || sourceEntry.sourceText)
+      || sourceBatch && sourceBatch.sourceText
+      || ''
+  ).trim();
+}
+
+function createFillPlannedEntries(sourceBatch, target) {
+  const requested = Math.max(1, Math.min(FILL_PASS_BATCH_TARGET, positiveBatchCount(target, 1)));
+  const baseEntries = Array.isArray(sourceBatch && sourceBatch.plannedEntries) && sourceBatch.plannedEntries.length
+    ? sourceBatch.plannedEntries.filter(Boolean)
+    : [{
+        sourceText: String(sourceBatch && sourceBatch.sourceText || '').trim(),
+        sectionText: String(sourceBatch && sourceBatch.sourceText || '').trim(),
+        headingPath: sourceBatch && sourceBatch.kind ? `${sourceBatch.kind} fill` : 'Fill source',
+      }];
+  if (!baseEntries.length) return [];
+
+  return Array.from({ length: requested }, (_, index) => {
+    const sourceEntry = baseEntries[index % baseEntries.length] || {};
+    const plannedType = fillTypeForIndex(sourceBatch, sourceEntry, index);
+    const text = sourceTextForFillEntry(sourceBatch, sourceEntry);
+    return {
+      ...sourceEntry,
+      count: 1,
+      plannedType,
+      types: [plannedType],
+      sourceName: sourceEntry.sourceName || sourceBatch && sourceBatch.sourceName || '',
+      headingPath: sourceEntry.headingPath || sourceEntry.sectionHeading || `Fill ${index + 1}`,
+      sectionHeading: sourceEntry.sectionHeading || sourceEntry.headingPath || `Fill ${index + 1}`,
+      sectionText: text,
+      sourceText: sourceEntry.sourceText || text,
+      fill: true,
+    };
+  });
+}
+
+function alignPlannedBatchForProvider(batch, requestedCount) {
+  const requested = Math.max(1, positiveBatchCount(requestedCount, 1));
+  const plannedEntries = Array.isArray(batch && batch.plannedEntries)
+    ? batch.plannedEntries.filter(Boolean).slice(0, requested)
+    : [];
+  if (!plannedEntries.length) return { ...batch, count: requested };
+  return {
+    ...batch,
+    count: plannedEntries.length,
+    sourceText: buildSectionBatchSourceText(plannedEntries) || String(batch && batch.sourceText || '').trim(),
+    types: plannedEntries.map((entry) => normalizeQuestionType(entry && (entry.plannedType || (entry.types && entry.types[0])))),
+    plannedEntries,
+  };
 }
 
 function retrySinglesForBatch(batch) {
@@ -304,12 +364,10 @@ function normalizeDiagnostics(details = {}, fallbackAccepted = 0) {
     ? details.rejectedReasons
     : {};
   return {
-    candidateCount: Number(details && details.candidateCount || 0),
     rawLineCount: Number(details && details.rawLineCount || 0),
     acceptedCount: Number(details && details.acceptedCount != null ? details.acceptedCount : fallbackAccepted),
     rejectedCount: Number(details && details.rejectedCount || 0),
     rejectedReasons,
-    unusedValidCount: Number(details && details.unusedValidCount || 0),
   };
 }
 
@@ -326,12 +384,10 @@ async function recordBatchFailure(store, jobId, batch, err, completedCount, retr
           batchId: batch && batch.batchId || '',
           batchNo: Number(batch && batch.batchNo || 0),
           requestedCount: Number(details && details.requestedCount != null ? details.requestedCount : batch && batch.count || 0),
-          candidateCount: diagnostics.candidateCount,
           rawLineCount: diagnostics.rawLineCount,
           acceptedCount: diagnostics.acceptedCount,
           rejectedCount: diagnostics.rejectedCount,
           rejectedReasons: diagnostics.rejectedReasons,
-          unusedValidCount: diagnostics.unusedValidCount,
           completedCount: Number(completedCount || 0),
           retry,
           fill: !!(batch && batch.fill),
@@ -418,9 +474,9 @@ async function processOneBatch(store, job, batch, state, options = {}) {
   try {
     const remaining = Math.max(0, job.requestedCount - state.acceptedCount);
     const target = acceptedTargetForBatch(batch, remaining);
-    const candidateCount = providerCandidateCountForBatch(batch, remaining);
-    if (target <= 0 || candidateCount <= 0) return { stopped: false };
-    const providerBatch = createProviderBatch(batch, candidateCount);
+    const requestedCount = providerRequestedCountForBatch(batch, remaining);
+    if (target <= 0 || requestedCount <= 0) return { stopped: false };
+    const providerBatch = alignPlannedBatchForProvider(batch, requestedCount);
     const body = await runGenerateBatch(job, providerBatch, state);
     const collection = collectUniqueQuizLines(body.lines, state, target);
     const accepted = collection.accepted;
@@ -452,11 +508,10 @@ async function processOneBatch(store, job, batch, state, options = {}) {
   } catch (err) {
     const remaining = Math.max(0, job.requestedCount - state.acceptedCount);
     const target = acceptedTargetForBatch(batch, remaining);
-    const candidateCount = providerCandidateCountForBatch(batch, remaining);
+    const requestedCount = providerRequestedCountForBatch(batch, remaining);
     if (collectFillSource) rememberFillSource(state, batch, 'failed');
     await recordBatchFailure(store, job.jobId, batch, err, 0, !!batch.retry, {
       requestedCount: target,
-      candidateCount,
       rawLineCount: 0,
       acceptedCount: 0,
       rejectedCount: 0,
@@ -474,12 +529,22 @@ async function processOneBatch(store, job, batch, state, options = {}) {
 function buildFillBatch(sourceEntry, attemptNo, missingCount) {
   const sourceBatch = sourceEntry && sourceEntry.batch ? sourceEntry.batch : sourceEntry;
   const target = Math.max(1, Math.min(FILL_PASS_BATCH_TARGET, parseInt(missingCount, 10) || 1));
+  const plannedEntries = createFillPlannedEntries(sourceBatch, target);
+  const plannedCount = plannedEntries.length || target;
+  const sourceText = plannedEntries.length
+    ? buildSectionBatchSourceText(plannedEntries)
+    : String(sourceBatch && sourceBatch.sourceText || '').trim();
   return {
     ...sourceBatch,
     batchId: `${sourceBatch && sourceBatch.batchId || 'batch'}-fill-${attemptNo}`,
     batchNo: Number(sourceBatch && sourceBatch.batchNo || attemptNo),
     kind: `${String(sourceBatch && sourceBatch.kind || 'batch')}-fill`,
-    count: target,
+    count: plannedCount,
+    sourceText,
+    types: plannedEntries.length
+      ? plannedEntries.map((entry) => normalizeQuestionType(entry && entry.plannedType))
+      : sourceBatch && sourceBatch.types,
+    plannedEntries: plannedEntries.length ? plannedEntries : undefined,
     fill: true,
     retry: false,
   };

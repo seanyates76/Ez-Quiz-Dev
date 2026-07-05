@@ -29,6 +29,53 @@ function malformedMtLine(n) {
   return `MT|Broken match ${n}.|1) Left ${n}A;2) Left ${n}B;3) Left ${n}C|A) Right ${n}A;B) Right ${n}B;C) Right ${n}C|1-B,2-A,3`;
 }
 
+function sectionEntry(n, type = 'TF', label = 'source') {
+  return {
+    count: 1,
+    plannedType: type,
+    types: [type],
+    sourceName: 'worker.md',
+    headingPath: `${label} > Section ${n}`,
+    sectionHeading: `Section ${n}`,
+    sectionText: `Section ${n} has enough source detail for a fill-safe planned question about networking concepts, commands, and troubleshooting.`,
+    sourceText: `Section content:\nSection ${n} has enough source detail for a fill-safe planned question about networking concepts, commands, and troubleshooting.`,
+  };
+}
+
+function plannedSourceText(entries) {
+  return entries.map((entry, index) => [
+    `Planned question ${index + 1} type: ${entry.plannedType || (entry.types && entry.types[0]) || 'TF'}`,
+    `Heading path: ${entry.headingPath || entry.sectionHeading || `Section ${index + 1}`}`,
+    'Section excerpt:',
+    entry.sectionText || entry.sourceText || `Section ${index + 1} source detail.`,
+  ].join('\n')).join('\n---\n');
+}
+
+function plannedSectionBatch(batchNo, count, types = ['TF']) {
+  const plannedEntries = Array.from({ length: count }, (_, index) => sectionEntry(
+    `${batchNo}-${index + 1}`,
+    types[index % types.length],
+    `batch-${batchNo}`
+  ));
+  return {
+    batchId: `batch-${batchNo}`,
+    batchNo,
+    kind: 'section',
+    count,
+    sourceText: plannedSourceText(plannedEntries),
+    types: plannedEntries.map((entry) => entry.plannedType),
+    plannedEntries,
+  };
+}
+
+function requestBodies(mockFn) {
+  return mockFn.mock.calls.map((call) => JSON.parse(call[0].body));
+}
+
+function plannedMarkerCount(sourceText) {
+  return (String(sourceText || '').match(/Planned question \d+/g) || []).length;
+}
+
 function okLines(lines, title = 'Async Quiz') {
   return {
     statusCode: 200,
@@ -406,14 +453,15 @@ describe('async generation worker', () => {
     expect(adapter.saves.some((save) => save.completedCount === 2)).toBe(true);
   });
 
-  test('worker uses async timeout mode and keeps a five-question batch intact', async () => {
+  test('main source-backed batch with five planned entries requests five questions', async () => {
     const lines = [1, 2, 3, 4, 5].map(tfLine);
     handleGenerateQuiz.mockResolvedValueOnce(okLines(lines));
     const job = await createWorkerJob([
-      { batchId: 'batch-1', batchNo: 1, count: 5, sourceText: 'source 1', types: ['MC', 'TF', 'YN', 'MC', 'MT'] },
+      plannedSectionBatch(1, 5, ['MC', 'TF', 'YN', 'MC', 'MT']),
     ], { requestedCount: 5 });
 
     const done = await processGenerationJob(job.jobId, { store });
+    const bodies = requestBodies(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
     expect(done.questions).toEqual(lines);
@@ -423,23 +471,27 @@ describe('async generation worker', () => {
       timeoutMode: 'async-worker',
       asyncWorker: true,
     });
-    expect(JSON.parse(handleGenerateQuiz.mock.calls[0][0].body)).toMatchObject({ count: 8 });
+    expect(bodies[0].count).toBe(5);
+    expect(plannedMarkerCount(bodies[0].sourceText)).toBe(5);
+    expect(bodies[0].count).toBe(plannedMarkerCount(bodies[0].sourceText));
   });
 
-  test('oversampled response saves five valid questions from more than five candidates', async () => {
+  test('main source-backed batch ignores extra returned lines without requesting extras', async () => {
     const lines = [1, 2, 3, 4, 5, 6, 7, 8].map(tfLine);
     handleGenerateQuiz.mockResolvedValueOnce(okLines(lines));
     const job = await createWorkerJob([
-      { batchId: 'batch-1', batchNo: 1, count: 5, sourceText: 'source 1', types: ['TF'] },
+      plannedSectionBatch(1, 5, ['TF']),
     ], { requestedCount: 5 });
 
     const done = await processGenerationJob(job.jobId, { store });
+    const bodies = requestBodies(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
     expect(done.completedCount).toBe(5);
     expect(done.questions).toEqual(lines.slice(0, 5));
     expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
-    expect(JSON.parse(handleGenerateQuiz.mock.calls[0][0].body).count).toBe(8);
+    expect(bodies[0].count).toBe(5);
+    expect(plannedMarkerCount(bodies[0].sourceText)).toBe(5);
   });
 
   test('malformed MT mapping is rejected before counting and valid MT is accepted', async () => {
@@ -459,7 +511,6 @@ describe('async generation worker', () => {
     expect(done.failedBatches[0]).toMatchObject({
       batchId: 'batch-1',
       requestedCount: 2,
-      candidateCount: 2,
       rawLineCount: 2,
       acceptedCount: 1,
       rejectedCount: 1,
@@ -486,31 +537,41 @@ describe('async generation worker', () => {
     expect(done.failedBatches[0]).toMatchObject({
       batchId: 'batch-1',
       message: 'A provider request timed out.',
-      candidateCount: 4,
+      requestedCount: 1,
     });
-    expect(JSON.parse(handleGenerateQuiz.mock.calls[1][0].body).sourceText).toBe('source 2');
-    expect(JSON.parse(handleGenerateQuiz.mock.calls[2][0].body).sourceText).toBe('source 1');
+    const bodies = requestBodies(handleGenerateQuiz);
+    expect(bodies[1].sourceText).toBe('source 2');
+    expect(bodies[2].sourceText).toContain('Planned question 1');
+    expect(bodies[2].sourceText).toContain('source 1');
   });
 
-  test('fill pass saves only the missing count and stops when requested count is reached', async () => {
+  test('fill batch target five has matching planned fill context and stops at requested count', async () => {
     handleGenerateQuiz
-      .mockResolvedValueOnce(okLines(tfLine(1)))
-      .mockResolvedValueOnce(okLines([tfLine(2), tfLine(3)]))
-      .mockResolvedValueOnce(okLines([tfLine(4), tfLine(5), tfLine(6)]));
+      .mockResolvedValueOnce(okLines([tfLine(1), tfLine(2)]))
+      .mockResolvedValueOnce(okLines(tfLine(3)))
+      .mockResolvedValueOnce(okLines([tfLine(4), tfLine(5), tfLine(6), tfLine(7), tfLine(8)]))
+      .mockResolvedValueOnce(okLines([tfLine(9), tfLine(10), tfLine(11)]));
     const job = await createWorkerJob([
-      { batchId: 'batch-1', batchNo: 1, count: 2, sourceText: 'source 1', types: ['TF'] },
-      { batchId: 'batch-2', batchNo: 2, count: 2, sourceText: 'source 2', types: ['TF'] },
-    ], { requestedCount: 4 });
+      plannedSectionBatch(1, 5, ['TF']),
+      plannedSectionBatch(2, 5, ['TF']),
+    ], { requestedCount: 10 });
 
     const done = await processGenerationJob(job.jobId, { store });
+    const bodies = requestBodies(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
-    expect(done.completedCount).toBe(4);
-    expect(done.questions).toEqual([tfLine(1), tfLine(2), tfLine(3), tfLine(4)]);
-    expect(handleGenerateQuiz).toHaveBeenCalledTimes(3);
-    expect(JSON.parse(handleGenerateQuiz.mock.calls[2][0].body).count).toBe(4);
-    expect(done.questions).not.toContain(tfLine(5));
-    expect(done.questions).not.toContain(tfLine(6));
+    expect(done.completedCount).toBe(10);
+    expect(done.questions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(tfLine));
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(4);
+    expect(bodies.map((body) => body.count)).toEqual([5, 5, 5, 2]);
+    for (const body of bodies) {
+      const plannedCount = plannedMarkerCount(body.sourceText);
+      expect(plannedCount).toBeGreaterThan(0);
+      expect(body.count).toBe(plannedCount);
+    }
+    expect(bodies[2].sourceText).toContain('batch-1 > Section 1-1');
+    expect(bodies[3].sourceText).toContain('batch-2 > Section 2-1');
+    expect(done.questions).not.toContain(tfLine(11));
   });
 
   test('zero usable questions returns failed', async () => {
