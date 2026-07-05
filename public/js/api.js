@@ -78,10 +78,17 @@ function normalizeEndpointSpecs(){
 }
 
 const API_ENDPOINT_CANDIDATES = normalizeEndpointSpecs();
+const ASYNC_GENERATION_ENDPOINTS = {
+  start: '/.netlify/functions/generate-quiz-start',
+  worker: '/.netlify/functions/generate-quiz-worker-background',
+  status: '/.netlify/functions/generate-quiz-status',
+  cancel: '/.netlify/functions/generate-quiz-cancel',
+};
 const LARGE_SOURCE_MULTI_REQUEST_THRESHOLD = 20000;
 export const GENERATION_BATCH_SIZE = 5;
 export const TOPIC_ONLY_BATCH_SIZE = GENERATION_BATCH_SIZE;
 export const SECTION_AWARE_BATCH_SIZE = 3;
+export const ASYNC_GENERATION_POLL_MS = 6000;
 export const LARGE_SOURCE_CHUNK_TARGET_CHARS = 4000;
 export const SECTION_QUIZ_WORTHY_MIN_SCORE = 45;
 export const SECTION_PACKET_TEXT_MAX_CHARS = 2800;
@@ -212,6 +219,22 @@ function shouldUseTopicOnlyBatching(count, opts){
 function stripClientOnlyOptions(opts = {}){
   const { sourceReport, signal, ...safe } = opts || {};
   return safe;
+}
+
+function stripSignalOption(opts = {}){
+  const { signal, ...safe } = opts || {};
+  return safe;
+}
+
+export function shouldUseAsyncGeneration(count, opts = {}){
+  const requested = toPositiveCount(count);
+  const sourceText = String(opts && opts.sourceText || '').trim();
+  if(!sourceText) return false;
+  const report = opts && opts.sourceReport || {};
+  const sectionCount = Number(report.sectionCount || (Array.isArray(report.sections) ? report.sections.length : 0) || 0);
+  return sourceText.length >= LARGE_SOURCE_MULTI_REQUEST_THRESHOLD
+    || sectionCount >= 50
+    || (requested >= 30 && sourceText.length >= 10000);
 }
 
 function generationAbortError(){
@@ -750,6 +773,100 @@ async function postGenerate(topic, count, opts = {}){
   }
 
   throw new Error(JSON.stringify({ error: 'All API endpoints failed', attempts: attemptErrors }));
+}
+
+async function parseJsonResponse(res, okStatuses = []){
+  let body;
+  try { body = await res.json(); }
+  catch { body = await res.text().catch(() => String(res.status)); }
+  if(!res.ok && !okStatuses.includes(res.status)){
+    const err = new Error(typeof body === 'object' && body && body.error ? body.error : `HTTP ${res.status}`);
+    err.status = res.status;
+    err.body = body;
+    throw err;
+  }
+  return body;
+}
+
+export async function startAsyncGeneration(topic, count, opts = {}){
+  const upstreamSignal = opts && opts.signal;
+  const requestOpts = stripSignalOption(opts);
+  const controller = new AbortController();
+  const onUpstreamAbort = () => {
+    try{ controller.abort(); }catch{}
+  };
+  if(upstreamSignal){
+    if(upstreamSignal.aborted) throw generationAbortError();
+    upstreamSignal.addEventListener('abort', onUpstreamAbort, { once: true });
+  }
+  const timer = setTimeout(() => {
+    try{ controller.abort(); }catch{}
+  }, 15000);
+  try{
+    const res = await fetch(ASYNC_GENERATION_ENDPOINTS.start, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, count, ...requestOpts }),
+      signal: controller.signal,
+    });
+    return parseJsonResponse(res);
+  }catch(err){
+    if(err && err.name === 'AbortError' && upstreamSignal && upstreamSignal.aborted) throw err;
+    if(err && err.name === 'AbortError'){
+      const timeout = new Error('Could not start async generation quickly.');
+      timeout.name = 'AsyncGenerationStartTimeout';
+      throw timeout;
+    }
+    throw err;
+  }finally{
+    clearTimeout(timer);
+    if(upstreamSignal){
+      try{ upstreamSignal.removeEventListener('abort', onUpstreamAbort); }catch{}
+    }
+  }
+}
+
+export function triggerAsyncGeneration(jobId){
+  const payload = JSON.stringify({ jobId });
+  try{
+    if(typeof navigator !== 'undefined' && navigator && typeof navigator.sendBeacon === 'function'){
+      const blob = new Blob([payload], { type: 'application/json' });
+      if(navigator.sendBeacon(ASYNC_GENERATION_ENDPOINTS.worker, blob)) {
+        return Promise.resolve({ sent: true, mode: 'beacon' });
+      }
+    }
+  }catch{}
+  try{
+    return fetch(ASYNC_GENERATION_ENDPOINTS.worker, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    }).then((res) => ({ sent: res.ok, mode: 'fetch', status: res.status }))
+      .catch((err) => ({ sent: false, mode: 'fetch', error: String(err && err.message || err || 'Network error') }));
+  }catch(err){
+    return Promise.resolve({ sent: false, mode: 'fetch', error: String(err && err.message || err || 'Network error') });
+  }
+}
+
+export async function getAsyncGenerationStatus(jobId, { signal } = {}){
+  const url = `${ASYNC_GENERATION_ENDPOINTS.status}?jobId=${encodeURIComponent(String(jobId || ''))}`;
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { 'Accept': 'application/json' },
+    signal,
+  });
+  return parseJsonResponse(res, [410]);
+}
+
+export async function cancelAsyncGeneration(jobId, { signal } = {}){
+  const res = await fetch(ASYNC_GENERATION_ENDPOINTS.cancel, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId }),
+    signal,
+  });
+  return parseJsonResponse(res, [410]);
 }
 
 function createCollectionState(opts = {}){

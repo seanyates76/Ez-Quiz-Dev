@@ -35,6 +35,10 @@ function flush() {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
+function delay(ms = 5) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function generatedTfLines(count) {
   return Array.from({ length: count }, (_, index) => `TF|Generated fact ${index + 1}.|T`).join('\n');
 }
@@ -51,6 +55,11 @@ describe('generator media import overlap regression', () => {
   let consoleDebugSpy;
   let validateMediaImportSize;
   let generateWithAI;
+  let startAsyncGeneration;
+  let triggerAsyncGeneration;
+  let getAsyncGenerationStatus;
+  let cancelAsyncGeneration;
+  let shouldUseAsyncGeneration;
   let analyzeSourceText;
   let formatSourceSectionSummary;
   let summarizeSourceReport;
@@ -86,6 +95,25 @@ describe('generator media import overlap regression', () => {
     generateWithAI = jest.fn().mockResolvedValue({
       title: 'Imported Source Quiz',
       lines: 'TF|Imported fact.|T',
+    });
+    startAsyncGeneration = jest.fn().mockResolvedValue({
+      jobId: 'qj_abcdefghijklmnopqrstuvwxyz123456',
+      status: 'queued',
+    });
+    triggerAsyncGeneration = jest.fn().mockResolvedValue({ sent: true, mode: 'fetch' });
+    getAsyncGenerationStatus = jest.fn().mockResolvedValue({
+      status: 'complete',
+      completedCount: 1,
+      requestedCount: 1,
+      questions: ['TF|Imported fact.|T'],
+      title: 'Imported Source Quiz',
+    });
+    cancelAsyncGeneration = jest.fn().mockResolvedValue({ status: 'canceled' });
+    shouldUseAsyncGeneration = jest.fn((count, opts = {}) => {
+      const sourceText = String(opts.sourceText || '');
+      const report = opts.sourceReport || {};
+      const sectionCount = Number(report.sectionCount || (Array.isArray(report.sections) ? report.sections.length : 0) || 0);
+      return !!sourceText && (sourceText.length >= 20000 || sectionCount >= 50 || (Number(count) >= 30 && sourceText.length >= 10000));
     });
     state = { settings: { beta: true }, quiz: {}, media: {} };
     announce = jest.fn();
@@ -149,7 +177,13 @@ describe('generator media import overlap regression', () => {
       },
       getMaxQuestions: () => 50,
       parseEditorInput,
+      ASYNC_GENERATION_POLL_MS: 1,
+      cancelAsyncGeneration,
       generateWithAI,
+      getAsyncGenerationStatus,
+      shouldUseAsyncGeneration,
+      startAsyncGeneration,
+      triggerAsyncGeneration,
       ImportController,
       sniffFileKind,
       isSupportedImportKind: () => true,
@@ -763,6 +797,171 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('generationStatusMeta').textContent).toBe('49 questions');
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
+  });
+
+  test('large source async generation starts a job, polls progress, and parses the completed quiz', async () => {
+    const complete = createDeferred();
+    const lines = generatedTfLines(50);
+    setMediaSource({
+      text: 'A'.repeat(25000),
+      name: 'ccna-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 60, quizWorthyCount: 55 }),
+    });
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
+    getAsyncGenerationStatus
+      .mockResolvedValueOnce({
+        status: 'running',
+        completedCount: 3,
+        requestedCount: 50,
+        progressMessage: '3 of 50 questions ready.',
+      })
+      .mockReturnValueOnce(complete.promise);
+
+    document.getElementById('topicInput').value = 'ccna async';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await delay();
+    await flush();
+
+    expect(startAsyncGeneration).toHaveBeenCalledWith('ccna async', 50, expect.objectContaining({
+      sourceText: 'A'.repeat(25000),
+      sourceName: 'ccna-notes.md',
+      sourceReport: expect.objectContaining({ sectionCount: 60 }),
+      types: ['MC', 'TF', 'YN', 'MT'],
+    }));
+    expect(triggerAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('3 of 50 questions ready.');
+
+    complete.resolve({
+      status: 'complete',
+      completedCount: 50,
+      requestedCount: 50,
+      questions: lines.split('\n'),
+      title: 'CCNA Async Quiz',
+      progressMessage: 'Quiz ready with 50 of 50 questions.',
+    });
+    await flush();
+    await flush();
+
+    expect(generateWithAI).not.toHaveBeenCalled();
+    expect(parseEditorInput).toHaveBeenCalledWith(lines);
+    expect(state.quiz.questions).toHaveLength(50);
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('success');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+  });
+
+  test('async partial result enables Start with usable questions', async () => {
+    const lines = generatedTfLines(12);
+    setMediaSource({
+      text: 'B'.repeat(25000),
+      name: 'partial-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
+    getAsyncGenerationStatus.mockResolvedValueOnce({
+      status: 'partial',
+      completedCount: 12,
+      requestedCount: 50,
+      questions: lines.split('\n'),
+      progressMessage: 'Quiz ready with 12 of 50 questions.',
+    });
+
+    document.getElementById('topicInput').value = 'partial async';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(parseEditorInput).toHaveBeenCalledWith(lines);
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('Quiz ready with 12 of 50 questions.');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+  });
+
+  test('async zero-question failure keeps Start disabled', async () => {
+    setMediaSource({
+      text: 'C'.repeat(25000),
+      name: 'empty-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    getAsyncGenerationStatus.mockResolvedValueOnce({
+      status: 'failed',
+      completedCount: 0,
+      requestedCount: 50,
+      progressMessage: 'Generation failed before any usable questions were created.',
+      errors: [{ message: 'No usable quiz questions were generated.' }],
+    });
+
+    document.getElementById('topicInput').value = 'empty async';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(parseEditorInput).not.toHaveBeenCalled();
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('error');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('No usable quiz questions were returned.');
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+  });
+
+  test('async cancel stops polling and marks the server job canceled', async () => {
+    const pending = createDeferred();
+    setMediaSource({
+      text: 'D'.repeat(25000),
+      name: 'cancel-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    getAsyncGenerationStatus.mockReturnValueOnce(pending.promise);
+
+    document.getElementById('topicInput').value = 'cancel async';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+
+    document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+
+    expect(cancelAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+  });
+
+  test('async polling errors are retried a bounded number of times', async () => {
+    setMediaSource({
+      text: 'E'.repeat(25000),
+      name: 'polling-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    getAsyncGenerationStatus.mockRejectedValue(new Error('network down'));
+
+    document.getElementById('topicInput').value = 'polling async';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await delay(20);
+    await flush();
+
+    expect(getAsyncGenerationStatus).toHaveBeenCalledTimes(4);
+    expect(parseEditorInput).not.toHaveBeenCalled();
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('error');
+    expect(document.getElementById('generationStatusMessage').textContent).toContain('Lost contact with generation status');
   });
 
   test('reduced motion skips the success pulse class while keeping completed state', async () => {

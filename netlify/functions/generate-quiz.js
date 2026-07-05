@@ -11,7 +11,7 @@
 
 const { generateLines, generateInBatches, callProvider, buildStructuredPrompt } = require('./lib/providers.js');
 const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
-const { cleanSourceText } = require('./lib/sourceMaterial.js');
+const { normalizeGenerationPayload, sanitizeAvoidStems, toPositiveInt } = require('./lib/generationRequest.js');
 
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
@@ -71,37 +71,9 @@ const RL = new Map(); // ip -> [timestamps]
 const DEFAULT_LIMIT = 60;
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
 
-function toPositiveInt(value, fallback) {
-  const parsed = parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
 const LIMIT = toPositiveInt(process.env.GENERATE_LIMIT, DEFAULT_LIMIT);
 const WINDOW_MS = toPositiveInt(process.env.GENERATE_WINDOW_MS, DEFAULT_WINDOW_MS);
-const CLIENT_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_CLIENT_MAX || process.env.CLIENT_MAX_QUESTIONS, 50)));
-const CONFIGURED_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_MAX_COUNT, CLIENT_MAX)));
-const MAX_COUNT = Math.min(CLIENT_MAX, CONFIGURED_MAX);
 const BEARER_TOKEN = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
-
-function sanitizeAvoidStems(raw) {
-  if (!Array.isArray(raw)) return [];
-  const out = [];
-  const seen = new Set();
-  for (const entry of raw) {
-    const cleaned = String(entry == null ? '' : entry)
-      .replace(/[\r\n|]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 180);
-    if (!cleaned) continue;
-    const key = cleaned.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(cleaned);
-    if (out.length >= 60) break;
-  }
-  return out;
-}
 
 function clientIp(event) {
   const h = event.headers || {};
@@ -171,7 +143,7 @@ function partialLegacyResult(result, actual, expected) {
   };
 }
 
-async function handleGenerateQuiz(event) {
+async function handleGenerateQuiz(event, options = {}) {
   const allowedOrigins = parseAllowedOrigins();
   const origin = getOrigin(event.headers);
   const originAllowed = !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin);
@@ -193,7 +165,7 @@ async function handleGenerateQuiz(event) {
     return res;
   }
 
-  if (rateLimited(event)) {
+  if (!options.skipRateLimit && rateLimited(event)) {
     const retry = Math.ceil(WINDOW_MS / 1000);
     const res = reply(429, { error: 'Rate limited' }, responseOrigin);
     res.headers['Retry-After'] = String(retry);
@@ -205,69 +177,30 @@ async function handleGenerateQuiz(event) {
     return reply(400, { error: 'Invalid JSON' }, responseOrigin);
   }
 
-  // Normalization + validation (non‑breaking)
-  const topicRaw = (payload.topic == null ? '' : String(payload.topic)).trim();
-  const topic = topicRaw || 'General knowledge';
-  const sourceText = cleanSourceText(payload.sourceText);
-  const sourceName = String(payload.sourceName || '').trim().slice(0, 160);
-
-  let count = payload.count;
-  if (count == null) { count = 10; }
-  const parsedCount = parseInt(count, 10);
-  if (!Number.isFinite(parsedCount)) {
-    return reply(400, {
-      error: 'Invalid request',
-      code: 'INVALID_COUNT',
-      details: `count must be a number between 1 and ${MAX_COUNT}`,
-      field: 'count',
-    }, responseOrigin);
-  }
-  count = Math.max(1, Math.min(MAX_COUNT, parsedCount));
-
-  let types = undefined;
-  if (payload.types !== undefined) {
-    if (!Array.isArray(payload.types)) {
-      return reply(400, {
-        error: 'Invalid request',
-        code: 'INVALID_TYPES',
-        details: 'types must be an array containing only MC, TF, YN, or MT',
-        field: 'types',
-      }, responseOrigin);
-    }
-    const invalidTypes = [];
-    const filtered = [];
-    for (const rawType of payload.types) {
-      const type = String(rawType || '').trim().toUpperCase();
-      if (/^(MC|TF|YN|MT)$/.test(type)) {
-        filtered.push(type);
-      } else {
-        invalidTypes.push(String(rawType));
-      }
-    }
-    if (invalidTypes.length) {
-      return reply(400, {
-        error: 'Invalid request',
-        code: 'INVALID_TYPES',
-        details: 'types must contain only MC, TF, YN, or MT',
-        field: 'types',
-        invalidTypes,
-      }, responseOrigin);
-    }
-    types = filtered;
+  let normalized;
+  try {
+    normalized = normalizeGenerationPayload(payload, {
+      env: process.env,
+      queryStringParameters: event.queryStringParameters,
+      headers: event.headers,
+    });
+  } catch (err) {
+    return reply(normalizeHttpStatus(err && err.status, 400), err && err.body ? err.body : { error: 'Invalid request' }, responseOrigin);
   }
 
-  const difficulty = (payload.difficulty && String(payload.difficulty).toLowerCase()) || undefined;
-  const provider = String(payload.provider || process.env.AI_PROVIDER || 'gemini');
-  const model = String(payload.model || '');
-  const avoidStems = sanitizeAvoidStems(payload.avoidStems);
-
-  const responseMode = String(process.env.QUIZ_RESPONSE || '').toLowerCase();
-  const useV2 = responseMode === 'v2';
-  const queryFormat = (event.queryStringParameters && event.queryStringParameters.format) || '';
-  const headerFormat = (event.headers && (event.headers['x-quiz-format'] || event.headers['X-Quiz-Format'])) || '';
-  const requestedFormat = String(payload.format || headerFormat || queryFormat).toLowerCase();
-  const wantsLegacyOnly = requestedFormat === 'legacy-lines';
-  const wantsStructured = useV2 && !wantsLegacyOnly && (requestedFormat === 'quiz-json' || requestedFormat === 'quiz-v2' || requestedFormat === 'json');
+  const {
+    topic,
+    count,
+    sourceText,
+    sourceName,
+    types,
+    difficulty,
+    provider,
+    model,
+    avoidStems,
+    wantsLegacyOnly,
+    wantsStructured,
+  } = normalized;
   const structuredPrompt = wantsStructured ? buildStructuredPrompt(topic, count, types, difficulty, sourceText) : null;
   // [quiz-v2: hook] structured payload remains opt-in; default path keeps legacy lines for compatibility.
 
@@ -488,4 +421,12 @@ exports.handler = async (event) => {
       responseOrigin
     );
   }
+};
+
+exports.handleGenerateQuiz = handleGenerateQuiz;
+exports._private = {
+  countQuizLines,
+  handleGenerateQuiz,
+  sanitizeAvoidStems,
+  usableQuizLines,
 };

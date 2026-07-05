@@ -1,7 +1,15 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.40';
+import {
+  ASYNC_GENERATION_POLL_MS,
+  cancelAsyncGeneration,
+  generateWithAI,
+  getAsyncGenerationStatus,
+  shouldUseAsyncGeneration,
+  startAsyncGeneration,
+  triggerAsyncGeneration,
+} from './api.js?v=1.5.41';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
@@ -403,6 +411,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!session) return;
     session.canceled = true;
     activeGenerationSession = null;
+    if(session.jobId){
+      cancelAsyncGeneration(session.jobId).catch((err) => {
+        try{ console.debug('[ezq:async-generation] cancel failed', err); }catch{}
+      });
+    }
     try{ session.controller.abort(); }catch{}
     setGenerationStatusState('canceled', {
       requestId: session.id,
@@ -702,6 +715,152 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       if(payload.sourceReport) opts.sourceReport = payload.sourceReport;
     }
     return opts;
+  }
+
+  function asyncGenerationOptions(payload, types){
+    return generationOptions(payload, types);
+  }
+
+  function waitForAsyncPollDelay(session){
+    return new Promise((resolve, reject) => {
+      if(!isActiveGeneration(session.id)) {
+        resolve();
+        return;
+      }
+      const timer = setTimeout(resolve, ASYNC_GENERATION_POLL_MS);
+      const abort = () => {
+        clearTimeout(timer);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      try{
+        if(session.controller.signal.aborted) abort();
+        else session.controller.signal.addEventListener('abort', abort, { once: true });
+      }catch{}
+    });
+  }
+
+  function asyncProgressMessage(status = {}){
+    const state = String(status.status || '').toLowerCase();
+    const completed = Number(status.completedCount || 0);
+    const requested = Number(status.requestedCount || 0);
+    if(status.progressMessage) return String(status.progressMessage);
+    if(state === 'queued') return 'Starting generation job.';
+    if(state === 'running') return `${completed} of ${requested} questions ready.`;
+    if(state === 'partial') return `Quiz ready with ${completed} of ${requested} questions.`;
+    if(state === 'complete') return `Quiz ready with ${completed} of ${requested} questions.`;
+    if(state === 'canceled') return 'Generation canceled.';
+    if(state === 'failed') return 'Generation failed before any usable questions were created.';
+    return 'Checking generation status.';
+  }
+
+  function asyncStatusToOutput(status = {}){
+    const lines = Array.isArray(status.questions)
+      ? status.questions.join('\n')
+      : String(status.lines || '').trim();
+    const completed = Number(status.completedCount || (lines ? lines.split('\n').filter(Boolean).length : 0) || 0);
+    const requested = Number(status.requestedCount || completed || 0);
+    return {
+      title: String(status.title || ''),
+      lines,
+      partial: status.status === 'partial' || (completed > 0 && requested > 0 && completed < requested),
+      completedCount: completed,
+      requestedCount: requested,
+      warning: completed > 0 && requested > 0 && completed < requested
+        ? `Quiz ready with ${completed} of ${requested} questions.`
+        : '',
+    };
+  }
+
+  async function pollAsyncGenerationJob(session, payload){
+    let pollingFailures = 0;
+    while(isActiveGeneration(session.id)){
+      let status;
+      try{
+        status = await getAsyncGenerationStatus(session.jobId, { signal: session.controller.signal });
+        pollingFailures = 0;
+      }catch(err){
+        if(err && err.name === 'AbortError') throw err;
+        pollingFailures += 1;
+        if(pollingFailures > 3){
+          const failed = new Error('Lost contact with generation status. The job may still finish; try again in a moment.');
+          failed.name = 'AsyncGenerationPollingError';
+          throw failed;
+        }
+        setGenerationStatusState('generating', {
+          requestId: session.id,
+          metadata: formatGenerationMetadata(payload),
+          message: 'Still checking generation status.',
+          largeSource: isLargeGenerationSource(payload),
+        });
+        await waitForAsyncPollDelay(session);
+        continue;
+      }
+
+      const state = String(status && status.status || '').toLowerCase();
+      const completed = Number(status && status.completedCount || 0);
+      const requested = Number(status && status.requestedCount || payload.count || 0);
+      setGenerationStatusState('generating', {
+        requestId: session.id,
+        metadata: formatGenerationMetadata(payload, { generatedCount: completed || requested }),
+        message: asyncProgressMessage(status),
+        largeSource: isLargeGenerationSource(payload),
+      });
+
+      if(state === 'complete' || state === 'partial' || state === 'failed' || state === 'canceled' || state === 'expired'){
+        return status;
+      }
+      await waitForAsyncPollDelay(session);
+    }
+    const err = new Error('Aborted');
+    err.name = 'AbortError';
+    throw err;
+  }
+
+  async function runAsyncGenerationJob(session, payload, types){
+    stopGenerationStatusRotation();
+    setGenerationStatusState('generating', {
+      requestId: session.id,
+      metadata: formatGenerationMetadata(payload),
+      message: 'Starting generation job.',
+      largeSource: isLargeGenerationSource(payload),
+    });
+
+    let started = false;
+    try{
+      const start = await startAsyncGeneration(payload.topic, payload.count, {
+        ...asyncGenerationOptions(payload, types),
+        signal: session.controller.signal,
+      });
+      started = true;
+      session.jobId = start && start.jobId;
+      if(!session.jobId) throw new Error('Async generation did not return a job ID.');
+      triggerAsyncGeneration(session.jobId).then((result) => {
+        if(result && result.sent === false) {
+          try{ console.debug('[ezq:async-generation] worker trigger failed', result); }catch{}
+        }
+      });
+      setGenerationStatusState('generating', {
+        requestId: session.id,
+        metadata: formatGenerationMetadata(payload),
+        message: 'Generation job queued.',
+        largeSource: isLargeGenerationSource(payload),
+      });
+      const status = await pollAsyncGenerationJob(session, payload);
+      if(status && status.status === 'canceled'){
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
+      if(status && status.status === 'expired'){
+        throw new Error('Generation job expired. Start a new quiz.');
+      }
+      return asyncStatusToOutput(status);
+    }catch(err){
+      if(!started && err && err.name !== 'AbortError'){
+        err.asyncStartFailed = true;
+      }
+      throw err;
+    }
   }
   function cleanLocalSourceText(raw){
     return cleanImportedSource(String(raw || '').replace(/^\uFEFF/, ''));
@@ -1334,10 +1493,35 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     try{
       setBuildStatus('creating', '');
       generateBtn.disabled = true;
-      const out = await generateWithAI(payload.topic, payload.count, {
-        ...generationOptions(payload, types),
-        signal: session.controller.signal,
-      });
+      const options = generationOptions(payload, types);
+      let out;
+      if(shouldUseAsyncGeneration(payload.count, options)){
+        try{
+          out = await runAsyncGenerationJob(session, payload, types);
+        }catch(err){
+          if(!isActiveGeneration(session.id)) return;
+          if(err && err.asyncStartFailed){
+            try{ console.debug('[ezq:async-generation] falling back to sync generation', err); }catch{}
+            setGenerationStatusState('generating', {
+              requestId: session.id,
+              metadata: formatGenerationMetadata(payload),
+              message: 'Async start failed. Trying the standard path.',
+              largeSource: isLargeGenerationSource(payload),
+            });
+            out = await generateWithAI(payload.topic, payload.count, {
+              ...options,
+              signal: session.controller.signal,
+            });
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        out = await generateWithAI(payload.topic, payload.count, {
+          ...options,
+          signal: session.controller.signal,
+        });
+      }
       if(!isActiveGeneration(session.id)) return;
       const lines = out && out.lines || '';
       if(!lines){
