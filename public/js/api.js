@@ -135,6 +135,37 @@ function normalizedStem(raw){
     .toLowerCase();
 }
 
+const SEMANTIC_DUPLICATE_STOP_WORDS = new Set([
+  'about', 'after', 'again', 'against', 'all', 'also', 'and', 'answer', 'are', 'before', 'best', 'can', 'could',
+  'does', 'during', 'each', 'from', 'have', 'how', 'into', 'likely', 'main', 'most', 'one', 'only', 'question',
+  'should', 'that', 'the', 'their', 'there', 'these', 'this', 'those', 'true', 'what', 'when', 'where', 'which',
+  'while', 'with', 'would', 'your',
+]);
+
+function semanticTokens(raw){
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.replace(/(?:ing|ed|es|s)$/i, ''))
+    .filter((token) => token.length >= 3 && !SEMANTIC_DUPLICATE_STOP_WORDS.has(token));
+}
+
+function isSemanticDuplicateStem(stem, previousStems = []){
+  const current = new Set(semanticTokens(stem));
+  if(current.size < 5) return false;
+  for(const previous of previousStems){
+    const prior = new Set(semanticTokens(previous));
+    if(prior.size < 5) continue;
+    let overlap = 0;
+    current.forEach((token) => { if(prior.has(token)) overlap += 1; });
+    const smaller = Math.min(current.size, prior.size);
+    const larger = Math.max(current.size, prior.size);
+    if(smaller >= 5 && overlap / smaller >= 0.78 && overlap / larger >= 0.55) return true;
+  }
+  return false;
+}
+
 function sanitizeAvoidStems(raw){
   if(!Array.isArray(raw)) return [];
   const out = [];
@@ -200,6 +231,7 @@ function collectUniqueQuizLines(rawLines, seenKeys, avoidStems){
     const stem = questionStemFromLine(line);
     const key = normalizedStem(stem);
     if(!stem || !key || seenKeys.has(key)) continue;
+    if(isSemanticDuplicateStem(stem, avoidStems)) continue;
     addAvoidStem(stem, avoidStems, seenKeys);
     accepted.push(line);
   }
@@ -915,7 +947,7 @@ function partialGenerationResult(collected, title, requested, requestNo){
     completedCount: collected.length,
     requestedCount: requested,
     failedBatch: requestNo,
-    warning: `Quiz ready with ${collected.length} of ${requested} questions.`,
+    warning: `${collected.length} of ${requested} questions ready.`,
   };
 }
 

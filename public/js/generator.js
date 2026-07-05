@@ -30,23 +30,26 @@ function formatUnitCount(count, singular, plural = `${singular}s`){
 
 const GENERATION_TOPIC_MESSAGES = [
   'Planning the quiz.',
-  'Writing questions.',
+  'Generating focused study questions.',
   'Checking answer choices.',
-  'Formatting the quiz.',
 ];
 
 const GENERATION_SOURCE_MESSAGES = [
-  'Reading your study material.',
-  'Finding quiz-worthy sections.',
-  'Writing questions.',
+  'Planning the quiz.',
+  'Generating focused study questions.',
+  'Filling remaining questions.',
   'Checking answer choices.',
-  'Formatting the quiz.',
 ];
 
 const GENERATION_LARGE_SOURCE_MESSAGES = [
   'This one has some reading to do.',
-  'Sorting the strong sections from the fluff.',
   'Still working through the big stuff.',
+];
+
+const GENERATION_RARE_MESSAGES = [
+  'Sorting the quiz goblins.',
+  'Convincing the answers to line up.',
+  'Counting carefully this time.',
 ];
 
 function hasSourcePayload(payload = {}){
@@ -206,6 +209,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   const generationStatusCard = $('generationStatusCard');
   const generationStatusTitle = $('generationStatusTitle');
   const generationStatusMessage = $('generationStatusMessage');
+  const generationStatusScan = $('generationStatusScan');
   const generationStatusMeta = $('generationStatusMeta');
   const generationStatusSecondary = $('generationStatusSecondary');
   const cancelGenerationBtn = $('cancelGenerationBtn');
@@ -295,6 +299,42 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     return items.join(' • ');
   }
 
+  function generationProgressText(completed, requested){
+    const wanted = Math.max(0, Number(requested || 0));
+    const ready = Math.max(0, Math.min(wanted || Number.MAX_SAFE_INTEGER, Number(completed || 0)));
+    if(wanted > 0) return `${ready.toLocaleString()} of ${wanted.toLocaleString()} questions ready.`;
+    return `${ready.toLocaleString()} questions ready.`;
+  }
+
+  function setGenerationProgress(completed = 0, requested = 0, { visible = false } = {}){
+    const wanted = Math.max(0, Number(requested || 0));
+    const ready = Math.max(0, Math.min(wanted || Number.MAX_SAFE_INTEGER, Number(completed || 0)));
+    const pct = wanted > 0 ? Math.max(0, Math.min(100, (ready / wanted) * 100)) : 0;
+    if(generationStatusScan){
+      generationStatusScan.setAttribute('aria-valuemin', '0');
+      generationStatusScan.setAttribute('aria-valuemax', String(wanted));
+      generationStatusScan.setAttribute('aria-valuenow', String(ready));
+      const fill = generationStatusScan.querySelector('span');
+      if(fill) fill.style.width = `${pct}%`;
+    }
+    if(generationStatusSecondary){
+      generationStatusSecondary.textContent = generationProgressText(ready, wanted);
+      generationStatusSecondary.hidden = !visible || wanted <= 0;
+    }
+  }
+
+  function maybeRareGenerationMessage(message, allowRare = false){
+    const base = String(message || '').trim();
+    if(!allowRare || !GENERATION_RARE_MESSAGES.length) return base;
+    try{
+      if(Math.random() < 0.1) {
+        const index = Math.floor(Math.random() * GENERATION_RARE_MESSAGES.length);
+        return GENERATION_RARE_MESSAGES[index] || base;
+      }
+    }catch{}
+    return base;
+  }
+
   function stopGenerationStatusRotation(){
     if(generationStatusTimer){
       clearInterval(generationStatusTimer);
@@ -308,11 +348,15 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const ui = uiState();
     const metadata = String(options.metadata || '').trim();
     const message = String(options.message || '').trim();
+    const requestedCount = Math.max(0, Number(options.requestedCount || 0));
+    const completedCount = Math.max(0, Number(options.completedCount || 0));
     ui.generationStatus = {
       state: nextState,
       requestId: Number(options.requestId || ui.generationStatus?.requestId || 0),
       message,
       metadata,
+      completedCount,
+      requestedCount,
     };
 
     if(!generationStatusCard) {
@@ -330,16 +374,18 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
     if(generationStatusTitle){
       const title = nextState === 'success' ? 'Quiz ready.'
+        : nextState === 'partial' ? 'Quiz partially ready.'
         : nextState === 'stopped' || nextState === 'canceled' ? 'Generation stopped.'
         : nextState === 'error' ? 'Could not create the quiz.'
-        : 'Building your quiz…';
+        : options.phase || 'Planning the quiz.';
       generationStatusTitle.textContent = title;
     }
     if(generationStatusMessage){
       const fallback = nextState === 'success' ? 'Start Quiz is ready when you are.'
+        : nextState === 'partial' ? 'Start Quiz can use the questions that are ready.'
         : nextState === 'stopped' || nextState === 'canceled' ? 'Your inputs are still here.'
         : nextState === 'error' ? 'Check the message below and try again.'
-        : GENERATION_TOPIC_MESSAGES[0];
+        : 'Generating focused study questions.';
       generationStatusMessage.textContent = message || fallback;
     }
     if(generationStatusMeta){
@@ -347,7 +393,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       generationStatusMeta.hidden = !metadata;
     }
     if(generationStatusSecondary){
-      generationStatusSecondary.hidden = nextState !== 'generating';
+      const showProgress = nextState !== 'idle' && nextState !== 'error' && requestedCount > 0;
+      setGenerationProgress(completedCount, requestedCount, { visible: showProgress });
+    } else {
+      setGenerationProgress(completedCount, requestedCount, { visible: false });
     }
     if(cancelGenerationBtn){
       const canCancel = nextState === 'generating';
@@ -372,18 +421,25 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const metadata = formatGenerationMetadata(payload);
     setGenerationStatusState('generating', {
       requestId: session.id,
+      phase: messages[idx],
       message: messages[idx],
       metadata,
       largeSource,
+      completedCount: 0,
+      requestedCount: payload.count,
     });
     generationStatusTimer = setInterval(() => {
       if(!activeGenerationSession || activeGenerationSession.id !== session.id) return;
       idx = (idx + 1) % messages.length;
+      const phase = messages[idx];
       setGenerationStatusState('generating', {
         requestId: session.id,
-        message: messages[idx],
+        phase,
+        message: maybeRareGenerationMessage(phase, true),
         metadata,
         largeSource,
+        completedCount: 0,
+        requestedCount: payload.count,
       });
     }, 3200);
   }
@@ -427,8 +483,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     setGenerationStatusState('generating', {
       requestId: session.id,
       metadata: formatGenerationMetadata(session.payload),
+      phase: 'Generation stopped.',
       message: 'Stopping generation.',
       largeSource: isLargeGenerationSource(session.payload),
+      completedCount: 0,
+      requestedCount: session.payload && session.payload.count,
     });
     if(session.jobId){
       try {
@@ -448,6 +507,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       metadata: formatGenerationMetadata(session.payload),
       message: stoppedGenerationMessage(session.payload),
       largeSource: isLargeGenerationSource(session.payload),
+      completedCount: 0,
+      requestedCount: session.payload && session.payload.count,
     });
     setBuildStatus('idle', 'Generation stopped.');
     if(generateBtn) generateBtn.disabled = false;
@@ -674,8 +735,6 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   function setTopicFromSourceName(name){
     if(!topicInput) return false;
     const ui = uiState();
-    const current = String(topicInput.value || '').trim();
-    if(current && !ui.topicSourceDerived) return false;
     const label = sourceTopicLabel(name);
     topicInput.value = label;
     ui.topicSourceDerived = true;
@@ -791,16 +850,32 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const state = String(status.status || '').toLowerCase();
     const completed = Number(status.completedCount || 0);
     const requested = Number(status.requestedCount || 0);
-    if(state === 'partial' || state === 'complete') return formatGenerationReadyMessage(completed, requested);
+    if(state === 'partial' || state === 'complete') return '';
     if(state === 'queued') return 'Starting generation job.';
-    if(state === 'running') return status.progressMessage ? String(status.progressMessage) : `${completed} of ${requested} questions ready.`;
+    if(state === 'running') {
+      const progress = String(status.progressMessage || '');
+      if(/filling/i.test(progress)) return 'Filling remaining questions.';
+      return 'Generating focused study questions.';
+    }
     if(state === 'stopped' || state === 'canceled') {
-      if(completed > 0) return formatGenerationReadyMessage(completed, requested);
+      if(completed > 0) return '';
       return 'Generation stopped before any questions were ready.';
     }
     if(state === 'failed') return 'Generation failed before any usable questions were created.';
     if(status.progressMessage) return String(status.progressMessage);
     return 'Checking generation status.';
+  }
+
+  function asyncProgressPhase(status = {}){
+    const state = String(status.status || '').toLowerCase();
+    const progress = String(status.progressMessage || '');
+    if(state === 'queued') return 'Planning the quiz.';
+    if(state === 'running' && /filling/i.test(progress)) return 'Filling remaining questions.';
+    if(state === 'running') return 'Generating focused study questions.';
+    if(state === 'partial') return 'Quiz partially ready.';
+    if(state === 'complete') return 'Quiz ready.';
+    if(state === 'stopped' || state === 'canceled') return 'Generation stopped.';
+    return 'Planning the quiz.';
   }
 
   function formatGenerationReadyMessage(completed, requested){
@@ -847,8 +922,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         setGenerationStatusState('generating', {
           requestId: session.id,
           metadata: formatGenerationMetadata(payload),
+          phase: 'Planning the quiz.',
           message: 'Still checking generation status.',
           largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
         });
         await waitForAsyncPollDelay(session);
         continue;
@@ -860,8 +938,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       setGenerationStatusState('generating', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload),
+        phase: asyncProgressPhase(status),
         message: asyncProgressMessage(status),
         largeSource: isLargeGenerationSource(payload),
+        completedCount: completed,
+        requestedCount: requested,
       });
 
       if(state === 'complete' || state === 'partial' || state === 'failed' || state === 'stopped' || state === 'canceled' || state === 'expired'){
@@ -883,8 +964,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     setGenerationStatusState('generating', {
       requestId: session.id,
       metadata: formatGenerationMetadata(payload),
+      phase: 'Planning the quiz.',
       message: 'Starting generation job.',
       largeSource: isLargeGenerationSource(payload),
+      completedCount: 0,
+      requestedCount: payload.count,
     });
 
     let started = false;
@@ -904,8 +988,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       setGenerationStatusState('generating', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload),
+        phase: 'Planning the quiz.',
         message: 'Generation job queued.',
         largeSource: isLargeGenerationSource(payload),
+        completedCount: 0,
+        requestedCount: payload.count,
       });
       const status = await pollAsyncGenerationJob(session, payload);
       if(status && status.status === 'expired'){
@@ -1420,6 +1507,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const curr = getParamsSnapshot();
     const changed = snapshotChanged(last, curr);
     ui.genDirty = !!changed;
+    if(changed && !activeGenerationSession){
+      setGenerationStatusState('idle');
+      setGenerationProgress(0, curr.count, { visible: false });
+    }
     updatePrimaryHint();
     setPrimaryAction();
   }
@@ -1563,8 +1654,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
             setGenerationStatusState('generating', {
               requestId: session.id,
               metadata: formatGenerationMetadata(payload),
+              phase: 'Generating focused study questions.',
               message: 'Async start failed. Trying the standard path.',
               largeSource: isLargeGenerationSource(payload),
+              completedCount: 0,
+              requestedCount: payload.count,
             });
             out = await generateWithAI(payload.topic, payload.count, {
               ...options,
@@ -1589,6 +1683,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
             metadata: formatGenerationMetadata(payload),
             message: 'Generation stopped before any questions were ready.',
             largeSource: isLargeGenerationSource(payload),
+            completedCount: 0,
+            requestedCount: payload.count,
           });
           setBuildStatus('idle', 'Generation stopped.');
           return;
@@ -1598,6 +1694,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
           metadata: formatGenerationMetadata(payload),
           message: 'No usable quiz questions were returned.',
           largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
         });
         setBuildStatus('failed', 'Could not create a valid quiz. Try fewer questions, a smaller source, or Demo Set.');
         return;
@@ -1605,8 +1703,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       setGenerationStatusState('generating', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload),
+        phase: 'Generating focused study questions.',
         message: 'Checking answer choices.',
         largeSource: isLargeGenerationSource(payload),
+        completedCount: 0,
+        requestedCount: payload.count,
       });
       setBuildStatus('validating', 'Checking the quiz before Start Quiz unlocks...');
       const parsed = parseEditorInput(lines);
@@ -1618,6 +1719,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
           metadata: formatGenerationMetadata(payload),
           message: reason,
           largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
         });
         setBuildStatus('failed', `Could not create a valid quiz: ${reason}`);
         return;
@@ -1628,11 +1731,18 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const title = (out && out.title) ? out.title : '';
       runParseFlow(lines, payload.topic, title);
       setLastGen(payload);
-      setGenerationStatusState(out && out.stopped ? 'stopped' : 'success', {
+      const requested = Number(payload.count || parsed.questions.length);
+      const completed = parsed.questions.length;
+      const finalState = out && out.stopped
+        ? 'stopped'
+        : (completed > 0 && requested > completed ? 'partial' : 'success');
+      setGenerationStatusState(finalState, {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload),
-        message: formatGenerationReadyMessage(parsed.questions.length, Number(payload.count || parsed.questions.length)),
+        message: '',
         largeSource: isLargeGenerationSource(payload),
+        completedCount: completed,
+        requestedCount: requested,
       });
       setPrimaryAction();
     }catch(err){
@@ -1643,6 +1753,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
           metadata: formatGenerationMetadata(payload),
           message: stoppedGenerationMessage(payload),
           largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
         });
         setBuildStatus('idle', 'Generation stopped.');
         return;
@@ -1653,6 +1765,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         metadata: formatGenerationMetadata(payload),
         message: pretty,
         largeSource: isLargeGenerationSource(payload),
+        completedCount: 0,
+        requestedCount: payload.count,
       });
       setBuildStatus('failed', `Could not create a valid quiz: ${pretty}`);
     }finally{

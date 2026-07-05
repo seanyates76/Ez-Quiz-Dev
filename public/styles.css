@@ -2920,6 +2920,19 @@ details.advanced>summary {
   align-items: center
 }
 
+.results-actions-dock {
+  position: sticky;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 8;
+  margin-bottom: 16px;
+  padding: 10px;
+  border: 1px solid color-mix(in srgb, var(--border) 74%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, .18);
+  backdrop-filter: blur(10px);
+}
+
 .results-actions .flex-spacer {
   flex: 1 1 0
 }
@@ -4442,42 +4455,40 @@ body[data-busy="true"] #interactiveEditor {
 .generation-status-scan {
   grid-area: scan;
   position: relative;
-  height: 7px;
+  height: 9px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(255, 255, 255, .08);
+  background: color-mix(in srgb, var(--field) 78%, rgba(103, 232, 249, .1));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 68%, transparent);
 }
 
 .generation-status-scan span {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 42%;
+  width: 0%;
   border-radius: inherit;
-  background: linear-gradient(90deg, transparent, var(--generation-cyan), transparent);
-  box-shadow: 0 0 14px rgba(103, 232, 249, .45);
-  opacity: .34;
-  transform: translateX(72%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--generation-cyan) 68%, #20c7b8), var(--generation-cyan));
+  box-shadow: 0 0 12px rgba(103, 232, 249, .26);
+  opacity: .9;
+  transform: none;
+  transition: width .32s ease, opacity .22s ease, box-shadow .22s ease;
 }
 
 .generation-status-card.is-animating .generation-status-scan span {
-  animation: generationScan 1.55s ease-in-out infinite;
-  opacity: 1;
+  opacity: .92;
 }
 
 .generation-status-card.is-complete .generation-status-scan {
-  background: color-mix(in srgb, var(--success) 18%, rgba(255, 255, 255, .08));
+  background: color-mix(in srgb, var(--generation-cyan) 13%, var(--field));
 }
 
 .generation-status-card.is-complete .generation-status-scan span {
-  width: 100%;
-  background: linear-gradient(90deg, color-mix(in srgb, var(--success) 66%, white), var(--success));
-  box-shadow: 0 0 14px color-mix(in srgb, var(--success) 46%, transparent);
-  opacity: .94;
-  transform: none;
+  box-shadow: 0 0 10px rgba(103, 232, 249, .18);
+  opacity: .96;
 }
 
 .generation-status-card.is-success-pulsing .generation-status-scan span {
-  animation: generationSuccessPulse .72s ease-in-out 3;
+  animation: none;
 }
 
 .generation-status-meta {
@@ -4542,16 +4553,6 @@ body[data-busy="true"] #interactiveEditor {
 
   50% {
     opacity: .9;
-  }
-}
-
-@keyframes generationScan {
-  0% {
-    transform: translateX(-120%);
-  }
-
-  100% {
-    transform: translateX(250%);
   }
 }
 
@@ -4629,8 +4630,6 @@ body[data-busy="true"] #interactiveEditor {
   }
 
   .generation-status-scan span {
-    width: 100%;
-    opacity: .42;
     transform: none !important;
   }
 

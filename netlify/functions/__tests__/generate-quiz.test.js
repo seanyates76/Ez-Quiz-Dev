@@ -220,7 +220,7 @@ describe('generate-quiz count guarantees', () => {
       partial: true,
       completedCount: 3,
       requestedCount: 5,
-      warning: 'Quiz ready with 3 of 5 questions.',
+      warning: '3 of 5 questions ready.',
     });
     expect(String(body.lines).trim().split('\n')).toHaveLength(3);
   });
@@ -253,7 +253,7 @@ describe('generate-quiz count guarantees', () => {
       partial: true,
       completedCount: 1,
       requestedCount: 2,
-      warning: 'Quiz ready with 1 of 2 questions.',
+      warning: '1 of 2 questions ready.',
     });
     expect(body.lines).toBe('TF|Good one.|T');
   });

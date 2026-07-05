@@ -332,6 +332,37 @@ function stemFromLine(line){
   return (parts.length > 1 ? parts[1] : raw).trim();
 }
 
+const SEMANTIC_DUPLICATE_STOP_WORDS = new Set([
+  'about', 'after', 'again', 'against', 'all', 'also', 'and', 'answer', 'are', 'before', 'best', 'can', 'could',
+  'does', 'during', 'each', 'from', 'have', 'how', 'into', 'likely', 'main', 'most', 'one', 'only', 'question',
+  'should', 'that', 'the', 'their', 'there', 'these', 'this', 'those', 'true', 'what', 'when', 'where', 'which',
+  'while', 'with', 'would', 'your',
+]);
+
+function semanticTokens(raw){
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.replace(/(?:ing|ed|es|s)$/i, ''))
+    .filter((token) => token.length >= 3 && !SEMANTIC_DUPLICATE_STOP_WORDS.has(token));
+}
+
+function isSemanticDuplicateStem(stem, previousStems = []){
+  const current = new Set(semanticTokens(stem));
+  if(current.size < 5) return false;
+  for(const previous of previousStems){
+    const prior = new Set(semanticTokens(previous));
+    if(prior.size < 5) continue;
+    let overlap = 0;
+    current.forEach((token) => { if(prior.has(token)) overlap += 1; });
+    const smaller = Math.min(current.size, prior.size);
+    const larger = Math.max(current.size, prior.size);
+    if(smaller >= 5 && overlap / smaller >= 0.78 && overlap / larger >= 0.55) return true;
+  }
+  return false;
+}
+
 function outputTokenBudget(count, kind = 'legacy'){
   const n = Math.max(1, Math.min(50, parseInt(count || 10, 10) || 10));
   const perQuestion = kind === 'structured' ? 220 : 260;
@@ -555,8 +586,9 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
     for(const line of chunkLines){
       const key = stemKeyFromLine(line);
       if(!key || seen.has(key)) continue;
-      seen.add(key);
       const stem = stemFromLine(line);
+      if(isSemanticDuplicateStem(stem, avoidList)) continue;
+      seen.add(key);
       if(stem) avoidList.push(stem);
       collected.push(line);
       if(collected.length >= target) break;
@@ -584,4 +616,5 @@ module.exports = {
   cleanSourceMaterial,
   outputTokenBudget,
   providerTimeoutMs,
+  isSemanticDuplicateStem,
 };

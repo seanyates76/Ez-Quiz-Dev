@@ -794,6 +794,58 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(lines.filter((line) => line === 'TF|Question 1.|T')).toHaveLength(1);
   });
 
+  test('topic-only batching filters obvious semantic duplicate stems conservatively', async () => {
+    const { generateWithAI } = loadApi();
+    const bodies = [];
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      if(bodies.length === 1) {
+        return okResponse([
+          'TF|How does distribution layer integrate access switches with the campus core during design?|T',
+          'YN|Why does distribution layer integrate access switches with the campus core during design?|Y',
+          'TF|STP blocks redundant links to prevent switching loops.|T',
+          'YN|Does DHCP lease renewal happen before the lease fully expires?|Y',
+          'TF|OSPF cost can influence path selection.|T',
+        ].join('\n'));
+      }
+      if(bodies.length === 2) return okResponse('TF|A trunk can carry multiple VLANs.|T');
+      return okResponse('TF|An access port normally belongs to one VLAN.|T');
+    });
+
+    const out = await generateWithAI('Switching', 6, { types: ['TF', 'YN'] });
+
+    const lines = out.lines.split('\n');
+    expect(bodies.map((body) => body.count)).toEqual([5, 1, 1]);
+    expect(lines).toHaveLength(6);
+    expect(lines.some((line) => line.includes('Why does distribution layer integrate'))).toBe(false);
+    expect(lines.some((line) => line.includes('STP blocks redundant links'))).toBe(true);
+    expect(lines.some((line) => line.includes('DHCP lease renewal'))).toBe(true);
+  });
+
+  test('topic-only underfill returns explicit partial metadata after bounded recovery', async () => {
+    const { generateWithAI } = loadApi();
+    const bodies = [];
+    global.fetch = jest.fn(async (_url, options = {}) => {
+      const body = JSON.parse(options.body || '{}');
+      bodies.push(body);
+      if(bodies.length === 1) return okResponse(tfLines(1, 5));
+      return okResponse([
+        'TF|Question 1.|T',
+        'not a quiz line',
+      ].join('\n'));
+    });
+
+    const out = await generateWithAI('Ports', 10, { types: ['TF'] });
+
+    expect(bodies).toHaveLength(4);
+    expect(out.partial).toBe(true);
+    expect(out.completedCount).toBe(5);
+    expect(out.requestedCount).toBe(10);
+    expect(out.warning).toBe('5 of 10 questions ready.');
+    expect(out.lines.split('\n')).toHaveLength(5);
+  });
+
   test('small source-backed count 20 uses four source requests of five or fewer', async () => {
     const { generateWithAI, GENERATION_BATCH_SIZE, LARGE_SOURCE_CHUNK_TARGET_CHARS } = loadApi();
     const allTypes = ['MC', 'TF', 'YN', 'MT'];
@@ -891,7 +943,7 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(out.partial).toBe(true);
     expect(out.completedCount).toBe(49);
     expect(out.requestedCount).toBe(50);
-    expect(out.warning).toBe('Quiz ready with 49 of 50 questions.');
+    expect(out.warning).toBe('49 of 50 questions ready.');
     expect(lines).toHaveLength(49);
     expect(lines.filter((line) => line === 'TF|Question 1.|T')).toHaveLength(1);
   });
@@ -912,7 +964,7 @@ describe('generateWithAI source-backed endpoint routing', () => {
     expect(out.partial).toBe(true);
     expect(out.completedCount).toBe(5);
     expect(out.requestedCount).toBe(20);
-    expect(out.warning).toBe('Quiz ready with 5 of 20 questions.');
+    expect(out.warning).toBe('5 of 20 questions ready.');
     expect(out.lines.split('\n')).toEqual(tfLines(1, 5).split('\n'));
   });
 

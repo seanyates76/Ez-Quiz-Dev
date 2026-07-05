@@ -10,6 +10,7 @@ const {
   callProvider,
   generateLines,
   generateInBatches,
+  isSemanticDuplicateStem,
   outputTokenBudget,
   providerTimeoutMs,
 } = require('../lib/providers.js');
@@ -335,5 +336,19 @@ describe('providers helpers', () => {
     const { lines, provider } = await generateInBatches({ provider: 'echo', topic: 'History', count: 50, env: {} });
     expect(provider).toBe('echo');
     expect(String(lines).trim().split('\n')).toHaveLength(50);
+  });
+
+  test('semantic duplicate guard catches obvious repeated stems without collapsing distinct ones', () => {
+    const previous = ['How does distribution layer integrate access switches with the campus core during design?'];
+
+    expect(isSemanticDuplicateStem(
+      'Why does distribution layer integrate access switches with the campus core during design?',
+      previous
+    )).toBe(true);
+
+    expect(isSemanticDuplicateStem(
+      'Why does STP block redundant links to prevent switching loops?',
+      previous
+    )).toBe(false);
   });
 });

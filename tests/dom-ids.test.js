@@ -91,11 +91,19 @@ describe('public/index.html structure', () => {
   test('generation status card starts hidden and exposes mobile/reduced-motion hooks', () => {
     const card = document.getElementById('generationStatusCard');
     const cancel = document.getElementById('cancelGenerationBtn');
+    const progress = document.getElementById('generationStatusScan');
+    const secondary = document.getElementById('generationStatusSecondary');
     expect(card.hidden).toBe(true);
     expect(card.dataset.generationState).toBe('idle');
     expect(card.classList.contains('generation-status-card')).toBe(true);
     expect(cancel.classList.contains('generation-status-cancel')).toBe(true);
     expect(cancel.textContent.trim()).toBe('Stop generation');
+    expect(progress.getAttribute('role')).toBe('progressbar');
+    expect(progress.getAttribute('aria-label')).toBe('Quiz generation progress');
+    expect(progress.getAttribute('aria-valuemin')).toBe('0');
+    expect(progress.getAttribute('aria-valuenow')).toBe('0');
+    expect(secondary.textContent).toBe('');
+    expect(readFile('public/index.html')).not.toContain('Counting to four. Repeatedly.');
 
     const css = readFile('public/styles.css');
     expect(css).toContain('@media (max-width: 640px)');
@@ -105,8 +113,22 @@ describe('public/index.html structure', () => {
     expect(css).toContain('.generation-status-scan span');
     expect(css).toContain('.generation-status-card.is-animating .generation-status-scan span');
     expect(css).toContain('.generation-status-card.is-complete .generation-status-scan span');
-    expect(css).toContain('.generation-status-card.is-success-pulsing .generation-status-scan span');
-    expect(css).toContain('@keyframes generationSuccessPulse');
+    expect(css).toContain('transition: width .32s ease');
+  });
+
+  test('results retake controls use a sticky action dock', () => {
+    const actions = document.querySelector('.results-actions-dock');
+    const retake = document.getElementById('retakeControl');
+    expect(actions).not.toBeNull();
+    expect(actions.contains(retake)).toBe(true);
+    expect(retake.getAttribute('role')).toBe('group');
+    expect(document.getElementById('retakePrimary').tagName).toBe('BUTTON');
+    expect(document.getElementById('retakeCaret').getAttribute('aria-haspopup')).toBe('menu');
+
+    const css = readFile('public/styles.css');
+    expect(css).toContain('.results-actions-dock');
+    expect(css).toContain('position: sticky');
+    expect(css).toContain('bottom: max(12px, env(safe-area-inset-bottom))');
   });
 
   test('narrow source warning modal starts closed with confirm and cancel actions', () => {

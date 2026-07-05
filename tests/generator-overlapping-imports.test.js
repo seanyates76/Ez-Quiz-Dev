@@ -398,16 +398,46 @@ describe('generator media import overlap regression', () => {
     expect(window.EZQ.ui.topicSourceDerived).toBe(true);
   });
 
-  test('manually edited topic plus successful file import preserves manual topic', async () => {
+  test('manually edited topic after import is respected for generation', async () => {
     const topicInput = document.getElementById('topicInput');
     await importLocalTextFile('04-Switching_CAM_ARP_STP.md', 'Switching notes');
 
     topicInput.value = 'My custom switching review';
     topicInput.dispatchEvent(new Event('input', { bubbles: true }));
-    await importLocalTextFile('The GSP System.pdf', 'GSP notes');
+    document.getElementById('countInput').value = '5';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
 
-    expect(topicInput.value).toBe('My custom switching review');
+    expect(generateWithAI).toHaveBeenCalledWith('My custom switching review', 5, expect.objectContaining({
+      sourceName: '04-Switching_CAM_ARP_STP.md',
+      sourceText: 'Switching notes',
+    }));
     expect(window.EZQ.ui.topicSourceDerived).toBe(false);
+  });
+
+  test('importing source after a topic-only quiz replaces the next payload topic', async () => {
+    document.getElementById('topicInput').value = 'panic! at the disco';
+    document.getElementById('countInput').value = '5';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    generateWithAI.mockClear();
+    await importLocalTextFile('21-Switch_Interface_Config.md', 'interface config notes');
+
+    expect(document.getElementById('topicInput').value).toBe('Switch Interface Config');
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(generateWithAI).toHaveBeenCalledWith('Switch Interface Config', 5, expect.objectContaining({
+      sourceName: '21-Switch_Interface_Config.md',
+      sourceText: 'interface config notes',
+    }));
   });
 
   test('clearing a source-derived topic allows the next import to auto-fill again', async () => {
@@ -663,7 +693,7 @@ describe('generator media import overlap regression', () => {
     }));
     expect(generateWithAI.mock.calls[0][2]).not.toHaveProperty('sourceText');
     expect(parseEditorInput).toHaveBeenCalledWith('TF|Imported fact.|T');
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('1 of 5 questions ready.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('1 of 5 questions ready.');
     expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').disabled).toBe(false);
@@ -678,10 +708,16 @@ describe('generator media import overlap regression', () => {
 
   test('shows the generation card while active and keeps it ready after success', async () => {
     const deferred = createDeferred();
+    const readyLines = generatedTfLines(10);
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
     generateWithAI.mockReturnValueOnce(deferred.promise);
 
     document.getElementById('topicInput').value = 'routing basics';
-    document.getElementById('countInput').value = '5';
+    document.getElementById('countInput').value = '10';
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
 
@@ -692,13 +728,16 @@ describe('generator media import overlap regression', () => {
     expect(card.classList.contains('is-complete')).toBe(false);
     expect(card.classList.contains('is-success-pulsing')).toBe(false);
     expect(card.getAttribute('aria-busy')).toBe('true');
-    expect(document.getElementById('generationStatusTitle').textContent).toBe('Building your quiz…');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Planning the quiz.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('0 of 10 questions ready.');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('0');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuemax')).toBe('10');
     expect(document.getElementById('cancelGenerationBtn').hidden).toBe(false);
     expect(document.getElementById('startBtn').disabled).toBe(true);
 
     deferred.resolve({
       title: 'Routing Basics',
-      lines: 'TF|Routing moves packets between networks.|T',
+      lines: readyLines,
     });
     await flush();
     await flush();
@@ -712,11 +751,43 @@ describe('generator media import overlap regression', () => {
     expect(card.classList.contains('is-success-pulsing')).toBe(true);
     expect(card.getAttribute('aria-busy')).toBe('false');
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz ready.');
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('1 of 5 questions ready.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('10 of 10 questions ready.');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('10');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuemax')).toBe('10');
     expect(document.getElementById('generationStatusMeta').hidden).toBe(true);
     expect(document.getElementById('cancelGenerationBtn').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('status').hidden).toBe(true);
+  });
+
+  test('progress bar resets when current inputs change after generation', async () => {
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
+    generateWithAI.mockResolvedValueOnce({
+      title: 'Routing Basics',
+      lines: generatedTfLines(10),
+    });
+    document.getElementById('topicInput').value = 'routing basics';
+    document.getElementById('countInput').value = '10';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    const card = document.getElementById('generationStatusCard');
+    expect(card.dataset.generationState).toBe('success');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('10');
+
+    document.getElementById('topicInput').value = 'switching basics';
+    document.getElementById('topicInput').dispatchEvent(new Event('input', { bubbles: true }));
+
+    expect(card.hidden).toBe(true);
+    expect(card.dataset.generationState).toBe('idle');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('0');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuemax')).toBe('10');
   });
 
   test('topic-only generation status avoids study-material and source wording', async () => {
@@ -757,8 +828,8 @@ describe('generator media import overlap regression', () => {
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
 
-    expect(document.getElementById('generationStatusMessage').textContent)
-      .toMatch(/study material/i);
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Planning the quiz.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('0 of 20 questions ready.');
     expect(document.getElementById('generationStatusCard').hidden).toBe(false);
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('generating');
     expect(document.getElementById('status').dataset.buildState).toBe('creating');
@@ -786,7 +857,7 @@ describe('generator media import overlap regression', () => {
       partial: true,
       completedCount: 49,
       requestedCount: 50,
-      warning: 'Quiz ready with 49 of 50 questions.',
+      warning: '49 of 50 questions ready.',
     });
 
     document.getElementById('topicInput').value = 'routing basics';
@@ -803,13 +874,46 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('status').dataset.buildState).toBe('ready');
     const card = document.getElementById('generationStatusCard');
-    expect(card.dataset.generationState).toBe('success');
-    expect(card.classList.contains('is-complete')).toBe(true);
+    expect(card.dataset.generationState).toBe('partial');
+    expect(card.classList.contains('is-complete')).toBe(false);
     expect(card.classList.contains('is-animating')).toBe(false);
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('49 of 50 questions ready.');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz partially ready.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('49 of 50 questions ready.');
     expect(document.getElementById('generationStatusMeta').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
+  });
+
+  test('topic-only underfill is shown as an explicit partial state', async () => {
+    const partialLines = generatedTfLines(5);
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
+    generateWithAI.mockResolvedValueOnce({
+      title: 'Underfilled Topic Quiz',
+      lines: partialLines,
+      partial: true,
+      completedCount: 5,
+      requestedCount: 10,
+      warning: '5 of 10 questions ready.',
+    });
+
+    document.getElementById('topicInput').value = 'routing basics';
+    document.getElementById('countInput').value = '10';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    const card = document.getElementById('generationStatusCard');
+    expect(card.dataset.generationState).toBe('partial');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz partially ready.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('5 of 10 questions ready.');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('5');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuemax')).toBe('10');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
   });
 
   test('large source async generation starts a job, polls progress, and parses the completed quiz', async () => {
@@ -849,7 +953,10 @@ describe('generator media import overlap regression', () => {
       types: ['MC', 'TF', 'YN', 'MT'],
     }));
     expect(triggerAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('3 of 50 questions ready.');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generating focused study questions.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('3 of 50 questions ready.');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('3');
+    expect(document.getElementById('generationStatusScan').getAttribute('aria-valuemax')).toBe('50');
 
     complete.resolve({
       status: 'complete',
@@ -857,7 +964,7 @@ describe('generator media import overlap regression', () => {
       requestedCount: 50,
       questions: lines.split('\n'),
       title: 'CCNA Async Quiz',
-      progressMessage: 'Quiz ready with 50 of 50 questions.',
+      progressMessage: '50 of 50 questions ready.',
     });
     await flush();
     await flush();
@@ -887,7 +994,7 @@ describe('generator media import overlap regression', () => {
       completedCount: 12,
       requestedCount: 50,
       questions: lines.split('\n'),
-      progressMessage: 'Quiz ready with 12 of 50 questions.',
+      progressMessage: '12 of 50 questions ready.',
     });
 
     document.getElementById('topicInput').value = 'partial async';
@@ -898,7 +1005,9 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(parseEditorInput).toHaveBeenCalledWith(lines);
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('12 of 50 questions ready.');
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('partial');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz partially ready.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('12 of 50 questions ready.');
     expect(document.getElementById('startBtn').disabled).toBe(false);
   });
 
@@ -932,7 +1041,7 @@ describe('generator media import overlap regression', () => {
 
   test.each([
     ['complete', 'success'],
-    ['partial', 'success'],
+    ['partial', 'partial'],
     ['failed', 'error'],
     ['stopped', 'stopped'],
     ['canceled', 'stopped'],
@@ -958,9 +1067,9 @@ describe('generator media import overlap regression', () => {
       requestedCount: 50,
       questions: terminalStatus === 'complete' || terminalStatus === 'partial' ? lines.split('\n') : [],
       progressMessage: terminalStatus === 'complete'
-        ? 'Quiz ready with 50 of 50 questions.'
+        ? '50 of 50 questions ready.'
         : terminalStatus === 'partial'
-          ? 'Quiz ready with 12 of 50 questions.'
+          ? '12 of 50 questions ready.'
           : '',
     });
 
@@ -1071,7 +1180,7 @@ describe('generator media import overlap regression', () => {
     expect(parseEditorInput).toHaveBeenCalledWith(lines);
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('stopped');
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation stopped.');
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('5 of 50 questions ready.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('5 of 50 questions ready.');
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('editor').value).toBe(lines);
     expect(state.media.sourceText).toBe('K'.repeat(25000));
@@ -1109,8 +1218,17 @@ describe('generator media import overlap regression', () => {
     }));
 
     try {
+      parseEditorInput.mockImplementation((text) => ({
+        questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+        errors: [],
+        error: null,
+      }));
+      generateWithAI.mockResolvedValueOnce({
+        title: 'Routing Basics',
+        lines: generatedTfLines(10),
+      });
       document.getElementById('topicInput').value = 'routing basics';
-      document.getElementById('countInput').value = '5';
+      document.getElementById('countInput').value = '10';
       document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
       await flush();
       await flush();
@@ -1192,6 +1310,7 @@ describe('generator media import overlap regression', () => {
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
 
+    document.getElementById('countInput').value = '1';
     document.getElementById('topicInput').value = 'first';
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
@@ -1217,7 +1336,7 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(generateWithAI).toHaveBeenCalledTimes(2);
-    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('success');
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('partial');
     expect(document.getElementById('editor').value).toBe('TF|Second fact.|T');
     expect(document.getElementById('mirror').value).toBe('TF|Second fact.|T');
     expect(parseEditorInput).toHaveBeenCalledWith('TF|Second fact.|T');
@@ -1293,7 +1412,8 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(document.getElementById('generationStatusMessage').textContent).toBe('10 questions ready.');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Quiz ready.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('10 of 10 questions ready.');
     expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('startToolbarBtn').classList.contains('start-primary')).toBe(true);
   });

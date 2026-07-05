@@ -38,6 +38,37 @@ function normalizedStem(raw) {
     .toLowerCase();
 }
 
+const SEMANTIC_DUPLICATE_STOP_WORDS = new Set([
+  'about', 'after', 'again', 'against', 'all', 'also', 'and', 'answer', 'are', 'before', 'best', 'can', 'could',
+  'does', 'during', 'each', 'from', 'have', 'how', 'into', 'likely', 'main', 'most', 'one', 'only', 'question',
+  'should', 'that', 'the', 'their', 'there', 'these', 'this', 'those', 'true', 'what', 'when', 'where', 'which',
+  'while', 'with', 'would', 'your',
+]);
+
+function semanticTokens(raw) {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .split(/\s+/)
+    .map((token) => token.replace(/(?:ing|ed|es|s)$/i, ''))
+    .filter((token) => token.length >= 3 && !SEMANTIC_DUPLICATE_STOP_WORDS.has(token));
+}
+
+function isSemanticDuplicateStem(stem, previousStems = []) {
+  const current = new Set(semanticTokens(stem));
+  if (current.size < 5) return false;
+  for (const previous of previousStems) {
+    const prior = new Set(semanticTokens(previous));
+    if (prior.size < 5) continue;
+    let overlap = 0;
+    current.forEach((token) => { if (prior.has(token)) overlap += 1; });
+    const smaller = Math.min(current.size, prior.size);
+    const larger = Math.max(current.size, prior.size);
+    if (smaller >= 5 && overlap / smaller >= 0.78 && overlap / larger >= 0.55) return true;
+  }
+  return false;
+}
+
 function questionStemFromLine(line) {
   const parsed = parseLegacyQuestion(line);
   if (!parsed) return '';
@@ -94,6 +125,7 @@ function collectUniqueQuizLines(rawLines, state, limit) {
   const accepted = [];
   const acceptedRecords = [];
   const localSeen = new Set(state.seenKeys);
+  const localStems = Array.isArray(state.avoidStems) ? state.avoidStems.slice() : [];
   const rejectedReasons = [];
   const max = Math.max(0, parseInt(limit, 10) || 0);
 
@@ -113,10 +145,15 @@ function collectUniqueQuizLines(rawLines, state, limit) {
       rejectedReasons.push('duplicate_stem');
       continue;
     }
+    if (isSemanticDuplicateStem(stem, localStems)) {
+      rejectedReasons.push('duplicate_stem');
+      continue;
+    }
     if (accepted.length >= max) {
       continue;
     }
     localSeen.add(key);
+    localStems.push(stem);
     acceptedRecords.push({ key, stem });
     accepted.push(line);
   }
@@ -237,15 +274,18 @@ function fillSourceKey(batch) {
   return `${String(batch && batch.kind || 'batch')}::${String(batch && batch.sourceText || '').slice(0, 200)}`;
 }
 
-function rememberFillSource(state, batch, reason) {
+function rememberFillSource(state, batch, reason, details = {}) {
   if (!state || !isSourceBackedBatch(batch)) return;
   if (!state.fillSources) state.fillSources = [];
   if (!state.fillSourceKeys) state.fillSourceKeys = new Set();
   const key = fillSourceKey(batch);
   if (!key || state.fillSourceKeys.has(key)) return;
+  const plannedEntries = Array.isArray(batch && batch.plannedEntries) ? batch.plannedEntries.filter(Boolean) : [];
+  const acceptedCount = Math.max(0, parseInt(details.acceptedCount || 0, 10) || 0);
+  const preferredEntries = plannedEntries.slice(Math.min(acceptedCount, plannedEntries.length));
   state.fillSourceKeys.add(key);
   state.fillSources.push({
-    batch,
+    batch: preferredEntries.length ? { ...batch, fillPreferredEntries: preferredEntries } : batch,
     reason: String(reason || 'shortfall'),
   });
 }
@@ -274,8 +314,13 @@ function sourceTextForFillEntry(sourceBatch, sourceEntry) {
 function createFillPlannedEntries(sourceBatch, target, profile) {
   const requested = Math.max(1, Math.min(FILL_PASS_BATCH_TARGET, positiveBatchCount(target, 1)));
   const safeProfile = profile ? safeGenerationProfile(profile) : null;
-  const baseEntries = Array.isArray(sourceBatch && sourceBatch.plannedEntries) && sourceBatch.plannedEntries.length
-    ? sourceBatch.plannedEntries.filter(Boolean)
+  const preferredEntries = Array.isArray(sourceBatch && sourceBatch.fillPreferredEntries)
+    ? sourceBatch.fillPreferredEntries.filter(Boolean)
+    : [];
+  const baseEntries = preferredEntries.length
+    ? preferredEntries
+    : Array.isArray(sourceBatch && sourceBatch.plannedEntries) && sourceBatch.plannedEntries.length
+      ? sourceBatch.plannedEntries.filter(Boolean)
     : [{
         sourceText: String(sourceBatch && sourceBatch.sourceText || '').trim(),
         sectionText: String(sourceBatch && sourceBatch.sourceText || '').trim(),
@@ -460,7 +505,7 @@ async function markFinal(store, jobId) {
         status: 'complete',
         completedCount: completed,
         questions: job.questions.slice(0, job.requestedCount),
-        progressMessage: `Quiz ready with ${job.requestedCount} of ${job.requestedCount} questions.`,
+        progressMessage: `${job.requestedCount} of ${job.requestedCount} questions ready.`,
       };
     }
     if (completed > 0) {
@@ -468,7 +513,7 @@ async function markFinal(store, jobId) {
         ...scrubStoredJobPayload(job),
         status: 'partial',
         completedCount: completed,
-        progressMessage: `Quiz ready with ${completed} of ${job.requestedCount} questions.`,
+        progressMessage: `${completed} of ${job.requestedCount} questions ready.`,
       };
     }
     return {
@@ -531,7 +576,7 @@ async function processOneBatch(store, job, batch, state, options = {}) {
     if (accepted.length < target) {
       const err = new Error('A generation batch returned fewer usable questions than requested.');
       err.code = 'BATCH_SHORTFALL';
-      if (collectFillSource) rememberFillSource(state, batch, 'underfilled');
+      if (collectFillSource) rememberFillSource(state, batch, 'underfilled', { acceptedCount: accepted.length });
       await recordBatchFailure(store, job.jobId, batch, err, accepted.length, !!batch.retry, {
         ...collection.diagnostics,
         requestedCount: target,
@@ -547,7 +592,7 @@ async function processOneBatch(store, job, batch, state, options = {}) {
     const remaining = Math.max(0, job.requestedCount - state.acceptedCount);
     const target = acceptedTargetForBatch(batch, remaining);
     const requestedCount = providerRequestedCountForBatch(batch, remaining);
-    if (collectFillSource) rememberFillSource(state, batch, 'failed');
+    if (collectFillSource) rememberFillSource(state, batch, 'failed', { acceptedCount: 0 });
     await recordBatchFailure(store, job.jobId, batch, err, 0, !!batch.retry, {
       requestedCount: target,
       rawLineCount: 0,
@@ -686,6 +731,7 @@ async function processGenerationJob(jobId, options = {}) {
 
 module.exports = {
   collectUniqueQuizLines,
+  isSemanticDuplicateStem,
   processGenerationJob,
   retrySinglesForBatch,
   safeError,

@@ -147,7 +147,7 @@ function partialLegacyResult(result, actual, expected) {
     partial: true,
     completedCount: actual,
     requestedCount: expected,
-    warning: `Quiz ready with ${actual} of ${expected} questions.`,
+    warning: `${actual} of ${expected} questions ready.`,
   };
 }
 

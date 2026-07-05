@@ -654,6 +654,32 @@ describe('async generation worker', () => {
     });
   });
 
+  test('obvious semantic duplicate stems are rejected before counting', async () => {
+    const original = 'TF|How does distribution layer integrate access switches with the campus core during design?|T';
+    const duplicate = 'YN|Why does distribution layer integrate access switches with the campus core during design?|Y';
+    handleGenerateQuiz
+      .mockResolvedValueOnce(okLines([original, duplicate]))
+      .mockResolvedValueOnce(okLines(tfLine(3)));
+    const job = await createWorkerJob([
+      plannedSectionBatch(1, 2, ['TF']),
+    ], { requestedCount: 2, options: { difficulty: 'easy' } });
+
+    const done = await processGenerationJob(job.jobId, { store });
+
+    expect(done.status).toBe('complete');
+    expect(done.completedCount).toBe(done.questions.length);
+    expect(done.questions).toEqual([original, tfLine(3)]);
+    expect(done.questions).not.toContain(duplicate);
+    expect(done.failedBatches[0]).toMatchObject({
+      batchId: 'profile-batch-1',
+      requestedCount: 2,
+      rawLineCount: 2,
+      acceptedCount: 1,
+      rejectedCount: 1,
+      rejectedReasons: { duplicate_stem: 1 },
+    });
+  });
+
   test('one failed batch is recorded and fill pass runs after later planned batches', async () => {
     handleGenerateQuiz
       .mockResolvedValueOnce(timeoutResponse())
@@ -709,8 +735,8 @@ describe('async generation worker', () => {
       expect(body.count).toBe(plannedCount);
       expect(body.quizLane).toBe('EXACT_STUDY');
     }
-    expect(bodies[4].sourceText).toContain('batch-1 > Section 1-1');
-    expect(bodies[5].sourceText).toContain('batch-1 > Section 1-4');
+    expect(bodies[4].sourceText).toContain('batch-1 > Section 1-3');
+    expect(bodies[5].sourceText).toContain('batch-1 > Section 1-5');
     expect(done.questions).not.toContain(tfLine(11));
   });
 
