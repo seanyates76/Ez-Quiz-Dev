@@ -3,11 +3,11 @@ import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
 import {
   ASYNC_GENERATION_POLL_MS,
-  cancelAsyncGeneration,
   generateWithAI,
   getAsyncGenerationStatus,
   shouldUseAsyncGeneration,
   startAsyncGeneration,
+  stopAsyncGeneration,
   triggerAsyncGeneration,
 } from './api.js?v=1.5.41';
 import { ImportController } from './import-controller.js';
@@ -53,7 +53,7 @@ function hasSourcePayload(payload = {}){
   return !!String(payload.sourceText || '').trim();
 }
 
-function canceledGenerationMessage(payload = {}){
+function stoppedGenerationMessage(payload = {}){
   return hasSourcePayload(payload)
     ? 'Your topic and study material are still here.'
     : 'Your topic is still here.';
@@ -330,14 +330,14 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
     if(generationStatusTitle){
       const title = nextState === 'success' ? 'Quiz ready.'
-        : nextState === 'canceled' ? 'Generation canceled.'
+        : nextState === 'stopped' || nextState === 'canceled' ? 'Generation stopped.'
         : nextState === 'error' ? 'Could not create the quiz.'
         : 'Building your quiz…';
       generationStatusTitle.textContent = title;
     }
     if(generationStatusMessage){
       const fallback = nextState === 'success' ? 'Start Quiz is ready when you are.'
-        : nextState === 'canceled' ? 'Your inputs are still here.'
+        : nextState === 'stopped' || nextState === 'canceled' ? 'Your inputs are still here.'
         : nextState === 'error' ? 'Check the message below and try again.'
         : GENERATION_TOPIC_MESSAGES[0];
       generationStatusMessage.textContent = message || fallback;
@@ -353,6 +353,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const canCancel = nextState === 'generating';
       cancelGenerationBtn.hidden = !canCancel;
       cancelGenerationBtn.disabled = !canCancel;
+      cancelGenerationBtn.textContent = 'Stop generation';
     }
     syncBuildStatusVisibility(statusBox, generationStatusCard);
   }
@@ -400,7 +401,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       id: ++generationRequestSeq,
       controller: new AbortController(),
       payload,
-      canceled: false,
+      stopped: false,
       superseded: false,
     };
     activeGenerationSession = session;
@@ -418,30 +419,43 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(abortActive && generateBtn) generateBtn.disabled = false;
   }
 
-  function cancelActiveGeneration(){
+  async function stopActiveGeneration(){
     const session = activeGenerationSession;
     if(!session) return;
-    session.canceled = true;
-    activeGenerationSession = null;
-    if(session.jobId){
-      cancelAsyncGeneration(session.jobId).catch((err) => {
-        try{ console.debug('[ezq:async-generation] cancel failed', err); }catch{}
-      });
-    }
-    try{ session.controller.abort(); }catch{}
-    setGenerationStatusState('canceled', {
+    session.stopped = true;
+    session.stopRefreshPending = true;
+    setGenerationStatusState('generating', {
       requestId: session.id,
       metadata: formatGenerationMetadata(session.payload),
-      message: canceledGenerationMessage(session.payload),
+      message: 'Stopping generation.',
       largeSource: isLargeGenerationSource(session.payload),
     });
-    setBuildStatus('idle', 'Generation canceled.');
+    if(session.jobId){
+      try {
+        await stopAsyncGeneration(session.jobId);
+      } catch (err) {
+        try{ console.debug('[ezq:async-generation] stop failed', err); }catch{}
+      } finally {
+        session.stopRefreshPending = true;
+        if(typeof session.wakePoll === 'function') session.wakePoll();
+      }
+      return;
+    }
+    activeGenerationSession = null;
+    try{ session.controller.abort(); }catch{}
+    setGenerationStatusState('stopped', {
+      requestId: session.id,
+      metadata: formatGenerationMetadata(session.payload),
+      message: stoppedGenerationMessage(session.payload),
+      largeSource: isLargeGenerationSource(session.payload),
+    });
+    setBuildStatus('idle', 'Generation stopped.');
     if(generateBtn) generateBtn.disabled = false;
     setPrimaryAction();
     updateCountAvailability();
   }
 
-  cancelGenerationBtn?.addEventListener('click', cancelActiveGeneration);
+  cancelGenerationBtn?.addEventListener('click', stopActiveGeneration);
 
   function registerCountSoftTarget(button){
     if(!button) return;
@@ -751,10 +765,20 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         resolve();
         return;
       }
+      if(session.stopRefreshPending) {
+        session.stopRefreshPending = false;
+        resolve();
+        return;
+      }
       const timer = setTimeout(resolve, ASYNC_GENERATION_POLL_MS);
       const abort = () => {
         clearTimeout(timer);
         reject(new DOMException('Aborted', 'AbortError'));
+      };
+      session.wakePoll = () => {
+        clearTimeout(timer);
+        session.wakePoll = null;
+        resolve();
       };
       try{
         if(session.controller.signal.aborted) abort();
@@ -770,7 +794,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(state === 'partial' || state === 'complete') return formatGenerationReadyMessage(completed, requested);
     if(state === 'queued') return 'Starting generation job.';
     if(state === 'running') return status.progressMessage ? String(status.progressMessage) : `${completed} of ${requested} questions ready.`;
-    if(state === 'canceled') return 'Generation canceled.';
+    if(state === 'stopped' || state === 'canceled') {
+      if(completed > 0) return formatGenerationReadyMessage(completed, requested);
+      return 'Generation stopped before any questions were ready.';
+    }
     if(state === 'failed') return 'Generation failed before any usable questions were created.';
     if(status.progressMessage) return String(status.progressMessage);
     return 'Checking generation status.';
@@ -793,6 +820,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       title: String(status.title || ''),
       lines,
       partial: status.status === 'partial' || (completed > 0 && requested > 0 && completed < requested),
+      stopped: status.status === 'stopped' || status.status === 'canceled' || !!status.stopped,
       completedCount: completed,
       requestedCount: requested,
       warning: completed > 0 && requested > 0 && completed < requested
@@ -836,8 +864,12 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         largeSource: isLargeGenerationSource(payload),
       });
 
-      if(state === 'complete' || state === 'partial' || state === 'failed' || state === 'canceled' || state === 'expired'){
+      if(state === 'complete' || state === 'partial' || state === 'failed' || state === 'stopped' || state === 'canceled' || state === 'expired'){
         return status;
+      }
+      if(session.stopRefreshPending) {
+        session.stopRefreshPending = false;
+        continue;
       }
       await waitForAsyncPollDelay(session);
     }
@@ -876,11 +908,6 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         largeSource: isLargeGenerationSource(payload),
       });
       const status = await pollAsyncGenerationJob(session, payload);
-      if(status && status.status === 'canceled'){
-        const err = new Error('Aborted');
-        err.name = 'AbortError';
-        throw err;
-      }
       if(status && status.status === 'expired'){
         throw new Error('Generation job expired. Start a new quiz.');
       }
@@ -1556,6 +1583,16 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       if(!isActiveGeneration(session.id)) return;
       const lines = out && out.lines || '';
       if(!lines){
+        if(out && out.stopped){
+          setGenerationStatusState('stopped', {
+            requestId: session.id,
+            metadata: formatGenerationMetadata(payload),
+            message: 'Generation stopped before any questions were ready.',
+            largeSource: isLargeGenerationSource(payload),
+          });
+          setBuildStatus('idle', 'Generation stopped.');
+          return;
+        }
         setGenerationStatusState('error', {
           requestId: session.id,
           metadata: formatGenerationMetadata(payload),
@@ -1591,7 +1628,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const title = (out && out.title) ? out.title : '';
       runParseFlow(lines, payload.topic, title);
       setLastGen(payload);
-      setGenerationStatusState('success', {
+      setGenerationStatusState(out && out.stopped ? 'stopped' : 'success', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload),
         message: formatGenerationReadyMessage(parsed.questions.length, Number(payload.count || parsed.questions.length)),
@@ -1601,13 +1638,13 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }catch(err){
       if(!isActiveGeneration(session.id)) return;
       if(err && err.name === 'AbortError'){
-        setGenerationStatusState('canceled', {
+        setGenerationStatusState('stopped', {
           requestId: session.id,
           metadata: formatGenerationMetadata(payload),
-          message: canceledGenerationMessage(payload),
+          message: stoppedGenerationMessage(payload),
           largeSource: isLargeGenerationSource(payload),
         });
-        setBuildStatus('idle', 'Generation canceled.');
+        setBuildStatus('idle', 'Generation stopped.');
         return;
       }
       const pretty = formatGenerationError(err);

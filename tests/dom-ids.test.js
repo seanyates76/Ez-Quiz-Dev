@@ -95,6 +95,7 @@ describe('public/index.html structure', () => {
     expect(card.dataset.generationState).toBe('idle');
     expect(card.classList.contains('generation-status-card')).toBe(true);
     expect(cancel.classList.contains('generation-status-cancel')).toBe(true);
+    expect(cancel.textContent.trim()).toBe('Stop generation');
 
     const css = readFile('public/styles.css');
     expect(css).toContain('@media (max-width: 640px)');

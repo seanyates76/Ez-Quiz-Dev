@@ -1,8 +1,12 @@
 'use strict';
 
 const { handleGenerateQuiz } = require('../generate-quiz.js');
-const { scrubStoredJobPayload } = require('./asyncJobStore.js');
+const { scrubStoredJobPayload, stoppedProgressMessage } = require('./asyncJobStore.js');
 const { parseLegacyQuestion } = require('./normalizer.js');
+
+function isStopStatus(status) {
+  return /^(stopped|canceled)$/i.test(String(status || ''));
+}
 
 function splitLines(raw) {
   return String(raw || '')
@@ -78,8 +82,8 @@ function safeError(err) {
   if (status === 429 || /quota|rate limit|429/i.test(msg)) {
     return { code: 'RATE_LIMITED', message: 'A provider rate limit interrupted one batch.' };
   }
-  if (/canceled|cancelled/i.test(msg)) {
-    return { code: 'CANCELED', message: 'Generation canceled.' };
+  if (/canceled|cancelled|stopped/i.test(msg)) {
+    return { code: 'STOPPED', message: 'Generation stopped.' };
   }
   return { code: code || 'BATCH_FAILED', message: 'A generation batch failed.' };
 }
@@ -114,7 +118,7 @@ async function runGenerateBatch(job, batch, state) {
     httpMethod: 'POST',
     headers: {},
     body: JSON.stringify(payload),
-  }, { skipRateLimit: true });
+  }, { skipRateLimit: true, timeoutMode: 'async-worker', asyncWorker: true });
   if (!response || response.statusCode < 200 || response.statusCode >= 300) {
     throw errorFromGenerateResponse(response || { statusCode: 500, body: '{}' });
   }
@@ -152,9 +156,21 @@ function retrySinglesForBatch(batch) {
 
 async function appendSuccessfulLines(store, jobId, lines, body, message) {
   return store.updateJob(jobId, (job) => {
-    if (job.status === 'canceled') return job;
     const existing = Array.isArray(job.questions) ? job.questions : [];
     const nextQuestions = existing.concat(lines).slice(0, job.requestedCount);
+    if (isStopStatus(job.status)) {
+      return {
+        ...job,
+        status: 'stopped',
+        stopped: true,
+        title: job.title || body.title || '',
+        provider: job.provider || body.provider || '',
+        model: job.model || body.model || '',
+        questions: nextQuestions,
+        completedCount: nextQuestions.length,
+        progressMessage: stoppedProgressMessage(nextQuestions.length, job.requestedCount),
+      };
+    }
     return {
       ...job,
       status: 'running',
@@ -171,7 +187,7 @@ async function appendSuccessfulLines(store, jobId, lines, body, message) {
 async function recordBatchFailure(store, jobId, batch, err, completedCount, retry = false) {
   const safe = safeError(err);
   return store.updateJob(jobId, (job) => {
-    if (job.status === 'canceled') return job;
+    if (isStopStatus(job.status)) return job;
     return {
       ...job,
       failedBatches: [
@@ -197,11 +213,13 @@ async function recordBatchFailure(store, jobId, batch, err, completedCount, retr
 async function markFinal(store, jobId) {
   return store.updateJob(jobId, (job) => {
     const completed = Array.isArray(job.questions) ? job.questions.length : Number(job.completedCount || 0);
-    if (job.status === 'canceled') {
+    if (isStopStatus(job.status)) {
       return {
         ...scrubStoredJobPayload(job),
+        status: 'stopped',
+        stopped: true,
         completedCount: completed,
-        progressMessage: 'Generation canceled.',
+        progressMessage: stoppedProgressMessage(completed, job.requestedCount),
       };
     }
     if (completed >= Number(job.requestedCount || 0)) {
@@ -237,16 +255,24 @@ async function markFinal(store, jobId) {
 async function processOneBatch(store, job, batch, state) {
   const latest = await store.getJob(job.jobId);
   if (!latest || latest.status === 'expired') return { stopped: true };
-  if (latest.status === 'canceled') {
+  if (isStopStatus(latest.status)) {
     await markFinal(store, job.jobId);
     return { stopped: true };
   }
 
-  await store.updateJob(job.jobId, (current) => ({
-    ...current,
-    status: 'running',
-    progressMessage: `Generating batch ${batch.batchNo} of ${job.plannedBatches.length}. ${current.completedCount || 0} of ${current.requestedCount} questions ready.`,
-  }));
+  const runningJob = await store.updateJob(job.jobId, (current) => (
+    isStopStatus(current.status)
+      ? current
+      : {
+          ...current,
+          status: 'running',
+          progressMessage: `Generating batch ${batch.batchNo} of ${job.plannedBatches.length}. ${current.completedCount || 0} of ${current.requestedCount} questions ready.`,
+        }
+  ));
+  if (!runningJob || isStopStatus(runningJob.status)) {
+    await markFinal(store, job.jobId);
+    return { stopped: true };
+  }
 
   try {
     const body = await runGenerateBatch(job, batch, state);
@@ -267,9 +293,19 @@ async function processOneBatch(store, job, batch, state) {
       err.code = 'BATCH_SHORTFALL';
       await recordBatchFailure(store, job.jobId, batch, err, accepted.length, !!batch.retry);
     }
+    const latestAfterBatch = await store.getJob(job.jobId);
+    if (latestAfterBatch && isStopStatus(latestAfterBatch.status)) {
+      await markFinal(store, job.jobId);
+      return { stopped: true };
+    }
     return { stopped: false };
   } catch (err) {
     await recordBatchFailure(store, job.jobId, batch, err, 0, !!batch.retry);
+    const latestAfterError = await store.getJob(job.jobId);
+    if (latestAfterError && isStopStatus(latestAfterError.status)) {
+      await markFinal(store, job.jobId);
+      return { stopped: true };
+    }
     if (!batch.retry) {
       const retries = retrySinglesForBatch(batch);
       for (const single of retries) {
@@ -286,7 +322,7 @@ async function processGenerationJob(jobId, options = {}) {
   if (!store) throw new Error('processGenerationJob requires a job store');
   let job = await store.getJob(jobId);
   if (!job || job.status === 'expired') return job;
-  if (job.status === 'canceled') return markFinal(store, job.jobId);
+  if (isStopStatus(job.status)) return markFinal(store, job.jobId);
   if (!Array.isArray(job.plannedBatches) || !job.plannedBatches.length) {
     return store.updateJob(job.jobId, (current) => ({
       ...current,
@@ -296,11 +332,16 @@ async function processGenerationJob(jobId, options = {}) {
     }));
   }
 
-  job = await store.updateJob(job.jobId, (current) => ({
-    ...current,
-    status: 'running',
-    progressMessage: 'Generation started.',
-  }));
+  job = await store.updateJob(job.jobId, (current) => (
+    isStopStatus(current.status)
+      ? current
+      : {
+          ...current,
+          status: 'running',
+          progressMessage: 'Generation started.',
+        }
+  ));
+  if (!job || isStopStatus(job.status)) return markFinal(store, jobId);
 
   const state = createCollectionState(job);
   state.acceptedCount = Number(job.completedCount || 0);

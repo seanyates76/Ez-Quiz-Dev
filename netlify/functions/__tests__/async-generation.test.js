@@ -29,16 +29,26 @@ function okLines(lines, title = 'Async Quiz') {
   };
 }
 
-function timeoutResponse() {
+function timeoutResponse(timeoutMs = 90000) {
   return {
     statusCode: 504,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       error: 'Generation timed out',
-      details: 'Gemini provider timed out after 22000ms',
+      details: `Gemini provider timed out after ${timeoutMs}ms`,
       code: 'PROVIDER_TIMEOUT',
     }),
   };
+}
+
+function createDeferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
 }
 
 class MemoryAdapter {
@@ -134,12 +144,13 @@ describe('async generation endpoints and job store', () => {
       plannedBatches: [{ batchId: 'batch-1', batchNo: 1, count: 1 }],
     });
 
-    for (const state of ['queued', 'running', 'partial', 'complete', 'failed']) {
+    for (const state of ['queued', 'running', 'partial', 'complete', 'failed', 'stopped']) {
       await store.updateJob(job.jobId, (current) => ({
         ...current,
         status: state,
+        stopped: state === 'stopped',
         questions: state === 'queued' || state === 'running' || state === 'failed' ? [] : [tfLine(1)],
-        completedCount: state === 'partial' || state === 'complete' ? 1 : 0,
+        completedCount: state === 'partial' || state === 'complete' || state === 'stopped' ? 1 : 0,
         errors: state === 'failed' ? [{ message: 'No usable quiz questions were generated.' }] : [],
       }));
       const res = await status({
@@ -150,6 +161,7 @@ describe('async generation endpoints and job store', () => {
       const body = json(res);
       expect(res.statusCode).toBe(200);
       expect(body.status).toBe(state);
+      expect(body.stopped).toBe(state === 'stopped');
       expect(JSON.stringify(body)).not.toContain('secret source text');
     }
   });
@@ -246,6 +258,86 @@ describe('async generation endpoints and job store', () => {
     expect(flatTypes.filter((type) => type === 'YN')).toHaveLength(12);
     expect(flatTypes.filter((type) => type === 'MT')).toHaveLength(12);
   });
+
+  test('stop endpoint marks jobs stopped and keeps existing questions', async () => {
+    const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
+    const { handler: stop } = require('../generate-quiz-stop.js');
+    const { handler: cancelAlias } = require('../generate-quiz-cancel.js');
+    const store = createGenerationJobStore({ env: process.env });
+    const job = await store.createJob({
+      topic: 'Stop',
+      requestedCount: 5,
+      options: { sourceText: 'private source text' },
+      plannedBatches: [{ batchId: 'batch-1', batchNo: 1, count: 5 }],
+    });
+    await store.updateJob(job.jobId, (current) => ({
+      ...current,
+      status: 'running',
+      questions: [tfLine(1), tfLine(2)],
+      completedCount: 2,
+    }));
+
+    const res = await stop(event({ jobId: job.jobId }));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.status).toBe('stopped');
+    expect(body.stopped).toBe(true);
+    expect(body.completedCount).toBe(2);
+    expect(body.questions).toEqual([tfLine(1), tfLine(2)]);
+    expect(body.progressMessage).toBe('Generation stopped. 2 of 5 questions ready.');
+    expect(JSON.stringify(body)).not.toContain('private source text');
+
+    const aliasRes = await cancelAlias(event({ jobId: job.jobId }));
+    const aliasBody = json(aliasRes);
+    expect(aliasRes.statusCode).toBe(200);
+    expect(aliasBody.status).toBe('stopped');
+    expect(aliasBody.stopped).toBe(true);
+  });
+
+  test('sync generation uses short timeout while async worker mode accepts slower provider success', async () => {
+    jest.useFakeTimers();
+    jest.resetModules();
+    process.env = { ...process.env, AI_PROVIDER: 'mock' };
+    const generateLines = jest.fn(async () => new Promise((resolve) => {
+      setTimeout(() => resolve({
+        title: 'Slow Quiz',
+        lines: tfLine(1),
+        provider: 'mock',
+        model: 'mock',
+      }), 26000);
+    }));
+    jest.doMock('../lib/providers.js', () => ({
+      providerTimeoutMs: jest.fn(() => 22000),
+      asyncProviderTimeoutMs: jest.fn(() => 90000),
+      generateLines,
+      generateInBatches: jest.fn(),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handleGenerateQuiz } = require('../generate-quiz.js');
+
+    try {
+      const syncPending = handleGenerateQuiz(event({ topic: 'Slow', count: 1, provider: 'mock' }));
+      await Promise.resolve();
+      expect(generateLines.mock.calls[0][0].providerTimeoutMs).toBe(22000);
+      jest.advanceTimersByTime(25000);
+      const syncRes = await syncPending;
+      expect(syncRes.statusCode).toBe(504);
+
+      generateLines.mockClear();
+      const asyncPending = handleGenerateQuiz(event({ topic: 'Slow', count: 1, provider: 'mock' }), { asyncWorker: true });
+      await Promise.resolve();
+      expect(generateLines.mock.calls[0][0].providerTimeoutMs).toBe(90000);
+      jest.advanceTimersByTime(26000);
+      const asyncRes = await asyncPending;
+      expect(asyncRes.statusCode).toBe(200);
+      expect(json(asyncRes).lines).toBe(tfLine(1));
+    } finally {
+      jest.dontMock('../lib/providers.js');
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('async generation worker', () => {
@@ -304,6 +396,26 @@ describe('async generation worker', () => {
     expect(done.questions).toEqual([tfLine(1), tfLine(2)]);
     expect(adapter.saves.some((save) => save.completedCount === 1)).toBe(true);
     expect(adapter.saves.some((save) => save.completedCount === 2)).toBe(true);
+  });
+
+  test('worker uses async timeout mode and keeps a five-question batch intact', async () => {
+    const lines = [1, 2, 3, 4, 5].map(tfLine);
+    handleGenerateQuiz.mockResolvedValueOnce(okLines(lines));
+    const job = await createWorkerJob([
+      { batchId: 'batch-1', batchNo: 1, count: 5, sourceText: 'source 1', types: ['MC', 'TF', 'YN', 'MC', 'MT'] },
+    ], { requestedCount: 5 });
+
+    const done = await processGenerationJob(job.jobId, { store });
+
+    expect(done.status).toBe('complete');
+    expect(done.questions).toEqual(lines);
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+    expect(handleGenerateQuiz.mock.calls[0][1]).toMatchObject({
+      skipRateLimit: true,
+      timeoutMode: 'async-worker',
+      asyncWorker: true,
+    });
+    expect(JSON.parse(handleGenerateQuiz.mock.calls[0][0].body)).toMatchObject({ count: 5 });
   });
 
   test('one failed batch is recorded and does not stop later batches', async () => {
@@ -369,16 +481,44 @@ describe('async generation worker', () => {
     expect(done.errors.some((err) => err.code === 'ZERO_USABLE_QUESTIONS')).toBe(true);
   });
 
-  test('canceled job stops before future batches where possible', async () => {
+  test('stopped job stops before future batches where possible', async () => {
     const job = await createWorkerJob([
       { batchId: 'batch-1', batchNo: 1, count: 1, sourceText: 'source 1', types: ['TF'] },
       { batchId: 'batch-2', batchNo: 2, count: 1, sourceText: 'source 2', types: ['TF'] },
     ]);
-    await store.cancelJob(job.jobId);
+    await store.stopJob(job.jobId);
 
     const done = await processGenerationJob(job.jobId, { store });
 
-    expect(done.status).toBe('canceled');
+    expect(done.status).toBe('stopped');
+    expect(done.stopped).toBe(true);
     expect(handleGenerateQuiz).not.toHaveBeenCalled();
+  });
+
+  test('worker saves an in-flight batch result after stop and does not start later batches', async () => {
+    const pending = createDeferred();
+    const lines = [1, 2, 3, 4, 5].map(tfLine);
+    handleGenerateQuiz.mockReturnValueOnce(pending.promise);
+    const job = await createWorkerJob([
+      { batchId: 'batch-1', batchNo: 1, count: 5, sourceText: 'source 1', types: ['TF'] },
+      { batchId: 'batch-2', batchNo: 2, count: 5, sourceText: 'source 2', types: ['TF'] },
+    ], { requestedCount: 10 });
+
+    const running = processGenerationJob(job.jobId, { store });
+    for (let i = 0; i < 8 && handleGenerateQuiz.mock.calls.length === 0; i += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+
+    await store.stopJob(job.jobId);
+    pending.resolve(okLines(lines));
+    const done = await running;
+
+    expect(done.status).toBe('stopped');
+    expect(done.stopped).toBe(true);
+    expect(done.completedCount).toBe(5);
+    expect(done.questions).toEqual(lines);
+    expect(done.progressMessage).toBe('Generation stopped. 5 of 10 questions ready.');
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
   });
 });

@@ -9,7 +9,15 @@
 - Requires env: GEMINI_API_KEY
   */
 
-const { generateLines, generateInBatches, callProvider, buildStructuredPrompt } = require('./lib/providers.js');
+const providers = require('./lib/providers.js');
+const {
+  generateLines,
+  generateInBatches,
+  callProvider,
+  buildStructuredPrompt,
+} = providers;
+const providerTimeoutMs = providers.providerTimeoutMs || (() => 22000);
+const asyncProviderTimeoutMs = providers.asyncProviderTimeoutMs || (() => 90000);
 const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
 const { normalizeGenerationPayload, sanitizeAvoidStems, toPositiveInt } = require('./lib/generationRequest.js');
 
@@ -253,7 +261,15 @@ async function handleGenerateQuiz(event, options = {}) {
     });
   }
 
-  const TIMEOUT_MS = Math.max(8000, Math.min(30000, parseInt(process.env.GENERATE_TIMEOUT_MS || '25000', 10)));
+  const asyncWorkerMode = !!(options.asyncWorker || options.timeoutMode === 'async-worker');
+  const providerCallTimeoutMs = asyncWorkerMode
+    ? asyncProviderTimeoutMs(process.env)
+    : providerTimeoutMs(process.env);
+  const syncTimeoutMs = Math.max(8000, Math.min(30000, parseInt(process.env.GENERATE_TIMEOUT_MS || '25000', 10)));
+  const asyncTimeoutRaw = parseInt(process.env.ASYNC_GENERATE_TIMEOUT_MS || process.env.ASYNC_FUNCTION_TIMEOUT_MS || '', 10);
+  const TIMEOUT_MS = asyncWorkerMode
+    ? Math.max(providerCallTimeoutMs + 1000, Math.min(125000, Number.isFinite(asyncTimeoutRaw) ? asyncTimeoutRaw : providerCallTimeoutMs + 5000))
+    : syncTimeoutMs;
 
   const corsHeaders = makeCorsHeaders(responseOrigin);
   const selectGenerator = (providerName) => {
@@ -262,12 +278,12 @@ async function handleGenerateQuiz(event, options = {}) {
   };
   const runGeneratorExact = async (args) => {
     let generator = selectGenerator(args.provider);
-    let result = await withTimeout(generator(args), TIMEOUT_MS);
+    let result = await withTimeout(generator({ ...args, providerTimeoutMs: providerCallTimeoutMs }), TIMEOUT_MS);
     let actual = countQuizLines(result.lines);
     let bestPartial = actual > 0 ? { result, actual } : null;
     if (actual < count && generator !== generateInBatches) {
       generator = generateInBatches;
-      result = await withTimeout(generator(args), TIMEOUT_MS);
+      result = await withTimeout(generator({ ...args, providerTimeoutMs: providerCallTimeoutMs }), TIMEOUT_MS);
       actual = countQuizLines(result.lines);
       if (actual > (bestPartial ? bestPartial.actual : 0)) {
         bestPartial = { result, actual };
@@ -283,7 +299,7 @@ async function handleGenerateQuiz(event, options = {}) {
   try {
     if(wantsStructured){
       const primary = await withTimeout(
-        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText }),
+        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText, timeoutMs: providerCallTimeoutMs }),
         TIMEOUT_MS
       );
       const quiz = normalizeQuizV2(primary.text, { topic, count, types });
@@ -315,7 +331,7 @@ async function handleGenerateQuiz(event, options = {}) {
       if (canFallbackToGemini && !isTimeout) {
         try {
           const fallback = await withTimeout(
-            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText }),
+            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText, timeoutMs: providerCallTimeoutMs }),
             TIMEOUT_MS
           );
           const fallbackLen = typeof fallback.text === 'string' ? fallback.text.length : 0;

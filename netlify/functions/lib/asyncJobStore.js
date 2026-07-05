@@ -8,7 +8,7 @@ const path = require('node:path');
 const STORE_NAME = 'async-generation-jobs';
 const DEFAULT_TTL_MS = 2 * 60 * 60 * 1000;
 const EXPIRED_MESSAGE = 'This generation job expired. Start a new quiz.';
-const VALID_STATUSES = new Set(['queued', 'running', 'partial', 'complete', 'failed', 'canceled', 'expired']);
+const VALID_STATUSES = new Set(['queued', 'running', 'partial', 'complete', 'failed', 'stopped', 'canceled', 'expired']);
 
 function nowMs() {
   return Date.now();
@@ -57,6 +57,7 @@ function expiredJob(jobId, job) {
     failedBatches: [],
     errors: [{ message: EXPIRED_MESSAGE }],
     progressMessage: EXPIRED_MESSAGE,
+    stopped: false,
     options: {},
     plannedBatches: [],
   };
@@ -85,9 +86,18 @@ function createJobRecord(input = {}, env = process.env) {
     failedBatches: [],
     errors: [],
     progressMessage: 'Generation job queued.',
+    stopped: false,
     options: clone(input.options || {}),
     plannedBatches: clone(input.plannedBatches || []),
   };
+}
+
+function stoppedProgressMessage(completed, requested) {
+  const ready = Number(completed || 0);
+  const target = Number(requested || 0);
+  if (ready > 0 && target > ready) return `Generation stopped. ${ready} of ${target} questions ready.`;
+  if (ready > 0) return `Generation stopped. ${ready} ${ready === 1 ? 'question' : 'questions'} ready.`;
+  return 'Generation stopped before any questions were ready.';
 }
 
 function safeBatchFailure(entry) {
@@ -130,6 +140,7 @@ function publicJobStatus(job) {
     completedCount: Number(job && job.completedCount || safeQuestions.length || 0),
     sourceName: job && job.sourceName || '',
     title: job && job.title || '',
+    stopped: status === 'stopped' || !!(job && job.stopped),
     progressMessage: job && job.progressMessage || '',
     failedBatches: (Array.isArray(job && job.failedBatches) ? job.failedBatches : [])
       .map(safeBatchFailure)
@@ -290,11 +301,21 @@ class GenerationJobStore {
   }
 
   async cancelJob(jobId) {
-    return this.updateJob(jobId, (job) => ({
-      ...scrubStoredJobPayload(job),
-      status: 'canceled',
-      progressMessage: 'Generation canceled.',
-    }));
+    return this.stopJob(jobId);
+  }
+
+  async stopJob(jobId) {
+    return this.updateJob(jobId, (job) => {
+      const completed = Array.isArray(job.questions) ? job.questions.length : Number(job.completedCount || 0);
+      return {
+        ...scrubStoredJobPayload(job),
+        status: 'stopped',
+        stopped: true,
+        stoppedAt: iso(),
+        completedCount: completed,
+        progressMessage: stoppedProgressMessage(completed, job.requestedCount),
+      };
+    });
   }
 }
 
@@ -316,5 +337,6 @@ module.exports = {
   publicJobStatus,
   sanitizeJobId,
   scrubStoredJobPayload,
+  stoppedProgressMessage,
   ttlMs,
 };

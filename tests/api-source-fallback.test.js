@@ -6,6 +6,7 @@ const { loadBrowserModule } = require('./utils');
 function loadApi() {
   return loadBrowserModule('public/js/api.js', [
     'generateWithAI',
+    'stopAsyncGeneration',
     'ASYNC_GENERATION_POLL_MS',
     'GENERATION_BATCH_SIZE',
     'TOPIC_ONLY_BATCH_SIZE',
@@ -119,6 +120,30 @@ describe('generateWithAI source-backed endpoint routing', () => {
 
     expect(ASYNC_GENERATION_POLL_MS).toBe(10000);
     expect(SECTION_AWARE_BATCH_SIZE).toBe(3);
+  });
+
+  test('stopAsyncGeneration prefers stop endpoint and falls back to cancel alias', async () => {
+    const { stopAsyncGeneration } = loadApi();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        json: async () => ({ error: 'Not found' }),
+        text: async () => 'Not found',
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ status: 'stopped', stopped: true }),
+      });
+
+    const out = await stopAsyncGeneration('qj_abcdefghijklmnopqrstuvwxyz123456');
+
+    expect(out).toEqual({ status: 'stopped', stopped: true });
+    expect(global.fetch.mock.calls.map(([url]) => url)).toEqual([
+      '/.netlify/functions/generate-quiz-stop',
+      '/.netlify/functions/generate-quiz-cancel',
+    ]);
   });
 
   function sectionReport(count, overrides = {}) {

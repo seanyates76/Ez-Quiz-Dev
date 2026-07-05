@@ -82,6 +82,7 @@ const ASYNC_GENERATION_ENDPOINTS = {
   start: '/.netlify/functions/generate-quiz-start',
   worker: '/.netlify/functions/generate-quiz-worker-background',
   status: '/.netlify/functions/generate-quiz-status',
+  stop: '/.netlify/functions/generate-quiz-stop',
   cancel: '/.netlify/functions/generate-quiz-cancel',
 };
 const LARGE_SOURCE_MULTI_REQUEST_THRESHOLD = 20000;
@@ -859,14 +860,33 @@ export async function getAsyncGenerationStatus(jobId, { signal } = {}){
   return parseJsonResponse(res, [410]);
 }
 
-export async function cancelAsyncGeneration(jobId, { signal } = {}){
-  const res = await fetch(ASYNC_GENERATION_ENDPOINTS.cancel, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId }),
-    signal,
-  });
-  return parseJsonResponse(res, [410]);
+export async function stopAsyncGeneration(jobId, { signal } = {}){
+  const endpoints = [ASYNC_GENERATION_ENDPOINTS.stop, ASYNC_GENERATION_ENDPOINTS.cancel];
+  let lastError = null;
+  for(let i = 0; i < endpoints.length; i += 1){
+    try{
+      const res = await fetch(endpoints[i], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId }),
+        signal,
+      });
+      if(res.status === 404 && i < endpoints.length - 1) {
+        lastError = new Error('Stop endpoint not found.');
+        continue;
+      }
+      return parseJsonResponse(res, [410]);
+    }catch(err){
+      lastError = err;
+      if(err && err.name === 'AbortError') throw err;
+      if(i >= endpoints.length - 1) throw err;
+    }
+  }
+  throw lastError || new Error('Could not stop generation.');
+}
+
+export async function cancelAsyncGeneration(jobId, options = {}){
+  return stopAsyncGeneration(jobId, options);
 }
 
 function createCollectionState(opts = {}){

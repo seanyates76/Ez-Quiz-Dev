@@ -39,6 +39,14 @@ function delay(ms = 5) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function flushUntil(predicate, attempts = 12) {
+  for (let i = 0; i < attempts; i += 1) {
+    if (predicate()) return true;
+    await flush();
+  }
+  return !!predicate();
+}
+
 function generatedTfLines(count) {
   return Array.from({ length: count }, (_, index) => `TF|Generated fact ${index + 1}.|T`).join('\n');
 }
@@ -58,7 +66,7 @@ describe('generator media import overlap regression', () => {
   let startAsyncGeneration;
   let triggerAsyncGeneration;
   let getAsyncGenerationStatus;
-  let cancelAsyncGeneration;
+  let stopAsyncGeneration;
   let shouldUseAsyncGeneration;
   let analyzeSourceText;
   let formatSourceSectionSummary;
@@ -108,7 +116,7 @@ describe('generator media import overlap regression', () => {
       questions: ['TF|Imported fact.|T'],
       title: 'Imported Source Quiz',
     });
-    cancelAsyncGeneration = jest.fn().mockResolvedValue({ status: 'canceled' });
+    stopAsyncGeneration = jest.fn().mockResolvedValue({ status: 'stopped', stopped: true });
     shouldUseAsyncGeneration = jest.fn((count, opts = {}) => {
       const sourceText = String(opts.sourceText || '');
       const report = opts.sourceReport || {};
@@ -178,11 +186,11 @@ describe('generator media import overlap regression', () => {
       getMaxQuestions: () => 50,
       parseEditorInput,
       ASYNC_GENERATION_POLL_MS: 1,
-      cancelAsyncGeneration,
       generateWithAI,
       getAsyncGenerationStatus,
       shouldUseAsyncGeneration,
       startAsyncGeneration,
+      stopAsyncGeneration,
       triggerAsyncGeneration,
       ImportController,
       sniffFileKind,
@@ -926,7 +934,8 @@ describe('generator media import overlap regression', () => {
     ['complete', 'success'],
     ['partial', 'success'],
     ['failed', 'error'],
-    ['canceled', 'canceled'],
+    ['stopped', 'stopped'],
+    ['canceled', 'stopped'],
     ['expired', 'error'],
   ])('async polling stops on %s status', async (terminalStatus, expectedCardState) => {
     const lines = terminalStatus === 'partial'
@@ -967,29 +976,105 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe(expectedCardState);
   });
 
-  test('async cancel stops polling and marks the server job canceled', async () => {
-    const pending = createDeferred();
+  test('async Stop requests stopped status without enabling Start when no questions are ready', async () => {
+    const firstStatus = createDeferred();
     setMediaSource({
       text: 'D'.repeat(25000),
-      name: 'cancel-notes.md',
+      name: 'stop-notes.md',
       charCount: 25000,
       report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
     });
-    getAsyncGenerationStatus.mockReturnValueOnce(pending.promise);
+    getAsyncGenerationStatus
+      .mockReturnValueOnce(firstStatus.promise)
+      .mockResolvedValueOnce({
+        status: 'stopped',
+        stopped: true,
+        completedCount: 0,
+        requestedCount: 50,
+        questions: [],
+        progressMessage: 'Generation stopped before any questions were ready.',
+      });
 
-    document.getElementById('topicInput').value = 'cancel async';
+    document.getElementById('topicInput').value = 'stop async';
     document.getElementById('countInput').value = '50';
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flushUntil(() => triggerAsyncGeneration.mock.calls.length > 0);
+
+    expect(document.getElementById('cancelGenerationBtn').textContent).toBe('Stop generation');
+    document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
     await flush();
+    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+
+    firstStatus.resolve({
+      status: 'running',
+      completedCount: 0,
+      requestedCount: 50,
+      progressMessage: '0 of 50 questions ready.',
+    });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('stopped');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation stopped.');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('Generation stopped before any questions were ready.');
+    expect(document.getElementById('startBtn').disabled).toBe(true);
+    expect(state.media.sourceText).toBe('D'.repeat(25000));
+  });
+
+  test('async Stop keeps returned questions and enables Start', async () => {
+    const firstStatus = createDeferred();
+    const lines = generatedTfLines(5);
+    setMediaSource({
+      text: 'K'.repeat(25000),
+      name: 'keep-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    parseEditorInput.mockImplementation((text) => ({
+      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+      errors: [],
+      error: null,
+    }));
+    getAsyncGenerationStatus
+      .mockReturnValueOnce(firstStatus.promise)
+      .mockResolvedValueOnce({
+        status: 'stopped',
+        stopped: true,
+        completedCount: 5,
+        requestedCount: 50,
+        questions: lines.split('\n'),
+        progressMessage: 'Generation stopped. 5 of 50 questions ready.',
+      });
+
+    document.getElementById('topicInput').value = 'keep async';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flushUntil(() => triggerAsyncGeneration.mock.calls.length > 0);
 
     document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
     await flush();
+    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
 
-    expect(cancelAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
-    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
-    expect(document.getElementById('startBtn').disabled).toBe(true);
+    firstStatus.resolve({
+      status: 'running',
+      completedCount: 0,
+      requestedCount: 50,
+      progressMessage: '0 of 50 questions ready.',
+    });
+    await flush();
+    await flush();
+    await flush();
+
+    expect(parseEditorInput).toHaveBeenCalledWith(lines);
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('stopped');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation stopped.');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('5 of 50 questions ready.');
+    expect(document.getElementById('startBtn').disabled).toBe(false);
+    expect(document.getElementById('editor').value).toBe(lines);
+    expect(state.media.sourceText).toBe('K'.repeat(25000));
   });
 
   test('async polling errors are retried a bounded number of times', async () => {
@@ -1040,7 +1125,7 @@ describe('generator media import overlap regression', () => {
     }
   });
 
-  test('cancel aborts active generation and leaves Start Quiz disabled without an existing quiz', async () => {
+  test('Stop aborts active local generation and leaves Start Quiz disabled without an existing quiz', async () => {
     let capturedSignal;
     generateWithAI.mockImplementationOnce((_topic, _count, opts = {}) => {
       capturedSignal = opts.signal;
@@ -1063,11 +1148,11 @@ describe('generator media import overlap regression', () => {
 
     expect(capturedSignal.aborted).toBe(true);
     const card = document.getElementById('generationStatusCard');
-    expect(card.dataset.generationState).toBe('canceled');
+    expect(card.dataset.generationState).toBe('stopped');
     expect(card.classList.contains('is-animating')).toBe(false);
     expect(card.classList.contains('is-complete')).toBe(false);
     expect(card.classList.contains('is-success-pulsing')).toBe(false);
-    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation canceled.');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation stopped.');
     expect(document.getElementById('generationStatusMessage').textContent).toBe('Your topic is still here.');
     expect(document.getElementById('status').hidden).toBe(true);
     expect(document.getElementById('generateBtn').disabled).toBe(false);
@@ -1076,7 +1161,7 @@ describe('generator media import overlap regression', () => {
     expect(parseEditorInput).not.toHaveBeenCalled();
   });
 
-  test('late response after cancel cannot overwrite the editor or unlock Start Quiz', async () => {
+  test('late response after Stop cannot overwrite the editor or unlock Start Quiz', async () => {
     const deferred = createDeferred();
     generateWithAI.mockReturnValueOnce(deferred.promise);
 
@@ -1093,7 +1178,7 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('stopped');
     expect(document.getElementById('editor').value).toBe('');
     expect(document.getElementById('mirror').value).toBe('');
     expect(document.getElementById('startBtn').disabled).toBe(true);
@@ -1139,7 +1224,7 @@ describe('generator media import overlap regression', () => {
     expect(parseEditorInput).not.toHaveBeenCalledWith('TF|First stale fact.|T');
   });
 
-  test('canceling a replacement generation keeps an existing valid quiz startable', async () => {
+  test('stopping a replacement generation keeps an existing valid quiz startable', async () => {
     document.getElementById('topicInput').value = 'ready quiz';
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
@@ -1164,7 +1249,7 @@ describe('generator media import overlap regression', () => {
     await flush();
     await flush();
 
-    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('canceled');
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('stopped');
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('startToolbarBtn').getAttribute('aria-disabled')).toBe('false');
     expect(document.getElementById('editor').value).toBe('TF|Imported fact.|T');

@@ -6,12 +6,20 @@ const { cleanSourceText: cleanSourceMaterial } = require('./sourceMaterial.js');
 const PRIVATE_KNOWLEDGE_START = 'PRIVATE INSTRUCTOR KNOWLEDGE START';
 const PRIVATE_KNOWLEDGE_END = 'PRIVATE INSTRUCTOR KNOWLEDGE END';
 const DEFAULT_PROVIDER_TIMEOUT_MS = 22000;
+const DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS = 90000;
 
 function providerTimeoutMs(env = process.env){
   const raw = env && (env.GENERATE_PROVIDER_TIMEOUT_MS || env.PROVIDER_TIMEOUT_MS);
   const parsed = parseInt(raw, 10);
   if(!Number.isFinite(parsed)) return DEFAULT_PROVIDER_TIMEOUT_MS;
   return Math.max(1000, Math.min(26000, parsed));
+}
+
+function asyncProviderTimeoutMs(env = process.env){
+  const raw = env && (env.ASYNC_PROVIDER_TIMEOUT_MS || env.ASYNC_GENERATE_PROVIDER_TIMEOUT_MS);
+  const parsed = parseInt(raw, 10);
+  if(!Number.isFinite(parsed)) return DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS;
+  return Math.max(1000, Math.min(120000, parsed));
 }
 
 function providerTimeoutError(provider, timeoutMs){
@@ -384,22 +392,24 @@ function echoGenerate({ topic, count, types, kind, avoidStems }){
   return out.join('\n');
 }
 
-async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems }){
+async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems, timeoutMs }){
   const selected = (provider || (env.AI_PROVIDER || 'gemini')).toLowerCase();
   const normalizedCount = Math.max(1, Math.min(50, parseInt(count || 10, 10)));
   const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText);
-  const timeoutMs = providerTimeoutMs(env);
+  const resolvedTimeoutMs = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+    ? Number(timeoutMs)
+    : providerTimeoutMs(env);
   // [quiz-v2: hook] provider call surface — swap prompt/response handling when structured default graduates.
 
   try {
     if (selected === 'gemini') {
       const resolvedModel = model || env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025';
-      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind), timeoutMs });
+      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind), timeoutMs: resolvedTimeoutMs });
       return { provider: 'gemini', model: resolvedModel, text };
     }
     if (selected === 'openai') {
       const resolvedModel = model || env.OPENAI_MODEL || 'gpt-4o-mini';
-      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind), timeoutMs });
+      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind), timeoutMs: resolvedTimeoutMs });
       return { provider: 'openai', model: resolvedModel, text };
     }
     if (selected === 'echo') {
@@ -416,15 +426,15 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
   }
 }
 
-async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText }){
+async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText, providerTimeoutMs: explicitProviderTimeoutMs }){
   const n = Math.max(1, Math.min(50, parseInt(count||10,10)));
   const prompt = buildPrompt(topic, n, types, difficulty, avoidStems, sourceText);
-  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems });
+  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems, timeoutMs: explicitProviderTimeoutMs });
   const { title, lines } = normalizeLegacyLines(text, n);
   return { provider: usedProvider, model: usedModel, title, lines };
 }
 
-async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems }){
+async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems, providerTimeoutMs: explicitProviderTimeoutMs }){
   const targetRaw = count == null ? 10 : count;
   let target = parseInt(targetRaw, 10);
   if(!Number.isFinite(target)) target = 10;
@@ -464,7 +474,7 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   for(let attempt = 0; attempt < passes && collected.length < target; attempt++){
     const remaining = target - collected.length;
     const ask = Math.min(batch, remaining);
-    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText });
+    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText, providerTimeoutMs: explicitProviderTimeoutMs });
 
     if(!resolvedTitle && title) resolvedTitle = title;
     if(usedProvider) resolvedProvider = usedProvider;
@@ -490,4 +500,16 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   };
 }
 
-module.exports = { generateLines, generateInBatches, callProvider, buildPrompt, buildStructuredPrompt, cleanSourceMaterial, outputTokenBudget };
+module.exports = {
+  DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS,
+  DEFAULT_PROVIDER_TIMEOUT_MS,
+  asyncProviderTimeoutMs,
+  generateLines,
+  generateInBatches,
+  callProvider,
+  buildPrompt,
+  buildStructuredPrompt,
+  cleanSourceMaterial,
+  outputTokenBudget,
+  providerTimeoutMs,
+};

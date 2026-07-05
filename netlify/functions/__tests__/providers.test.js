@@ -1,12 +1,16 @@
 'use strict';
 
 const {
+  DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS,
+  DEFAULT_PROVIDER_TIMEOUT_MS,
+  asyncProviderTimeoutMs,
   buildPrompt,
   buildStructuredPrompt,
   callProvider,
   generateLines,
   generateInBatches,
   outputTokenBudget,
+  providerTimeoutMs,
 } = require('../lib/providers.js');
 
 function expectSourceHiddenFraming(out){
@@ -173,6 +177,15 @@ describe('providers helpers', () => {
     expect(provider).toBe('echo');
     expect(model).toBe('echo');
     expect(text.split('\n')).toHaveLength(3);
+  });
+
+  test('provider timeout helpers keep sync short and async worker longer', () => {
+    expect(DEFAULT_PROVIDER_TIMEOUT_MS).toBe(22000);
+    expect(DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS).toBe(90000);
+    expect(providerTimeoutMs({})).toBe(22000);
+    expect(providerTimeoutMs({ PROVIDER_TIMEOUT_MS: '1200' })).toBe(1200);
+    expect(asyncProviderTimeoutMs({})).toBe(90000);
+    expect(asyncProviderTimeoutMs({ ASYNC_PROVIDER_TIMEOUT_MS: '75000' })).toBe(75000);
   });
 
   test('callProvider hard-times out Gemini requests when the SDK call never settles', async () => {
