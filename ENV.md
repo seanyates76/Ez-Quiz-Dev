@@ -26,6 +26,15 @@ AI Generation providers (optional):
 - OPENAI_API_KEY: OpenAI API key
 - OPENAI_MODEL: e.g. `gpt-4o-mini`
 
+Async generation jobs (optional):
+- ASYNC_GENERATION_STORE: `file` or `blobs`
+  - Defaults to file storage for tests/local development and Netlify Blobs when deployed on Netlify.
+  - Do not force file storage in production because function filesystems are not durable across invocations.
+- ASYNC_GENERATION_JOB_TTL_MS: job lifetime in milliseconds
+  - Defaults to 2 hours and is clamped between 5 minutes and 24 hours.
+- ASYNC_GENERATION_JOB_DIR: local directory used only by the file adapter
+  - Defaults to `.netlify/async-generation-jobs` during Netlify Dev.
+
 Provider smoke note:
 - `Ez-Quiz-Dev` is the active development repo, but the linked Netlify project/env is tied to `Ez-Quiz-App`.
 - Normal `netlify dev` may inject App-linked env while running Dev-repo code.

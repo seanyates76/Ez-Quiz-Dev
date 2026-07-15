@@ -1,18 +1,23 @@
 Release-Prep Notes
 ==================
 
-Date: 2026-06-23
+Date: 2026-07-14
 
 EZ Quiz Web v3.6.0 release review notes
 ---------------------------------------
 
 Current-state source of truth
 - Create Quiz builds a valid quiz; Start Quiz begins taking it.
-- A compact generation status card stays visible during generation and after success, cancellation, or errors.
+- Generation runs as asynchronous jobs with bounded quiz-level lanes and compact provider contracts.
+- Completed usable questions are retained between batches, and Stop generation preserves everything already ready.
+- Bounded recovery fills remaining questions when possible and returns an explicit partial state when it cannot reach the requested count.
+- The generation status card keeps the broad active title "Building your quiz...", shows the changing phase in its detail line, and uses broad complete, partial, stopped, and failed terminal titles.
+- The progress bar and bottom count are based only on completed usable questions divided by the requested count.
 - Public quiz lengths are 5, 10, 15, 20, 30, and 50 questions.
 - Topic-only quizzes build in smaller batches for better quality while preserving requested count.
 - Larger study material uses section-aware planning when source reports are available.
 - Difficulty guidance is subject-agnostic while keeping technical examples when relevant.
+- Hard and Expert generation uses scenario budgets, with exactly one curveball question per Expert quiz.
 - Questions from study material should read like normal quiz items and avoid mentioning notes, readings, passages, or source material.
 - The landing intro has version-aware What's New behavior with compact feature cards; "Don't show again" remains unchanged.
 - Supported import formats: PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.

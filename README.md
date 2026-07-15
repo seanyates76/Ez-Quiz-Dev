@@ -21,7 +21,7 @@ Live app
 
 What’s in this repo
 -------------------
-- quiz generation and play flow
+- asynchronous quiz generation and play flow
 - PWA/service worker support
 - Netlify Functions for generation, feedback, and health endpoints
 - tests, CI workflows, and maintainer tooling
@@ -73,6 +73,10 @@ Architecture
 Key endpoints
 -------------
 - `/.netlify/functions/generate-quiz` — generate from topic or seed text
+- `/.netlify/functions/generate-quiz-start` — create an asynchronous generation job
+- `/.netlify/functions/generate-quiz-worker-background` — process a queued generation job
+- `/.netlify/functions/generate-quiz-status` — read generation progress and completed questions
+- `/.netlify/functions/generate-quiz-stop` — stop generation while preserving completed questions
 - `/.netlify/functions/send-feedback` — feedback mailer
 - `/.netlify/functions/health` — health probe
 
