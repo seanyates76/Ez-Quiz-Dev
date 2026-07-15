@@ -19,7 +19,8 @@ const {
 const providerTimeoutMs = providers.providerTimeoutMs || (() => 22000);
 const asyncProviderTimeoutMs = providers.asyncProviderTimeoutMs || (() => 90000);
 const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
-const { normalizeGenerationPayload, sanitizeAvoidStems, toPositiveInt } = require('./lib/generationRequest.js');
+const { normalizeGenerationPayload, sanitizeAvoidStems } = require('./lib/generationRequest.js');
+const { rateLimited, retryAfterSeconds } = require('./lib/generationRateLimit.js');
 
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
@@ -74,39 +75,7 @@ function reply(statusCode, body, origin, extraHeaders = {}) {
   };
 }
 
-// Sliding window rate limit per IP (defaults: 60 requests / 15 minutes)
-const RL = new Map(); // ip -> [timestamps]
-const DEFAULT_LIMIT = 60;
-const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
-
-const LIMIT = toPositiveInt(process.env.GENERATE_LIMIT, DEFAULT_LIMIT);
-const WINDOW_MS = toPositiveInt(process.env.GENERATE_WINDOW_MS, DEFAULT_WINDOW_MS);
 const BEARER_TOKEN = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
-
-function clientIp(event) {
-  const h = event.headers || {};
-  const xf = h['x-forwarded-for'] || h['X-Forwarded-For'] || '';
-  const ip = (Array.isArray(xf) ? xf[0] : String(xf).split(',')[0]).trim() || h['client-ip'] || h['x-nf-client-connection-ip'] || 'unknown';
-  return String(ip);
-}
-
-function rateLimited(event) {
-  if (!LIMIT) return false;
-  const now = Date.now();
-  const ip = clientIp(event);
-  const arr = RL.get(ip) || [];
-  const fresh = arr.filter(ts => now - ts < WINDOW_MS);
-  if (fresh.length >= LIMIT) return true;
-  fresh.push(now);
-  RL.set(ip, fresh);
-  if (RL.size > 500) {
-    for (const [k, list] of RL.entries()) {
-      const keep = list.filter(ts => now - ts < WINDOW_MS);
-      if (keep.length) RL.set(k, keep); else RL.delete(k);
-    }
-  }
-  return false;
-}
 
 function authorize(event) {
   if (!BEARER_TOKEN) return true;
@@ -117,6 +86,23 @@ function authorize(event) {
   if (!trimmed.toLowerCase().startsWith('bearer ')) return false;
   const token = trimmed.slice(7).trim();
   return token === BEARER_TOKEN;
+}
+
+function safeInternalLaneContract(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const quizLane = ['TRIVIA', 'EXACT_STUDY', 'ABSTRACT_STUDY'].includes(raw.quizLane) ? raw.quizLane : '';
+  const questionType = /^(MC|TF|YN|MT)$/.test(String(raw.questionType || '').toUpperCase())
+    ? String(raw.questionType).toUpperCase()
+    : '';
+  if (!quizLane || !questionType) return null;
+  return {
+    quizLane,
+    contractFlavor: String(raw.contractFlavor || '').replace(/[^a-z0-9_-]+/gi, '').slice(0, 80),
+    questionType,
+    scenario: !!raw.scenario,
+    curveball: !!raw.curveball,
+    curveballCount: Math.max(0, Math.min(50, parseInt(raw.curveballCount || 0, 10) || 0)),
+  };
 }
 
 function countQuizLines(lines) {
@@ -167,14 +153,15 @@ async function handleGenerateQuiz(event, options = {}) {
 
   if (event.httpMethod !== 'POST') return reply(405, { error: 'Method Not Allowed' }, responseOrigin);
 
-  if (!authorize(event)) {
+  const trustedInternalRequest = options.trustedInternalRequest === true;
+  if (!trustedInternalRequest && !authorize(event)) {
     const res = reply(401, { error: 'Unauthorized' }, responseOrigin);
     res.headers['WWW-Authenticate'] = 'Bearer';
     return res;
   }
 
   if (!options.skipRateLimit && rateLimited(event)) {
-    const retry = Math.ceil(WINDOW_MS / 1000);
+    const retry = retryAfterSeconds();
     const res = reply(429, { error: 'Rate limited' }, responseOrigin);
     res.headers['Retry-After'] = String(retry);
     return res;
@@ -209,14 +196,7 @@ async function handleGenerateQuiz(event, options = {}) {
     wantsLegacyOnly,
     wantsStructured,
   } = normalized;
-  const laneContract = payload && payload.quizLane ? {
-    quizLane: payload.quizLane,
-    contractFlavor: payload.contractFlavor,
-    questionType: payload.questionType,
-    scenario: !!payload.scenario,
-    curveball: !!payload.curveball,
-    curveballCount: payload.curveballCount,
-  } : null;
+  const laneContract = trustedInternalRequest ? safeInternalLaneContract(options.laneContract) : null;
   const structuredPrompt = wantsStructured ? buildStructuredPrompt(topic, count, types, difficulty, sourceText) : null;
   // [quiz-v2: hook] structured payload remains opt-in; default path keeps legacy lines for compatibility.
 
@@ -244,10 +224,11 @@ async function handleGenerateQuiz(event, options = {}) {
   }
 
   function buildLegacyResponse(result, meta = {}) {
+    const lines = usableQuizLines(result && result.lines).slice(0, count);
     const body = {
       ...meta,
       title: result.title,
-      lines: result.lines,
+      lines: lines.join('\n'),
       provider: result.provider,
       model: result.model,
     };
@@ -451,6 +432,7 @@ exports.handleGenerateQuiz = handleGenerateQuiz;
 exports._private = {
   countQuizLines,
   handleGenerateQuiz,
+  safeInternalLaneContract,
   sanitizeAvoidStems,
   usableQuizLines,
 };

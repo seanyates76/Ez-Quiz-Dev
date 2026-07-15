@@ -46,6 +46,7 @@ export function wireModals({ onPause, onResume }){
     settingsBtn:'settingsModal',
     promptBtn:'promptModal',
     versionInfoBtn:'releaseNotesModal',
+    settingsVersionInfoBtn:'releaseNotesModal',
     privacyLink:'privacyModal',
     termsLink:'termsModal'
   };

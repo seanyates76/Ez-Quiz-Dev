@@ -258,6 +258,27 @@ describe('generate-quiz count guarantees', () => {
     expect(body.lines).toBe('TF|Good one.|T');
   });
 
+  test('filters malformed prefixed lines out of otherwise complete legacy responses', async () => {
+    jest.doMock('../lib/providers.js', () => ({
+      generateLines: jest.fn(async () => ({
+        title: 'Complete With Junk',
+        lines: 'MT|Broken match.|1) One;2) Two;3) Three|A) Alpha;B) Beta;C) Gamma|1-B,2-A,3\nTF|Good one.|T',
+        provider: 'mock',
+        model: 'mock',
+      })),
+      generateInBatches: jest.fn(),
+      callProvider: jest.fn(),
+      buildStructuredPrompt: jest.fn(),
+    }));
+    const { handler } = require('../generate-quiz.js');
+    const res = await handler(event({ topic: 'Complete', count: 1, provider: 'mock' }));
+    const body = json(res);
+
+    expect(res.statusCode).toBe(200);
+    expect(body.partial).toBeUndefined();
+    expect(body.lines).toBe('TF|Good one.|T');
+  });
+
   test('returns JSON instead of a raw 500 body for handled provider failures', async () => {
     const generateLines = jest.fn(async () => {
       const err = new Error('Provider exploded while generating the batch');

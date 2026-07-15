@@ -142,12 +142,20 @@ const SEMANTIC_DUPLICATE_STOP_WORDS = new Set([
   'while', 'with', 'would', 'your',
 ]);
 
+function stemSemanticToken(token){
+  if(token.length >= 7 && token.endsWith('ing')) return token.slice(0, -3);
+  if(token.length >= 6 && token.endsWith('ed')) return token.slice(0, -2);
+  if(token.length >= 5 && /(?:ches|shes|sses|xes|zes)$/.test(token)) return token.slice(0, -2);
+  if(token.length >= 5 && token.endsWith('s') && !token.endsWith('ss')) return token.slice(0, -1);
+  return token;
+}
+
 function semanticTokens(raw){
   return String(raw || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ')
     .split(/\s+/)
-    .map((token) => token.replace(/(?:ing|ed|es|s)$/i, ''))
+    .map(stemSemanticToken)
     .filter((token) => token.length >= 3 && !SEMANTIC_DUPLICATE_STOP_WORDS.has(token));
 }
 

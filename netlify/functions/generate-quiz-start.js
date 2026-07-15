@@ -4,10 +4,17 @@ const { handleCors, parseJsonBody, reply } = require('./lib/asyncHttp.js');
 const { createGenerationJobStore, publicJobStatus } = require('./lib/asyncJobStore.js');
 const { buildPlannedBatches } = require('./lib/asyncGenerationPlanner.js');
 const { normalizeGenerationPayload } = require('./lib/generationRequest.js');
+const { rateLimited, retryAfterSeconds } = require('./lib/generationRateLimit.js');
 
 exports.handler = async (event) => {
   const cors = handleCors(event, ['POST']);
   if (cors.done) return cors.response;
+
+  if (rateLimited(event)) {
+    return reply(429, { error: 'Rate limited' }, cors.origin, {
+      'Retry-After': String(retryAfterSeconds()),
+    });
+  }
 
   let payload;
   try {

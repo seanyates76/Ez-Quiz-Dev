@@ -63,12 +63,17 @@ function createDefaultGenerationProfile(input = {}) {
   const scenarioRatio = scenarioRatioForDifficulty(difficulty);
   const quizLane = QUIZ_LANES.includes(input.quizLane) ? input.quizLane : 'EXACT_STUDY';
   const curveballCount = difficulty === 'expert' ? 1 : 0;
+  const hasSelectedTypes = Array.isArray(input.types) && input.types.length > 0;
+  const allowedTypes = hasSelectedTypes
+    ? normalizeQuestionTypesForPlanning(input.types)
+    : DEFAULT_LANE_ALLOWED_TYPES.slice();
+  const allowMatching = allowedTypes.includes('MT');
   return {
     quizLane,
     batchSize: DEFAULT_LANE_BATCH_SIZE,
-    allowedTypes: DEFAULT_LANE_ALLOWED_TYPES.slice(),
-    avoidTypes: ['MT'],
-    allowMatching: false,
+    allowedTypes,
+    avoidTypes: VALID_QUESTION_TYPES.filter((type) => !allowedTypes.includes(type)),
+    allowMatching,
     scenarioRatio,
     scenarioBudget: Math.round(requestedCount * scenarioRatio),
     curveballCount,
@@ -83,7 +88,7 @@ function safeGenerationProfile(profile = {}) {
     .filter((type) => type !== 'MT' || profile.allowMatching)
     .filter((type, index, arr) => arr.indexOf(type) === index);
   const safeAllowed = allowedTypes.length ? allowedTypes : DEFAULT_LANE_ALLOWED_TYPES.slice();
-  const avoidTypes = Array.isArray(profile.avoidTypes)
+  const avoidTypes = Array.isArray(profile.avoidTypes) && profile.avoidTypes.length
     ? normalizeQuestionTypesForPlanning(profile.avoidTypes).filter((type, index, arr) => arr.indexOf(type) === index)
     : [];
   const flavors = Array.isArray(profile.contractFlavors)
@@ -491,7 +496,7 @@ function flattenBatchEntries(batches) {
 function typeForProfileEntry(entry, profile, index) {
   const rawType = plannedTypeForEntry(entry);
   const allowed = Array.isArray(profile.allowedTypes) && profile.allowedTypes.length ? profile.allowedTypes : DEFAULT_LANE_ALLOWED_TYPES;
-  if (profile.allowMatching && rawType === 'MT' && allowed.includes('MT')) return 'MT';
+  if (rawType && allowed.includes(rawType)) return rawType;
   const batchSize = Math.max(1, profile.batchSize || DEFAULT_LANE_BATCH_SIZE);
   return allowed[Math.floor(index / batchSize) % allowed.length] || 'TF';
 }
@@ -518,7 +523,7 @@ function tagEntriesForProfile(entries, profile, requestedCount) {
 
   return selected.map((entry, index) => {
     const curveball = curveballIndexes.has(index);
-    const questionType = curveball ? 'MC' : typeForProfileEntry(entry, safeProfile, index);
+    const questionType = typeForProfileEntry(entry, safeProfile, index);
     return {
       ...entry,
       count: 1,

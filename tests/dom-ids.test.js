@@ -74,6 +74,35 @@ describe('public/index.html structure', () => {
     expect(title.textContent.trim()).toBe('Welcome to EZ Quiz 3.6.0!');
   });
 
+  test('uses unique IDs and exposes both release-notes triggers', () => {
+    const ids = Array.from(document.querySelectorAll('[id]')).map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(document.getElementById('versionInfoBtn')).not.toBeNull();
+    expect(document.getElementById('settingsVersionInfoBtn')).not.toBeNull();
+    expect(document.getElementById('versionInfoBtn').getAttribute('aria-controls')).toBe('releaseNotesModal');
+    expect(document.getElementById('settingsVersionInfoBtn').getAttribute('aria-controls')).toBe('releaseNotesModal');
+  });
+
+  test('keeps versioned module imports aligned with the service worker asset version', () => {
+    const serviceWorker = readFile('public/sw.js');
+    const assetVersion = serviceWorker.match(/const ASSET_VERSION = '([^']+)'/)?.[1];
+    expect(assetVersion).toBeTruthy();
+
+    const moduleFiles = [
+      'public/js/main.js',
+      'public/js/quiz.js',
+      'public/js/editor.gui.js',
+      'public/js/generator.js',
+    ];
+    const importVersions = moduleFiles.flatMap((file) => Array.from(
+      readFile(file).matchAll(/from\s+['"][^'"]+\?v=([^'"]+)['"]/g),
+      (match) => match[1]
+    ));
+
+    expect(importVersions.length).toBeGreaterThan(0);
+    expect(new Set(importVersions)).toEqual(new Set([assetVersion]));
+  });
+
   test('mirror textarea stays read-only and flagged empty by default', () => {
     const mirror = document.getElementById('mirror');
     expect(mirror).not.toBeNull();

@@ -351,4 +351,16 @@ describe('providers helpers', () => {
       previous
     )).toBe(false);
   });
+
+  test('semantic token normalization preserves short technical acronyms', () => {
+    const { semanticTokens } = require('../lib/semanticDuplicates.js');
+
+    expect(semanticTokens('DNS TLS CSS switches routes questions')).toEqual(expect.arrayContaining([
+      'dns',
+      'tls',
+      'css',
+      'switch',
+      'route',
+    ]));
+  });
 });

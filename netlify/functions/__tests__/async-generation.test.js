@@ -72,6 +72,10 @@ function requestBodies(mockFn) {
   return mockFn.mock.calls.map((call) => JSON.parse(call[0].body));
 }
 
+function laneContracts(mockFn) {
+  return mockFn.mock.calls.map((call) => call[1] && call[1].laneContract);
+}
+
 function plannedMarkerCount(sourceText) {
   return (String(sourceText || '').match(/Planned question \d+/g) || []).length;
 }
@@ -187,6 +191,27 @@ describe('async generation endpoints and job store', () => {
     expect(statusBody).not.toHaveProperty('plannedBatches');
   });
 
+  test('start endpoint rate-limits job creation per client IP', async () => {
+    process.env.GENERATE_LIMIT = '1';
+    process.env.GENERATE_WINDOW_MS = '60000';
+    jest.resetModules();
+    const { clearRateLimit } = require('../lib/generationRateLimit.js');
+    const { handler: start } = require('../generate-quiz-start.js');
+    clearRateLimit();
+    const request = { topic: 'Rate limited', count: 5, provider: 'echo' };
+    const headers = { 'x-forwarded-for': '192.0.2.10' };
+
+    const first = await start(event(request, { headers }));
+    const second = await start(event(request, { headers }));
+    const otherClient = await start(event(request, { headers: { 'x-forwarded-for': '192.0.2.11' } }));
+
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(429);
+    expect(json(second)).toEqual({ error: 'Rate limited' });
+    expect(second.headers['Retry-After']).toBe('60');
+    expect(otherClient.statusCode).toBe(202);
+  });
+
   test('status endpoint returns safe queued, running, partial, complete, and failed states', async () => {
     const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
     const { createDefaultGenerationProfile } = require('../lib/asyncGenerationPlanner.js');
@@ -244,6 +269,48 @@ describe('async generation endpoints and job store', () => {
       topic: 'Adapter',
       requestedCount: 1,
     });
+  });
+
+  test('Netlify Blobs adapter uses strong reads and ETag-conditional updates', async () => {
+    const blobStore = {
+      get: jest.fn(),
+      getWithMetadata: jest.fn(async () => ({
+        data: { jobId: 'qj_abcdefghijklmnopqrstuvwxyz', status: 'queued' },
+        etag: 'etag-1',
+        metadata: {},
+      })),
+      setJSON: jest.fn(async () => ({ modified: true, etag: 'etag-2' })),
+      delete: jest.fn(),
+    };
+    jest.doMock('@netlify/blobs', () => ({
+      connectLambda: jest.fn(),
+      getStore: jest.fn(() => blobStore),
+    }));
+
+    try {
+      const { NetlifyBlobsJobAdapter } = require('../lib/asyncJobStore.js');
+      const adapter = new NetlifyBlobsJobAdapter();
+      const versioned = await adapter.getVersioned('qj_abcdefghijklmnopqrstuvwxyz');
+      const modified = await adapter.setIfVersion(
+        'qj_abcdefghijklmnopqrstuvwxyz',
+        { jobId: 'qj_abcdefghijklmnopqrstuvwxyz', status: 'running', expiresAt: 'later' },
+        versioned.version
+      );
+
+      expect(versioned).toMatchObject({ version: 'etag-1', job: { status: 'queued' } });
+      expect(blobStore.getWithMetadata).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz', {
+        type: 'json',
+        consistency: 'strong',
+      });
+      expect(blobStore.setJSON).toHaveBeenCalledWith(
+        'qj_abcdefghijklmnopqrstuvwxyz',
+        expect.objectContaining({ status: 'running' }),
+        expect.objectContaining({ onlyIfMatch: 'etag-1' })
+      );
+      expect(modified).toBe(true);
+    } finally {
+      jest.dontMock('@netlify/blobs');
+    }
   });
 
   test('expired jobs are scrubbed and reported safely', async () => {
@@ -345,6 +412,37 @@ describe('async generation endpoints and job store', () => {
     ]));
   });
 
+  test('source-backed profiles honor explicitly selected question types', () => {
+    const {
+      buildProfiledBatches,
+      createDefaultGenerationProfile,
+    } = require('../lib/asyncGenerationPlanner.js');
+    const trueFalseProfile = createDefaultGenerationProfile({
+      requestedCount: 4,
+      difficulty: 'hard',
+      sourceBacked: true,
+      types: ['TF'],
+    });
+    const trueFalseBatches = buildProfiledBatches(
+      [plannedSectionBatch(1, 4, ['MC', 'YN', 'TF', 'MT'])],
+      trueFalseProfile,
+      4
+    );
+    const matchingProfile = createDefaultGenerationProfile({
+      requestedCount: 2,
+      difficulty: 'easy',
+      sourceBacked: true,
+      types: ['MT'],
+    });
+
+    expect(trueFalseProfile.allowedTypes).toEqual(['TF']);
+    expect(trueFalseBatches.flatMap((batch) => batch.plannedEntries).every((entry) => entry.questionType === 'TF')).toBe(true);
+    expect(matchingProfile).toMatchObject({
+      allowedTypes: ['MT'],
+      allowMatching: true,
+    });
+  });
+
   test('expert profile uses scenario ratio 0.6 and assigns exactly one curveball', () => {
     const {
       buildProfiledBatches,
@@ -444,7 +542,7 @@ describe('async generation endpoints and job store', () => {
     }
   });
 
-  test('generate-quiz passes lane contract metadata into provider generation', async () => {
+  test('generate-quiz ignores public lane metadata and accepts trusted worker contracts', async () => {
     jest.resetModules();
     process.env = { ...process.env, AI_PROVIDER: 'mock' };
     const generateLines = jest.fn(async () => ({
@@ -464,7 +562,7 @@ describe('async generation endpoints and job store', () => {
 
     try {
       const { handleGenerateQuiz } = require('../generate-quiz.js');
-      const res = await handleGenerateQuiz(event({
+      const publicRes = await handleGenerateQuiz(event({
         topic: 'Lane',
         count: 1,
         provider: 'mock',
@@ -475,11 +573,32 @@ describe('async generation endpoints and job store', () => {
         questionType: 'YN',
         scenario: true,
         curveball: false,
-      }), { asyncWorker: true });
+      }));
 
-      expect(res.statusCode).toBe(200);
-      expect(generateLines).toHaveBeenCalledTimes(1);
-      expect(generateLines.mock.calls[0][0].laneContract).toMatchObject({
+      const internalRes = await handleGenerateQuiz(event({
+        topic: 'Lane',
+        count: 1,
+        provider: 'mock',
+        sourceText: 'Source excerpt.',
+        types: ['YN'],
+      }), {
+        asyncWorker: true,
+        skipRateLimit: true,
+        trustedInternalRequest: true,
+        laneContract: {
+          quizLane: 'EXACT_STUDY',
+          contractFlavor: 'config_behavior',
+          questionType: 'YN',
+          scenario: true,
+          curveball: false,
+        },
+      });
+
+      expect(publicRes.statusCode).toBe(200);
+      expect(internalRes.statusCode).toBe(200);
+      expect(generateLines).toHaveBeenCalledTimes(2);
+      expect(generateLines.mock.calls[0][0].laneContract).toBeNull();
+      expect(generateLines.mock.calls[1][0].laneContract).toMatchObject({
         quizLane: 'EXACT_STUDY',
         contractFlavor: 'config_behavior',
         questionType: 'YN',
@@ -489,6 +608,32 @@ describe('async generation endpoints and job store', () => {
     } finally {
       jest.dontMock('../lib/providers.js');
     }
+  });
+
+  test('trusted worker generation succeeds when public generation requires bearer auth', async () => {
+    process.env.GENERATE_BEARER_TOKEN = 'test-worker-secret';
+    process.env.AI_PROVIDER = 'echo';
+    jest.resetModules();
+    const { handler: publicGenerate } = require('../generate-quiz.js');
+    const unauthorized = await publicGenerate(event({ topic: 'Protected', count: 1, provider: 'echo' }));
+    expect(unauthorized.statusCode).toBe(401);
+
+    const { GenerationJobStore } = require('../lib/asyncJobStore.js');
+    const { processGenerationJob: processProtectedJob } = require('../lib/asyncGenerationWorker.js');
+    const protectedAdapter = new MemoryAdapter();
+    const protectedStore = new GenerationJobStore({ adapter: protectedAdapter, env: process.env });
+    const job = await protectedStore.createJob({
+      topic: 'Protected worker',
+      requestedCount: 1,
+      options: { provider: 'echo', difficulty: 'easy', types: ['TF'] },
+      plannedBatches: [{ batchId: 'batch-1', batchNo: 1, count: 1, types: ['TF'] }],
+    });
+
+    const done = await processProtectedJob(job.jobId, { store: protectedStore });
+
+    expect(done.status).toBe('complete');
+    expect(done.completedCount).toBe(1);
+    expect(done.questions).toHaveLength(1);
   });
 });
 
@@ -552,6 +697,63 @@ describe('async generation worker', () => {
     expect(adapter.saves.some((save) => save.completedCount === 2)).toBe(true);
   });
 
+  test.each(['complete', 'partial', 'failed'])(
+    'rerunning a %s job returns the terminal record unchanged',
+    async (status) => {
+      const requestedCount = status === 'complete' ? 1 : 2;
+      const questions = status === 'failed' ? [] : [tfLine(1)];
+      const job = await createWorkerJob([
+        { batchId: 'batch-1', batchNo: 1, count: requestedCount, types: ['TF'] },
+      ], { requestedCount });
+      const { scrubStoredJobPayload } = require('../lib/asyncJobStore.js');
+      await store.updateJob(job.jobId, (current) => ({
+        ...scrubStoredJobPayload(current),
+        status,
+        questions,
+        completedCount: questions.length,
+        errors: status === 'failed' ? [{ code: 'TEST_FAILURE', message: 'Original failure.' }] : [],
+        progressMessage: `${questions.length} of ${requestedCount} questions ready.`,
+      }));
+      const before = await store.getJob(job.jobId);
+      const saveCount = adapter.saves.length;
+
+      const done = await processGenerationJob(job.jobId, { store });
+
+      expect(done).toEqual(before);
+      expect(adapter.saves).toHaveLength(saveCount);
+      expect(handleGenerateQuiz).not.toHaveBeenCalled();
+    }
+  );
+
+  test('a second worker invocation no-ops while the active lease is held', async () => {
+    const pending = createDeferred();
+    handleGenerateQuiz.mockReturnValueOnce(pending.promise);
+    const job = await createWorkerJob([
+      { batchId: 'batch-1', batchNo: 1, count: 1, types: ['TF'] },
+    ], { requestedCount: 1, options: { difficulty: 'easy', types: ['TF'] } });
+
+    const firstRun = processGenerationJob(job.jobId, { store, workerId: 'worker-one' });
+    for (let index = 0; index < 8 && handleGenerateQuiz.mock.calls.length === 0; index += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+
+    const secondRun = await processGenerationJob(job.jobId, { store, workerId: 'worker-two' });
+    expect(secondRun.status).toBe('running');
+    expect(secondRun.workerLeaseId).toBe('worker-one');
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+
+    pending.resolve(okLines(tfLine(1)));
+    const done = await firstRun;
+    const saved = await store.getJob(job.jobId);
+
+    expect(done.status).toBe('complete');
+    expect(saved.questions).toEqual([tfLine(1)]);
+    expect(saved.completedCount).toBe(1);
+    expect(saved).not.toHaveProperty('workerLeaseId');
+    expect(handleGenerateQuiz).toHaveBeenCalledTimes(1);
+  });
+
   test('profiled hard source-backed batches use one lane and aligned planned entries', async () => {
     handleGenerateQuiz
       .mockResolvedValueOnce(okLines([tfLine(1), tfLine(2)]))
@@ -563,6 +765,7 @@ describe('async generation worker', () => {
 
     const done = await processGenerationJob(job.jobId, { store });
     const bodies = requestBodies(handleGenerateQuiz);
+    const contracts = laneContracts(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
     expect(done.questions).toEqual([1, 2, 3, 4, 5].map(tfLine));
@@ -571,11 +774,15 @@ describe('async generation worker', () => {
       skipRateLimit: true,
       timeoutMode: 'async-worker',
       asyncWorker: true,
+      trustedInternalRequest: true,
     });
     expect(bodies.map((body) => body.count)).toEqual([2, 1, 2]);
-    expect(new Set(bodies.map((body) => body.quizLane))).toEqual(new Set(['EXACT_STUDY']));
-    expect(bodies.map((body) => body.scenario)).toEqual([true, false, false]);
-    expect(bodies.every((body) => typeof body.curveball === 'boolean')).toBe(true);
+    expect(bodies.every((body) => !Object.hasOwn(body, 'quizLane'))).toBe(true);
+    expect(new Set(contracts.map((contract) => contract.quizLane))).toEqual(new Set(['EXACT_STUDY']));
+    expect(contracts.map((contract) => contract.scenario)).toEqual([true, false, false]);
+    expect(contracts.every((contract) => typeof contract.curveball === 'boolean')).toBe(true);
+    expect(contracts.every((contract) => contract.questionType === 'TF')).toBe(true);
+    expect(bodies.every((body) => body.types.every((type) => type === 'TF'))).toBe(true);
     expect(bodies.every((body) => body.count === plannedMarkerCount(body.sourceText))).toBe(true);
     expect(bodies.every((body) => !body.types.includes('MT'))).toBe(true);
     expect(done.generationProfile).toMatchObject({
@@ -615,6 +822,7 @@ describe('async generation worker', () => {
 
     const done = await processGenerationJob(job.jobId, { store });
     const bodies = requestBodies(handleGenerateQuiz);
+    const contracts = laneContracts(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
     expect(done.generationProfile).toMatchObject({
@@ -622,10 +830,11 @@ describe('async generation worker', () => {
       scenarioRatio: 0.6,
       curveballCount: 1,
     });
-    expect(new Set(bodies.map((body) => body.quizLane))).toEqual(new Set(['EXACT_STUDY']));
-    expect(bodies.filter((body) => body.curveball)).toHaveLength(1);
-    expect(bodies.reduce((sum, body) => sum + Number(body.curveballCount || 0), 0)).toBe(1);
-    expect(bodies.filter((body) => body.scenario).reduce((sum, body) => sum + body.count, 0)).toBeLessThanOrEqual(6);
+    expect(new Set(contracts.map((contract) => contract.quizLane))).toEqual(new Set(['EXACT_STUDY']));
+    expect(contracts.filter((contract) => contract.curveball)).toHaveLength(1);
+    expect(contracts.reduce((sum, contract) => sum + Number(contract.curveballCount || 0), 0)).toBe(1);
+    expect(contracts.filter((contract) => contract.scenario).reduce((sum, contract, index) => sum + bodies[index].count, 0)).toBeLessThanOrEqual(6);
+    expect(contracts.every((contract) => contract.questionType === 'TF')).toBe(true);
     expect(bodies.every((body) => body.count === plannedMarkerCount(body.sourceText))).toBe(true);
     expect(bodies.every((body) => !body.types.includes('MT'))).toBe(true);
   });
@@ -723,17 +932,18 @@ describe('async generation worker', () => {
 
     const done = await processGenerationJob(job.jobId, { store });
     const bodies = requestBodies(handleGenerateQuiz);
+    const contracts = laneContracts(handleGenerateQuiz);
 
     expect(done.status).toBe('complete');
     expect(done.completedCount).toBe(10);
     expect(done.questions).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(tfLine));
     expect(handleGenerateQuiz).toHaveBeenCalledTimes(6);
     expect(bodies.map((body) => body.count)).toEqual([3, 3, 3, 1, 5, 2]);
-    for (const body of bodies) {
+    for (const [index, body] of bodies.entries()) {
       const plannedCount = plannedMarkerCount(body.sourceText);
       expect(plannedCount).toBeGreaterThan(0);
       expect(body.count).toBe(plannedCount);
-      expect(body.quizLane).toBe('EXACT_STUDY');
+      expect(contracts[index].quizLane).toBe('EXACT_STUDY');
     }
     expect(bodies[4].sourceText).toContain('batch-1 > Section 1-3');
     expect(bodies[5].sourceText).toContain('batch-1 > Section 1-5');

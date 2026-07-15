@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('node:crypto');
 const { handleGenerateQuiz } = require('../generate-quiz.js');
 const { scrubStoredJobPayload, stoppedProgressMessage } = require('./asyncJobStore.js');
 const {
@@ -9,12 +10,58 @@ const {
   safeGenerationProfile,
 } = require('./asyncGenerationPlanner.js');
 const { parseLegacyQuestion } = require('./normalizer.js');
+const { isSemanticDuplicateStem } = require('./semanticDuplicates.js');
 
 const FILL_PASS_MAX_ATTEMPTS = 6;
 const FILL_PASS_BATCH_TARGET = 5;
+const WORKER_LEASE_MS = 2 * 60 * 1000;
 
 function isStopStatus(status) {
   return /^(stopped|canceled)$/i.test(String(status || ''));
+}
+
+function isTerminalStatus(status) {
+  return /^(complete|partial|failed|expired)$/i.test(String(status || ''));
+}
+
+function workerLeaseExpiresAt(now = Date.now()) {
+  return new Date(now + WORKER_LEASE_MS).toISOString();
+}
+
+function hasActiveWorkerLease(job, now = Date.now()) {
+  const expiresAt = Date.parse(job && job.workerLeaseExpiresAt || '');
+  return !!String(job && job.workerLeaseId || '') && Number.isFinite(expiresAt) && expiresAt > now;
+}
+
+function ownsWorkerLease(job, workerId) {
+  return !!workerId && String(job && job.workerLeaseId || '') === String(workerId);
+}
+
+async function claimGenerationJob(store, jobId, workerId) {
+  const now = Date.now();
+  return store.updateJob(jobId, (job) => {
+    if (isTerminalStatus(job.status) || isStopStatus(job.status)) return job;
+    if (job.status === 'running' && hasActiveWorkerLease(job, now) && !ownsWorkerLease(job, workerId)) return job;
+    return {
+      ...job,
+      status: 'running',
+      workerLeaseId: workerId,
+      workerLeaseExpiresAt: workerLeaseExpiresAt(now),
+      progressMessage: 'Generation started.',
+    };
+  });
+}
+
+async function updateOwnedJob(store, jobId, workerId, updater) {
+  return store.updateJob(jobId, (job) => {
+    if (isTerminalStatus(job.status) || isStopStatus(job.status) || !ownsWorkerLease(job, workerId)) return job;
+    const updated = updater(job) || job;
+    return {
+      ...updated,
+      workerLeaseId: workerId,
+      workerLeaseExpiresAt: workerLeaseExpiresAt(),
+    };
+  });
 }
 
 function splitLines(raw) {
@@ -36,37 +83,6 @@ function normalizedStem(raw) {
   return cleanStem(raw)
     .replace(/\s+([?!.,:;])/g, '$1')
     .toLowerCase();
-}
-
-const SEMANTIC_DUPLICATE_STOP_WORDS = new Set([
-  'about', 'after', 'again', 'against', 'all', 'also', 'and', 'answer', 'are', 'before', 'best', 'can', 'could',
-  'does', 'during', 'each', 'from', 'have', 'how', 'into', 'likely', 'main', 'most', 'one', 'only', 'question',
-  'should', 'that', 'the', 'their', 'there', 'these', 'this', 'those', 'true', 'what', 'when', 'where', 'which',
-  'while', 'with', 'would', 'your',
-]);
-
-function semanticTokens(raw) {
-  return String(raw || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .split(/\s+/)
-    .map((token) => token.replace(/(?:ing|ed|es|s)$/i, ''))
-    .filter((token) => token.length >= 3 && !SEMANTIC_DUPLICATE_STOP_WORDS.has(token));
-}
-
-function isSemanticDuplicateStem(stem, previousStems = []) {
-  const current = new Set(semanticTokens(stem));
-  if (current.size < 5) return false;
-  for (const previous of previousStems) {
-    const prior = new Set(semanticTokens(previous));
-    if (prior.size < 5) continue;
-    let overlap = 0;
-    current.forEach((token) => { if (prior.has(token)) overlap += 1; });
-    const smaller = Math.min(current.size, prior.size);
-    const larger = Math.max(current.size, prior.size);
-    if (smaller >= 5 && overlap / smaller >= 0.78 && overlap / larger >= 0.55) return true;
-  }
-  return false;
 }
 
 function questionStemFromLine(line) {
@@ -214,25 +230,29 @@ async function runGenerateBatch(job, batch, state) {
     sourceText: batch.sourceText || '',
     avoidStems: state.avoidStems.slice(-60),
     format: 'legacy-lines',
+  };
+  if (!payload.sourceText) delete payload.sourceText;
+  if (!payload.sourceName) delete payload.sourceName;
+  if (!payload.model) delete payload.model;
+  const laneContract = batch && batch.quizLane && questionType ? {
     quizLane: batch.quizLane,
     contractFlavor: batch.contractFlavor,
     questionType,
     scenario: !!batch.scenario,
     curveball: !!batch.curveball,
     curveballCount: Number(batch.curveballCount || 0),
-  };
-  if (!payload.sourceText) delete payload.sourceText;
-  if (!payload.sourceName) delete payload.sourceName;
-  if (!payload.model) delete payload.model;
-  if (!payload.quizLane) delete payload.quizLane;
-  if (!payload.contractFlavor) delete payload.contractFlavor;
-  if (!payload.questionType) delete payload.questionType;
-  if (!payload.curveballCount) delete payload.curveballCount;
+  } : null;
   const response = await handleGenerateQuiz({
     httpMethod: 'POST',
     headers: {},
     body: JSON.stringify(payload),
-  }, { skipRateLimit: true, timeoutMode: 'async-worker', asyncWorker: true });
+  }, {
+    skipRateLimit: true,
+    timeoutMode: 'async-worker',
+    asyncWorker: true,
+    trustedInternalRequest: true,
+    laneContract,
+  });
   if (!response || response.statusCode < 200 || response.statusCode >= 300) {
     throw errorFromGenerateResponse(response || { statusCode: 500, body: '{}' });
   }
@@ -407,7 +427,7 @@ function retrySinglesForBatch(batch) {
   }));
 }
 
-async function appendSuccessfulLines(store, jobId, lines, body, message) {
+async function appendSuccessfulLines(store, jobId, lines, body, message, workerId) {
   return store.updateJob(jobId, (job) => {
     const existing = Array.isArray(job.questions) ? job.questions : [];
     const nextQuestions = existing.concat(lines).slice(0, job.requestedCount);
@@ -424,6 +444,7 @@ async function appendSuccessfulLines(store, jobId, lines, body, message) {
         progressMessage: stoppedProgressMessage(nextQuestions.length, job.requestedCount),
       };
     }
+    if (!ownsWorkerLease(job, workerId) || isTerminalStatus(job.status)) return job;
     return {
       ...job,
       status: 'running',
@@ -433,6 +454,7 @@ async function appendSuccessfulLines(store, jobId, lines, body, message) {
       questions: nextQuestions,
       completedCount: nextQuestions.length,
       progressMessage: message || `${nextQuestions.length} of ${job.requestedCount} questions ready.`,
+      workerLeaseExpiresAt: workerLeaseExpiresAt(),
     };
   });
 }
@@ -449,11 +471,11 @@ function normalizeDiagnostics(details = {}, fallbackAccepted = 0) {
   };
 }
 
-async function recordBatchFailure(store, jobId, batch, err, completedCount, retry = false, details = {}) {
+async function recordBatchFailure(store, jobId, batch, err, completedCount, retry = false, details = {}, workerId) {
   const safe = safeError(err);
   const diagnostics = normalizeDiagnostics(details, completedCount);
   return store.updateJob(jobId, (job) => {
-    if (isStopStatus(job.status)) return job;
+    if (isStopStatus(job.status) || isTerminalStatus(job.status) || !ownsWorkerLease(job, workerId)) return job;
     return {
       ...job,
       failedBatches: [
@@ -483,12 +505,14 @@ async function recordBatchFailure(store, jobId, batch, err, completedCount, retr
         safe,
       ].slice(-10),
       progressMessage: retry ? 'Retrying a failed batch as single-question requests.' : 'One batch failed; continuing with the remaining batches.',
+      workerLeaseExpiresAt: workerLeaseExpiresAt(),
     };
   });
 }
 
-async function markFinal(store, jobId) {
+async function markFinal(store, jobId, workerId) {
   return store.updateJob(jobId, (job) => {
+    if (isTerminalStatus(job.status)) return job;
     const completed = Array.isArray(job.questions) ? job.questions.length : Number(job.completedCount || 0);
     if (isStopStatus(job.status)) {
       return {
@@ -499,6 +523,7 @@ async function markFinal(store, jobId) {
         progressMessage: stoppedProgressMessage(completed, job.requestedCount),
       };
     }
+    if (workerId && !ownsWorkerLease(job, workerId)) return job;
     if (completed >= Number(job.requestedCount || 0)) {
       return {
         ...scrubStoredJobPayload(job),
@@ -531,28 +556,27 @@ async function markFinal(store, jobId) {
 
 async function processOneBatch(store, job, batch, state, options = {}) {
   const collectFillSource = options.collectFillSource !== false;
+  const workerId = options.workerId;
   const latest = await store.getJob(job.jobId);
   if (!latest || latest.status === 'expired') return { stopped: true };
   if (isStopStatus(latest.status)) {
-    await markFinal(store, job.jobId);
+    await markFinal(store, job.jobId, workerId);
     return { stopped: true };
   }
+  if (isTerminalStatus(latest.status) || !ownsWorkerLease(latest, workerId)) return { stopped: true, leaseLost: true };
 
-  const runningJob = await store.updateJob(job.jobId, (current) => (
-    isStopStatus(current.status)
-      ? current
-      : {
-          ...current,
-          status: 'running',
-          progressMessage: batch.fill
-            ? `Filling remaining questions. ${current.completedCount || 0} of ${current.requestedCount} questions ready.`
-            : `Generating batch ${batch.batchNo} of ${job.plannedBatches.length}. ${current.completedCount || 0} of ${current.requestedCount} questions ready.`,
-        }
-  ));
+  const runningJob = await updateOwnedJob(store, job.jobId, workerId, (current) => ({
+    ...current,
+    status: 'running',
+    progressMessage: batch.fill
+      ? `Filling remaining questions. ${current.completedCount || 0} of ${current.requestedCount} questions ready.`
+      : `Generating batch ${batch.batchNo} of ${job.plannedBatches.length}. ${current.completedCount || 0} of ${current.requestedCount} questions ready.`,
+  }));
   if (!runningJob || isStopStatus(runningJob.status)) {
-    await markFinal(store, job.jobId);
+    await markFinal(store, job.jobId, workerId);
     return { stopped: true };
   }
+  if (!ownsWorkerLease(runningJob, workerId)) return { stopped: true, leaseLost: true };
 
   try {
     const remaining = Math.max(0, job.requestedCount - state.acceptedCount);
@@ -565,13 +589,17 @@ async function processOneBatch(store, job, batch, state, options = {}) {
     const accepted = collection.accepted;
     state.acceptedCount += accepted.length;
     if (accepted.length) {
-      await appendSuccessfulLines(
+      const saved = await appendSuccessfulLines(
         store,
         job.jobId,
         accepted,
         body,
-        `${state.acceptedCount} of ${job.requestedCount} questions ready.`
+        `${state.acceptedCount} of ${job.requestedCount} questions ready.`,
+        workerId
       );
+      if (saved && !isStopStatus(saved.status) && !ownsWorkerLease(saved, workerId)) {
+        return { stopped: true, leaseLost: true };
+      }
     }
     if (accepted.length < target) {
       const err = new Error('A generation batch returned fewer usable questions than requested.');
@@ -580,13 +608,14 @@ async function processOneBatch(store, job, batch, state, options = {}) {
       await recordBatchFailure(store, job.jobId, batch, err, accepted.length, !!batch.retry, {
         ...collection.diagnostics,
         requestedCount: target,
-      });
+      }, workerId);
     }
     const latestAfterBatch = await store.getJob(job.jobId);
     if (latestAfterBatch && isStopStatus(latestAfterBatch.status)) {
-      await markFinal(store, job.jobId);
+      await markFinal(store, job.jobId, workerId);
       return { stopped: true };
     }
+    if (latestAfterBatch && !ownsWorkerLease(latestAfterBatch, workerId)) return { stopped: true, leaseLost: true };
     return { stopped: false };
   } catch (err) {
     const remaining = Math.max(0, job.requestedCount - state.acceptedCount);
@@ -599,12 +628,13 @@ async function processOneBatch(store, job, batch, state, options = {}) {
       acceptedCount: 0,
       rejectedCount: 0,
       rejectedReasons: {},
-    });
+    }, workerId);
     const latestAfterError = await store.getJob(job.jobId);
     if (latestAfterError && isStopStatus(latestAfterError.status)) {
-      await markFinal(store, job.jobId);
+      await markFinal(store, job.jobId, workerId);
       return { stopped: true };
     }
+    if (latestAfterError && !ownsWorkerLease(latestAfterError, workerId)) return { stopped: true, leaseLost: true };
     return { stopped: false };
   }
 }
@@ -641,7 +671,7 @@ function buildFillBatch(sourceEntry, attemptNo, missingCount, profile) {
   };
 }
 
-async function runFillPass(store, job, state) {
+async function runFillPass(store, job, state, workerId) {
   const sources = Array.isArray(state.fillSources) ? state.fillSources.filter(Boolean) : [];
   if (!sources.length) return { stopped: false };
 
@@ -650,15 +680,16 @@ async function runFillPass(store, job, state) {
     const latest = await store.getJob(job.jobId);
     if (!latest || latest.status === 'expired') return { stopped: true };
     if (isStopStatus(latest.status)) {
-      await markFinal(store, job.jobId);
+      await markFinal(store, job.jobId, workerId);
       return { stopped: true };
     }
+    if (isTerminalStatus(latest.status) || !ownsWorkerLease(latest, workerId)) return { stopped: true, leaseLost: true };
 
     const missing = Math.max(0, job.requestedCount - state.acceptedCount);
     if (missing <= 0) break;
     const source = sources[(attempt - 1) % sources.length];
     const fillBatch = buildFillBatch(source, attempt, missing, state.generationProfile);
-    const result = await processOneBatch(store, job, fillBatch, state, { collectFillSource: false });
+    const result = await processOneBatch(store, job, fillBatch, state, { collectFillSource: false, workerId });
     if (result.stopped) return result;
   }
   return { stopped: false };
@@ -669,6 +700,7 @@ async function processGenerationJob(jobId, options = {}) {
   if (!store) throw new Error('processGenerationJob requires a job store');
   let job = await store.getJob(jobId);
   if (!job || job.status === 'expired') return job;
+  if (isTerminalStatus(job.status)) return job;
   if (isStopStatus(job.status)) return markFinal(store, job.jobId);
   if (!Array.isArray(job.plannedBatches) || !job.plannedBatches.length) {
     return store.updateJob(job.jobId, (current) => ({
@@ -679,36 +711,29 @@ async function processGenerationJob(jobId, options = {}) {
     }));
   }
 
-  job = await store.updateJob(job.jobId, (current) => (
-    isStopStatus(current.status)
-      ? current
-      : {
-          ...current,
-          status: 'running',
-          progressMessage: 'Generation started.',
-        }
-  ));
-  if (!job || isStopStatus(job.status)) return markFinal(store, jobId);
+  const workerId = String(options.workerId || crypto.randomUUID());
+  job = await claimGenerationJob(store, job.jobId, workerId);
+  if (!job || isTerminalStatus(job.status)) return job;
+  if (isStopStatus(job.status)) return markFinal(store, jobId, workerId);
+  if (!ownsWorkerLease(job, workerId)) return job;
 
   const sourceBacked = job.plannedBatches.some(isSourceBackedBatch);
   if (sourceBacked) {
     const generationProfile = safeGenerationProfile(job.generationProfile || createDefaultGenerationProfile({
       requestedCount: job.requestedCount,
       difficulty: job.options && job.options.difficulty,
+      types: job.options && job.options.types,
       sourceBacked: true,
     }));
     const profiledBatches = buildProfiledBatches(job.plannedBatches, generationProfile, job.requestedCount);
     if (profiledBatches.length) {
-      job = await store.updateJob(job.jobId, (current) => (
-        isStopStatus(current.status)
-          ? current
-          : {
-              ...current,
-              generationProfile,
-              plannedBatches: profiledBatches,
-            }
-      ));
-      if (!job || isStopStatus(job.status)) return markFinal(store, jobId);
+      job = await updateOwnedJob(store, job.jobId, workerId, (current) => ({
+        ...current,
+        generationProfile,
+        plannedBatches: profiledBatches,
+      }));
+      if (!job || isStopStatus(job.status)) return markFinal(store, jobId, workerId);
+      if (isTerminalStatus(job.status) || !ownsWorkerLease(job, workerId)) return job;
     }
   }
 
@@ -719,19 +744,24 @@ async function processGenerationJob(jobId, options = {}) {
   state.generationProfile = job.generationProfile ? safeGenerationProfile(job.generationProfile) : null;
   for (const batch of job.plannedBatches) {
     if (state.acceptedCount >= job.requestedCount) break;
-    const result = await processOneBatch(store, job, batch, state);
+    const result = await processOneBatch(store, job, batch, state, { workerId });
     if (result.stopped) return store.getJob(job.jobId);
   }
   if (state.acceptedCount < job.requestedCount) {
-    const fillResult = await runFillPass(store, job, state);
+    const fillResult = await runFillPass(store, job, state, workerId);
     if (fillResult.stopped) return store.getJob(job.jobId);
   }
-  return markFinal(store, job.jobId);
+  return markFinal(store, job.jobId, workerId);
 }
 
 module.exports = {
+  WORKER_LEASE_MS,
+  claimGenerationJob,
   collectUniqueQuizLines,
+  hasActiveWorkerLease,
   isSemanticDuplicateStem,
+  isTerminalStatus,
+  ownsWorkerLease,
   processGenerationJob,
   retrySinglesForBatch,
   safeError,

@@ -10,6 +10,7 @@ const STORE_NAME = 'async-generation-jobs';
 const DEFAULT_TTL_MS = 2 * 60 * 60 * 1000;
 const EXPIRED_MESSAGE = 'This generation job expired. Start a new quiz.';
 const VALID_STATUSES = new Set(['queued', 'running', 'partial', 'complete', 'failed', 'stopped', 'canceled', 'expired']);
+const JOB_UPDATE_LOCKS = new Map();
 
 function nowMs() {
   return Date.now();
@@ -179,8 +180,13 @@ function publicJobStatus(job) {
 function scrubStoredJobPayload(job) {
   const options = job && job.options && typeof job.options === 'object' ? job.options : {};
   const { sourceText, sourceReport, avoidStems, ...safeOptions } = options;
+  const {
+    workerLeaseId,
+    workerLeaseExpiresAt,
+    ...safeJob
+  } = job || {};
   return {
-    ...job,
+    ...safeJob,
     options: safeOptions,
     plannedBatches: [],
   };
@@ -240,7 +246,15 @@ class NetlifyBlobsJobAdapter {
   async get(jobId) {
     const safe = sanitizeJobId(jobId);
     if (!safe) return null;
-    return this.store.get(safe, { type: 'json' });
+    return this.store.get(safe, { type: 'json', consistency: 'strong' });
+  }
+
+  async getVersioned(jobId) {
+    const safe = sanitizeJobId(jobId);
+    if (!safe) return null;
+    const result = await this.store.getWithMetadata(safe, { type: 'json', consistency: 'strong' });
+    if (!result) return null;
+    return { job: result.data, version: result.etag };
   }
 
   async set(jobId, job) {
@@ -252,6 +266,19 @@ class NetlifyBlobsJobAdapter {
         status: job && job.status || '',
       },
     });
+  }
+
+  async setIfVersion(jobId, job, version) {
+    const safe = sanitizeJobId(jobId);
+    if (!safe || !version) return false;
+    const result = await this.store.setJSON(safe, job, {
+      onlyIfMatch: version,
+      metadata: {
+        expiresAt: job && job.expiresAt || '',
+        status: job && job.status || '',
+      },
+    });
+    return !!(result && result.modified);
   }
 
   async delete(jobId) {
@@ -278,6 +305,30 @@ class GenerationJobStore {
       : new NetlifyBlobsJobAdapter(options));
   }
 
+  async withUpdateLock(jobId, callback) {
+    const previous = JOB_UPDATE_LOCKS.get(jobId) || Promise.resolve();
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    const queued = previous.then(() => gate);
+    JOB_UPDATE_LOCKS.set(jobId, queued);
+    await previous;
+    try {
+      return await callback();
+    } finally {
+      release();
+      if (JOB_UPDATE_LOCKS.get(jobId) === queued) JOB_UPDATE_LOCKS.delete(jobId);
+    }
+  }
+
+  prepareSavedJob(job, safeJobId) {
+    return {
+      ...clone(job),
+      jobId: safeJobId,
+      status: normalizeStatus(job.status),
+      updatedAt: iso(),
+    };
+  }
+
   async createJob(input) {
     const job = createJobRecord(input, this.env);
     await this.adapter.set(job.jobId, job);
@@ -299,12 +350,7 @@ class GenerationJobStore {
   async saveJob(job) {
     const safe = sanitizeJobId(job && job.jobId);
     if (!safe) throw new Error('Invalid jobId');
-    const next = {
-      ...clone(job),
-      jobId: safe,
-      status: normalizeStatus(job.status),
-      updatedAt: iso(),
-    };
+    const next = this.prepareSavedJob(job, safe);
     await this.adapter.set(safe, next);
     return next;
   }
@@ -312,12 +358,35 @@ class GenerationJobStore {
   async updateJob(jobId, updater) {
     const safe = sanitizeJobId(jobId);
     if (!safe) return null;
-    const current = await this.getJob(safe);
-    if (!current || current.status === 'expired') return current;
-    const draft = clone(current);
-    const updated = await updater(draft);
-    if (updated === null) return null;
-    return this.saveJob(updated || draft);
+    return this.withUpdateLock(safe, async () => {
+      const supportsConditionalWrite = typeof this.adapter.getVersioned === 'function'
+        && typeof this.adapter.setIfVersion === 'function';
+      const attempts = supportsConditionalWrite ? 8 : 1;
+      for (let attempt = 0; attempt < attempts; attempt += 1) {
+        const versioned = supportsConditionalWrite ? await this.adapter.getVersioned(safe) : null;
+        const current = supportsConditionalWrite
+          ? versioned && versioned.job
+          : await this.getJob(safe);
+        if (!current) return null;
+        if (jobExpired(current)) {
+          await this.adapter.delete(safe);
+          return expiredJob(safe, current);
+        }
+        if (current.status === 'expired') return current;
+        const draft = clone(current);
+        const updated = await updater(draft);
+        if (updated === null) return null;
+        const next = this.prepareSavedJob(updated || draft, safe);
+        if (!supportsConditionalWrite) {
+          await this.adapter.set(safe, next);
+          return next;
+        }
+        if (await this.adapter.setIfVersion(safe, next, versioned.version)) return next;
+      }
+      const err = new Error('Generation job changed too many times; retry the request.');
+      err.code = 'JOB_UPDATE_CONFLICT';
+      throw err;
+    });
   }
 
   async cancelJob(jobId) {
