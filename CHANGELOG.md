@@ -21,6 +21,15 @@ Changelog
   - Version labels and package metadata prepared for v3.6.0.
   - Asset query strings bumped to `1.5.39`; service worker cache advanced to `ezq-v1223`.
 
+2026-05-17 — v3.5.0
+- Generation
+  - Create Quiz now builds first; Start Quiz unlocks only after a valid quiz is ready.
+  - Public quiz lengths remain 5, 10, 15, and 20 while larger 30/50-question builds stay on the reliability roadmap.
+- Production
+  - Study-material import and Results explanations are part of the production flow.
+- Maintenance
+  - Version labels and package metadata updated to v3.5.0.
+
 2025-10-22 — v3.3 (hotfix) / 1.5.18-hotfix
 - Reset
   - Performs a cache-busting navigation to avoid BFCache/stale state after clearing SW + caches.
