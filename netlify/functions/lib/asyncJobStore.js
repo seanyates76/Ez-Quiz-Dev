@@ -11,6 +11,7 @@ const DEFAULT_TTL_MS = 2 * 60 * 60 * 1000;
 const EXPIRED_MESSAGE = 'This generation job expired. Start a new quiz.';
 const VALID_STATUSES = new Set(['queued', 'running', 'partial', 'complete', 'failed', 'stopped', 'canceled', 'expired']);
 const JOB_UPDATE_LOCKS = new Map();
+const WORKER_TOKEN_BYTES = 24;
 
 function nowMs() {
   return Date.now();
@@ -28,6 +29,26 @@ function ttlMs(env = process.env) {
 
 function makeJobId() {
   return `qj_${crypto.randomBytes(24).toString('base64url')}`;
+}
+
+function makeWorkerToken() {
+  return crypto.randomBytes(WORKER_TOKEN_BYTES).toString('base64url');
+}
+
+function hashWorkerToken(raw) {
+  const token = String(raw || '').trim();
+  if (!/^[A-Za-z0-9_-]{24,96}$/.test(token)) return '';
+  return crypto.createHash('sha256').update(token).digest('base64url');
+}
+
+function workerTokenMatches(job, raw) {
+  const expected = String(job && job.workerTokenHash || '');
+  const actual = hashWorkerToken(raw);
+  if (!expected || !actual) return false;
+  const expectedBytes = Buffer.from(expected);
+  const actualBytes = Buffer.from(actual);
+  return expectedBytes.length === actualBytes.length
+    && crypto.timingSafeEqual(expectedBytes, actualBytes);
 }
 
 function sanitizeJobId(raw) {
@@ -91,6 +112,9 @@ function createJobRecord(input = {}, env = process.env) {
     progressMessage: 'Generation job queued.',
     stopped: false,
     generationProfile: input.generationProfile ? safeGenerationProfile(input.generationProfile) : null,
+    workerTokenHash: /^[A-Za-z0-9_-]{43}$/.test(String(input.workerTokenHash || ''))
+      ? String(input.workerTokenHash)
+      : '',
     options: clone(input.options || {}),
     plannedBatches: clone(input.plannedBatches || []),
   };
@@ -183,6 +207,7 @@ function scrubStoredJobPayload(job) {
   const {
     workerLeaseId,
     workerLeaseExpiresAt,
+    workerTokenHash,
     ...safeJob
   } = job || {};
   return {
@@ -422,10 +447,13 @@ module.exports = {
   createGenerationJobStore,
   createJobRecord,
   expiredJob,
+  hashWorkerToken,
   jobExpired,
+  makeWorkerToken,
   publicJobStatus,
   sanitizeJobId,
   scrubStoredJobPayload,
   stoppedProgressMessage,
   ttlMs,
+  workerTokenMatches,
 };

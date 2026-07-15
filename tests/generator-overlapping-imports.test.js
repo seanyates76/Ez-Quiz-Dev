@@ -106,6 +106,7 @@ describe('generator media import overlap regression', () => {
     });
     startAsyncGeneration = jest.fn().mockResolvedValue({
       jobId: 'qj_abcdefghijklmnopqrstuvwxyz123456',
+      workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
       status: 'queued',
     });
     triggerAsyncGeneration = jest.fn().mockResolvedValue({ sent: true, mode: 'fetch' });
@@ -973,7 +974,10 @@ describe('generator media import overlap regression', () => {
       sourceReport: expect.objectContaining({ sectionCount: 60 }),
       types: ['MC', 'TF', 'YN', 'MT'],
     }));
-    expect(triggerAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+    expect(triggerAsyncGeneration).toHaveBeenCalledWith(
+      'qj_abcdefghijklmnopqrstuvwxyz123456',
+      'worker_capability_abcdefghijklmnopqrstuvwxyz'
+    );
     expect(document.getElementById('generationStatusTitle').textContent).toBe('Building your quiz...');
     expect(document.getElementById('generationStatusMessage').textContent).toBe('Generating focused study questions.');
     expect(document.getElementById('generationStatusTitle').textContent)

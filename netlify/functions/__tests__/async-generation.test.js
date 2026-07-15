@@ -170,6 +170,7 @@ describe('async generation endpoints and job store', () => {
     expect(Date.now() - started).toBeLessThan(200);
     expect(res.statusCode).toBe(202);
     expect(body.jobId).toMatch(/^qj_[A-Za-z0-9_-]{24,96}$/);
+    expect(body.workerToken).toMatch(/^[A-Za-z0-9_-]{24,96}$/);
     expect(body.status).toBe('queued');
     expect(body.plannedBatchCount).toBeGreaterThan(1);
 
@@ -210,6 +211,52 @@ describe('async generation endpoints and job store', () => {
     expect(json(second)).toEqual({ error: 'Rate limited' });
     expect(second.headers['Retry-After']).toBe('60');
     expect(otherClient.statusCode).toBe(202);
+  });
+
+  test('bearer-protected worker accepts only its per-job browser capability', async () => {
+    process.env.GENERATE_BEARER_TOKEN = 'test-worker-secret';
+    jest.resetModules();
+    const { handler: start } = require('../generate-quiz-start.js');
+    const { handler: worker } = require('../generate-quiz-worker-background.js');
+    const startRes = await start(event({
+      topic: 'Protected async worker',
+      count: 1,
+      provider: 'echo',
+      types: ['TF'],
+    }, {
+      headers: { Authorization: 'Bearer test-worker-secret' },
+    }));
+    const started = json(startRes);
+
+    expect(startRes.statusCode).toBe(202);
+    expect(started.workerToken).toMatch(/^[A-Za-z0-9_-]{24,96}$/);
+
+    const missingToken = await worker(event({ jobId: started.jobId }));
+    const wrongToken = await worker(event({
+      jobId: started.jobId,
+      workerToken: 'wrong_worker_capability_token_12345',
+    }));
+    const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
+    const store = createGenerationJobStore({ env: process.env });
+    const stillQueued = await store.getJob(started.jobId);
+    const accepted = await worker(event({
+      jobId: started.jobId,
+      workerToken: started.workerToken,
+    }));
+    const acceptedBody = json(accepted);
+    const stored = await store.getJob(started.jobId);
+
+    expect(missingToken.statusCode).toBe(401);
+    expect(wrongToken.statusCode).toBe(401);
+    expect(stillQueued.status).toBe('queued');
+    expect(stillQueued.workerTokenHash).toBeTruthy();
+    expect(stillQueued.workerTokenHash).not.toBe(started.workerToken);
+    expect(accepted.statusCode).toBe(202);
+    expect(acceptedBody.status).toBe('complete');
+    expect(acceptedBody.completedCount).toBe(1);
+    expect(JSON.stringify(acceptedBody)).not.toContain(started.workerToken);
+    expect(acceptedBody).not.toHaveProperty('workerTokenHash');
+    expect(stored).not.toHaveProperty('workerTokenHash');
   });
 
   test('status endpoint returns safe queued, running, partial, complete, and failed states', async () => {

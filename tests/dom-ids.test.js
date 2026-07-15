@@ -130,6 +130,7 @@ describe('public/index.html structure', () => {
     expect(progress.getAttribute('role')).toBe('progressbar');
     expect(progress.getAttribute('aria-label')).toBe('Quiz generation progress');
     expect(progress.getAttribute('aria-valuemin')).toBe('0');
+    expect(progress.getAttribute('aria-valuemax')).toBe('1');
     expect(progress.getAttribute('aria-valuenow')).toBe('0');
     expect(secondary.textContent).toBe('');
     expect(readFile('public/index.html')).not.toContain('Counting to four. Repeatedly.');

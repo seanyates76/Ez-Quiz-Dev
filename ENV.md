@@ -18,6 +18,7 @@ Optional security:
   - `Retry-After` responses are derived from this window; shorten it to offer quicker retries.
 - GENERATE_BEARER_TOKEN: Optional shared secret required in the `Authorization: Bearer <token>` header for quiz generation.
   - Combine with Netlify redirects or an API gateway to keep the token private in zero-trust setups.
+  - Async job start returns a separate per-job worker capability for the browser beacon; the shared bearer token is never exposed to client code.
 
 AI Generation providers (optional):
 - AI_PROVIDER: `gemini`, `openai`, or `echo`

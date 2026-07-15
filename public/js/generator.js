@@ -9,14 +9,14 @@ import {
   startAsyncGeneration,
   stopAsyncGeneration,
   triggerAsyncGeneration,
-} from './api.js?v=1.5.41';
+} from './api.js?v=1.5.42';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.41';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.41';
-import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.41';
+import { announce } from './a11y-announcer.js?v=1.5.42';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.42';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.42';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
 
@@ -1010,8 +1010,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       });
       started = true;
       session.jobId = start && start.jobId;
+      session.workerToken = start && start.workerToken;
       if(!session.jobId) throw new Error('Async generation did not return a job ID.');
-      triggerAsyncGeneration(session.jobId).then((result) => {
+      triggerAsyncGeneration(session.jobId, session.workerToken).then((result) => {
         if(result && result.sent === false) {
           try{ console.debug('[ezq:async-generation] worker trigger failed', result); }catch{}
         }

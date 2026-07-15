@@ -74,7 +74,13 @@ function methodNotAllowed(origin) {
   return reply(405, { error: 'Method Not Allowed' }, origin);
 }
 
-function handleCors(event, allowedMethods) {
+function unauthorized(origin) {
+  const res = reply(401, { error: 'Unauthorized' }, origin);
+  res.headers['WWW-Authenticate'] = 'Bearer';
+  return res;
+}
+
+function handleCors(event, allowedMethods, { requireAuth = true } = {}) {
   const originInfo = responseOriginFor(event);
   if (!originInfo.allowed) return { done: true, response: reply(403, { error: 'Forbidden origin' }, '') };
   if (event && event.httpMethod === 'OPTIONS') {
@@ -84,17 +90,17 @@ function handleCors(event, allowedMethods) {
   if (methods.length && !methods.includes(event && event.httpMethod)) {
     return { done: true, response: methodNotAllowed(originInfo.responseOrigin) };
   }
-  if (!authorize(event)) {
-    const res = reply(401, { error: 'Unauthorized' }, originInfo.responseOrigin);
-    res.headers['WWW-Authenticate'] = 'Bearer';
-    return { done: true, response: res };
+  if (requireAuth && !authorize(event)) {
+    return { done: true, response: unauthorized(originInfo.responseOrigin) };
   }
   return { done: false, origin: originInfo.responseOrigin };
 }
 
 module.exports = {
+  authorize,
   handleCors,
   normalizeHttpStatus,
   parseJsonBody,
   reply,
+  unauthorized,
 };

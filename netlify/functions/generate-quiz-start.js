@@ -1,7 +1,12 @@
 'use strict';
 
 const { handleCors, parseJsonBody, reply } = require('./lib/asyncHttp.js');
-const { createGenerationJobStore, publicJobStatus } = require('./lib/asyncJobStore.js');
+const {
+  createGenerationJobStore,
+  hashWorkerToken,
+  makeWorkerToken,
+  publicJobStatus,
+} = require('./lib/asyncJobStore.js');
 const { buildPlannedBatches } = require('./lib/asyncGenerationPlanner.js');
 const { normalizeGenerationPayload } = require('./lib/generationRequest.js');
 const { rateLimited, retryAfterSeconds } = require('./lib/generationRateLimit.js');
@@ -36,6 +41,7 @@ exports.handler = async (event) => {
 
   const plannedBatches = buildPlannedBatches(request);
   const store = createGenerationJobStore({ event });
+  const workerToken = makeWorkerToken();
   const job = await store.createJob({
     topic: request.topic,
     requestedCount: request.count,
@@ -53,10 +59,12 @@ exports.handler = async (event) => {
       avoidStems: request.avoidStems,
     },
     plannedBatches,
+    workerTokenHash: hashWorkerToken(workerToken),
   });
 
   return reply(202, {
     jobId: job.jobId,
+    workerToken,
     status: 'queued',
     requestedCount: job.requestedCount,
     plannedBatchCount: plannedBatches.length,

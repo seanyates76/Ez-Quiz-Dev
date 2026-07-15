@@ -867,8 +867,11 @@ export async function startAsyncGeneration(topic, count, opts = {}){
   }
 }
 
-export function triggerAsyncGeneration(jobId){
-  const payload = JSON.stringify({ jobId });
+export function triggerAsyncGeneration(jobId, workerToken){
+  const body = { jobId };
+  const capability = String(workerToken || '').trim();
+  if(capability) body.workerToken = capability;
+  const payload = JSON.stringify(body);
   try{
     if(typeof navigator !== 'undefined' && navigator && typeof navigator.sendBeacon === 'function'){
       const blob = new Blob([payload], { type: 'application/json' });

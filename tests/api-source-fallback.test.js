@@ -7,6 +7,7 @@ function loadApi() {
   return loadBrowserModule('public/js/api.js', [
     'generateWithAI',
     'stopAsyncGeneration',
+    'triggerAsyncGeneration',
     'ASYNC_GENERATION_POLL_MS',
     'GENERATION_BATCH_SIZE',
     'TOPIC_ONLY_BATCH_SIZE',
@@ -144,6 +145,43 @@ describe('generateWithAI source-backed endpoint routing', () => {
       '/.netlify/functions/generate-quiz-stop',
       '/.netlify/functions/generate-quiz-cancel',
     ]);
+  });
+
+  test('triggerAsyncGeneration sends the per-job worker capability without an authorization header', async () => {
+    const { triggerAsyncGeneration } = loadApi();
+    const sendBeacon = navigator.sendBeacon;
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      value: jest.fn(() => false),
+    });
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 202 });
+
+    try {
+      const out = await triggerAsyncGeneration(
+        'qj_abcdefghijklmnopqrstuvwxyz123456',
+        'worker_capability_abcdefghijklmnopqrstuvwxyz'
+      );
+
+      expect(out).toEqual({ sent: true, mode: 'fetch', status: 202 });
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/.netlify/functions/generate-quiz-worker-background',
+        expect.objectContaining({
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jobId: 'qj_abcdefghijklmnopqrstuvwxyz123456',
+            workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+          }),
+          keepalive: true,
+        })
+      );
+      expect(global.fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
+    } finally {
+      Object.defineProperty(navigator, 'sendBeacon', {
+        configurable: true,
+        value: sendBeacon,
+      });
+    }
   });
 
   function sectionReport(count, overrides = {}) {
