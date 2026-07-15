@@ -35,6 +35,22 @@ describe('generate-quiz count guarantees', () => {
     expect(String(body.lines).trim().split('\n')).toHaveLength(50);
   });
 
+  test('normalizes provider, model, and difficulty request whitespace centrally', () => {
+    const { normalizeGenerationPayload } = require('../lib/generationRequest.js');
+    const request = normalizeGenerationPayload({
+      topic: 'Normalization',
+      provider: ' Gemini ',
+      model: ' gemini-custom-model ',
+      difficulty: ' Hard ',
+    }, { env: {} });
+
+    expect(request).toMatchObject({
+      provider: 'gemini',
+      model: 'gemini-custom-model',
+      difficulty: 'hard',
+    });
+  });
+
   test('caps oversized public requests to the 50-question default max', async () => {
     const { handler } = require('../generate-quiz.js');
     const res = await handler(event({ topic: 'Ports', count: 99, provider: 'echo' }));

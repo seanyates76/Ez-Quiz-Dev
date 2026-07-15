@@ -61,6 +61,11 @@ function expectSharedDifficultyGuidance(out, level){
 }
 
 describe('providers helpers', () => {
+  test('installed Gemini SDK exposes its supported CommonJS entry point', () => {
+    const { GoogleGenerativeAI } = require('@google/generative-ai');
+    expect(typeof GoogleGenerativeAI).toBe('function');
+  });
+
   test('buildStructuredPrompt requests minified JSON schema', () => {
     const out = buildStructuredPrompt('History', 3, ['MC','YN'], 'hard');
     expect(out).toMatch(/structured quiz about History/);

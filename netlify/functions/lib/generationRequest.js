@@ -104,9 +104,9 @@ function normalizeGenerationPayload(payload, options = {}) {
   count = Math.max(1, Math.min(maxCount, parsedCount));
 
   const types = normalizeQuestionTypes(body.types);
-  const difficulty = (body.difficulty && String(body.difficulty).toLowerCase()) || undefined;
-  const provider = String(body.provider || env.AI_PROVIDER || 'gemini');
-  const model = String(body.model || '');
+  const difficulty = (body.difficulty && String(body.difficulty).trim().toLowerCase()) || undefined;
+  const provider = String(body.provider || env.AI_PROVIDER || 'gemini').trim().toLowerCase();
+  const model = String(body.model || '').trim();
   const avoidStems = sanitizeAvoidStems(body.avoidStems);
   const sourceReport = body.sourceReport && typeof body.sourceReport === 'object' && !Array.isArray(body.sourceReport)
     ? body.sourceReport
