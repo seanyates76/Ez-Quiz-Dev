@@ -709,11 +709,19 @@ describe('generator media import overlap regression', () => {
   test('shows the generation card while active and keeps it ready after success', async () => {
     const deferred = createDeferred();
     const readyLines = generatedTfLines(10);
-    parseEditorInput.mockImplementation((text) => ({
-      questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
-      errors: [],
-      error: null,
-    }));
+    const validationStatuses = [];
+    parseEditorInput.mockImplementation((text) => {
+      validationStatuses.push({
+        title: document.getElementById('generationStatusTitle').textContent,
+        detail: document.getElementById('generationStatusMessage').textContent,
+        count: document.getElementById('generationStatusSecondary').textContent,
+      });
+      return {
+        questions: String(text || '').split('\n').filter(Boolean).map((line) => ({ prompt: line })),
+        errors: [],
+        error: null,
+      };
+    });
     generateWithAI.mockReturnValueOnce(deferred.promise);
 
     document.getElementById('topicInput').value = 'routing basics';
@@ -728,7 +736,11 @@ describe('generator media import overlap regression', () => {
     expect(card.classList.contains('is-complete')).toBe(false);
     expect(card.classList.contains('is-success-pulsing')).toBe(false);
     expect(card.getAttribute('aria-busy')).toBe('true');
-    expect(document.getElementById('generationStatusTitle').textContent).toBe('Planning the quiz.');
+    const planningTitle = document.getElementById('generationStatusTitle').textContent;
+    const planningDetail = document.getElementById('generationStatusMessage').textContent;
+    expect(planningTitle).toBe('Building your quiz...');
+    expect(planningDetail).toBe('Planning the quiz.');
+    expect(planningTitle).not.toBe(planningDetail);
     expect(document.getElementById('generationStatusSecondary').textContent).toBe('0 of 10 questions ready.');
     expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('0');
     expect(document.getElementById('generationStatusScan').getAttribute('aria-valuemax')).toBe('10');
@@ -758,6 +770,12 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('cancelGenerationBtn').hidden).toBe(true);
     expect(document.getElementById('startBtn').disabled).toBe(false);
     expect(document.getElementById('status').hidden).toBe(true);
+    expect(validationStatuses[0]).toEqual({
+      title: 'Building your quiz...',
+      detail: 'Checking answer choices.',
+      count: '0 of 10 questions ready.',
+    });
+    expect(validationStatuses[0].title).not.toBe(validationStatuses[0].detail);
   });
 
   test('progress bar resets when current inputs change after generation', async () => {
@@ -828,7 +846,10 @@ describe('generator media import overlap regression', () => {
     document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
 
-    expect(document.getElementById('generationStatusTitle').textContent).toBe('Planning the quiz.');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Building your quiz...');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('Planning the quiz.');
+    expect(document.getElementById('generationStatusTitle').textContent)
+      .not.toBe(document.getElementById('generationStatusMessage').textContent);
     expect(document.getElementById('generationStatusSecondary').textContent).toBe('0 of 20 questions ready.');
     expect(document.getElementById('generationStatusCard').hidden).toBe(false);
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('generating');
@@ -953,7 +974,10 @@ describe('generator media import overlap regression', () => {
       types: ['MC', 'TF', 'YN', 'MT'],
     }));
     expect(triggerAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
-    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generating focused study questions.');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Building your quiz...');
+    expect(document.getElementById('generationStatusMessage').textContent).toBe('Generating focused study questions.');
+    expect(document.getElementById('generationStatusTitle').textContent)
+      .not.toBe(document.getElementById('generationStatusMessage').textContent);
     expect(document.getElementById('generationStatusSecondary').textContent).toBe('3 of 50 questions ready.');
     expect(document.getElementById('generationStatusScan').getAttribute('aria-valuenow')).toBe('3');
     expect(document.getElementById('generationStatusScan').getAttribute('aria-valuemax')).toBe('50');
@@ -1035,18 +1059,21 @@ describe('generator media import overlap regression', () => {
 
     expect(parseEditorInput).not.toHaveBeenCalled();
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('error');
+    expect(document.getElementById('generationStatusTitle').textContent).toBe('Generation failed.');
     expect(document.getElementById('generationStatusMessage').textContent).toBe('No usable quiz questions were returned.');
+    expect(document.getElementById('generationStatusSecondary').textContent).toBe('0 of 50 questions ready.');
+    expect(document.getElementById('generationStatusSecondary').hidden).toBe(false);
     expect(document.getElementById('startBtn').disabled).toBe(true);
   });
 
   test.each([
-    ['complete', 'success'],
-    ['partial', 'partial'],
-    ['failed', 'error'],
-    ['stopped', 'stopped'],
-    ['canceled', 'stopped'],
-    ['expired', 'error'],
-  ])('async polling stops on %s status', async (terminalStatus, expectedCardState) => {
+    ['complete', 'success', 'Quiz ready.', 50],
+    ['partial', 'partial', 'Quiz partially ready.', 12],
+    ['failed', 'error', 'Generation failed.', 0],
+    ['stopped', 'stopped', 'Generation stopped.', 0],
+    ['canceled', 'stopped', 'Generation stopped.', 0],
+    ['expired', 'error', 'Generation failed.', 0],
+  ])('async polling stops on %s status', async (terminalStatus, expectedCardState, expectedTitle, expectedReady) => {
     const lines = terminalStatus === 'partial'
       ? generatedTfLines(12)
       : generatedTfLines(50);
@@ -1083,6 +1110,12 @@ describe('generator media import overlap regression', () => {
 
     expect(getAsyncGenerationStatus).toHaveBeenCalledTimes(1);
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe(expectedCardState);
+    expect(document.getElementById('generationStatusTitle').textContent).toBe(expectedTitle);
+    expect(document.getElementById('generationStatusTitle').textContent)
+      .not.toBe(document.getElementById('generationStatusMessage').textContent);
+    expect(document.getElementById('generationStatusSecondary').textContent)
+      .toBe(`${expectedReady} of 50 questions ready.`);
+    expect(document.getElementById('generationStatusSecondary').hidden).toBe(false);
   });
 
   test('async Stop requests stopped status without enabling Start when no questions are ready', async () => {

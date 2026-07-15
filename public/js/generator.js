@@ -346,6 +346,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const nextState = state || 'idle';
     if(nextState !== 'generating') stopGenerationStatusRotation();
     const ui = uiState();
+    const phase = String(options.phase || '').trim();
     const metadata = String(options.metadata || '').trim();
     const message = String(options.message || '').trim();
     const requestedCount = Math.max(0, Number(options.requestedCount || 0));
@@ -376,8 +377,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const title = nextState === 'success' ? 'Quiz ready.'
         : nextState === 'partial' ? 'Quiz partially ready.'
         : nextState === 'stopped' || nextState === 'canceled' ? 'Generation stopped.'
-        : nextState === 'error' ? 'Could not create the quiz.'
-        : options.phase || 'Planning the quiz.';
+        : nextState === 'error' ? 'Generation failed.'
+        : 'Building your quiz...';
       generationStatusTitle.textContent = title;
     }
     if(generationStatusMessage){
@@ -385,7 +386,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         : nextState === 'partial' ? 'Start Quiz can use the questions that are ready.'
         : nextState === 'stopped' || nextState === 'canceled' ? 'Your inputs are still here.'
         : nextState === 'error' ? 'Check the message below and try again.'
-        : 'Generating focused study questions.';
+        : phase || 'Generating focused study questions.';
       generationStatusMessage.textContent = message || fallback;
     }
     if(generationStatusMeta){
@@ -393,7 +394,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       generationStatusMeta.hidden = !metadata;
     }
     if(generationStatusSecondary){
-      const showProgress = nextState !== 'idle' && nextState !== 'error' && requestedCount > 0;
+      const showProgress = nextState !== 'idle' && requestedCount > 0;
       setGenerationProgress(completedCount, requestedCount, { visible: showProgress });
     } else {
       setGenerationProgress(completedCount, requestedCount, { visible: false });
