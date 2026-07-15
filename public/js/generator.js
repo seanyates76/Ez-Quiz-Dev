@@ -449,11 +449,34 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     return !!(activeGenerationSession && activeGenerationSession.id === requestId);
   }
 
-  function beginGenerationSession(payload){
-    if(activeGenerationSession && activeGenerationSession.controller){
-      activeGenerationSession.superseded = true;
-      try{ activeGenerationSession.controller.abort(); }catch{}
+  function requestAsyncGenerationStop(session){
+    if(!session?.jobId) return null;
+    if(session.stopRequest) return session.stopRequest;
+    let request;
+    try{
+      request = Promise.resolve(stopAsyncGeneration(session.jobId));
+    }catch(err){
+      request = Promise.reject(err);
     }
+    session.stopRequest = request;
+    request.catch(() => {
+      if(session.stopRequest === request) session.stopRequest = null;
+    });
+    return request;
+  }
+
+  function abandonGenerationSession(session){
+    if(!session) return;
+    session.superseded = true;
+    const stopRequest = requestAsyncGenerationStop(session);
+    stopRequest?.catch((err) => {
+      try{ console.debug('[ezq:async-generation] abandoned job stop failed', err); }catch{}
+    });
+    try{ session.controller?.abort(); }catch{}
+  }
+
+  function beginGenerationSession(payload){
+    if(activeGenerationSession) abandonGenerationSession(activeGenerationSession);
     const session = {
       id: ++generationRequestSeq,
       controller: new AbortController(),
@@ -467,10 +490,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   }
 
   function resetGenerationStatus({ abortActive = false } = {}){
-    if(abortActive && activeGenerationSession?.controller){
-      activeGenerationSession.superseded = true;
-      try{ activeGenerationSession.controller.abort(); }catch{}
-    }
+    if(abortActive && activeGenerationSession) abandonGenerationSession(activeGenerationSession);
     activeGenerationSession = null;
     setGenerationStatusState('idle');
     if(abortActive && generateBtn) generateBtn.disabled = false;
@@ -492,7 +512,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     });
     if(session.jobId){
       try {
-        await stopAsyncGeneration(session.jobId);
+        await requestAsyncGenerationStop(session);
       } catch (err) {
         try{ console.debug('[ezq:async-generation] stop failed', err); }catch{}
       } finally {
@@ -913,6 +933,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         status = await getAsyncGenerationStatus(session.jobId, { signal: session.controller.signal });
         pollingFailures = 0;
       }catch(err){
+        if(!isActiveGeneration(session.id)){
+          const aborted = new Error('Aborted');
+          aborted.name = 'AbortError';
+          throw aborted;
+        }
         if(err && err.name === 'AbortError') throw err;
         pollingFailures += 1;
         if(pollingFailures > 3){
@@ -931,6 +956,11 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         });
         await waitForAsyncPollDelay(session);
         continue;
+      }
+      if(!isActiveGeneration(session.id)){
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        throw err;
       }
 
       const state = String(status && status.status || '').toLowerCase();

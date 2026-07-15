@@ -1165,6 +1165,41 @@ describe('generator media import overlap regression', () => {
     expect(state.media.sourceText).toBe('D'.repeat(25000));
   });
 
+  test('clearing an active async generation stops the backend job before abandoning the UI session', async () => {
+    const firstStatus = createDeferred();
+    setMediaSource({
+      text: 'X'.repeat(25000),
+      name: 'abandoned-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    getAsyncGenerationStatus.mockReturnValueOnce(firstStatus.promise);
+
+    document.getElementById('topicInput').value = 'abandoned async';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flushUntil(() => triggerAsyncGeneration.mock.calls.length > 0);
+
+    document.getElementById('clearBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+
+    expect(stopAsyncGeneration).toHaveBeenCalledTimes(1);
+    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('idle');
+    expect(document.getElementById('editor').value).toBe('');
+
+    firstStatus.resolve({
+      status: 'running',
+      completedCount: 1,
+      requestedCount: 50,
+      progressMessage: '1 of 50 questions ready.',
+    });
+    await flush();
+    await flush();
+
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('idle');
+  });
+
   test('async Stop keeps returned questions and enables Start', async () => {
     const firstStatus = createDeferred();
     const lines = generatedTfLines(5);
