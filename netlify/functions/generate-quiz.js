@@ -21,6 +21,7 @@ const asyncProviderTimeoutMs = providers.asyncProviderTimeoutMs || (() => 90000)
 const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
 const { normalizeGenerationPayload, sanitizeAvoidStems } = require('./lib/generationRequest.js');
 const { rateLimited, retryAfterSeconds } = require('./lib/generationRateLimit.js');
+const { timingSafeStringEqual } = require('./lib/asyncHttp.js');
 
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
@@ -85,7 +86,7 @@ function authorize(event) {
   const trimmed = raw.trim();
   if (!trimmed.toLowerCase().startsWith('bearer ')) return false;
   const token = trimmed.slice(7).trim();
-  return token === BEARER_TOKEN;
+  return timingSafeStringEqual(token, BEARER_TOKEN);
 }
 
 function safeInternalLaneContract(raw) {

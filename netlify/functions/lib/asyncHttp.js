@@ -121,5 +121,6 @@ module.exports = {
   normalizeHttpStatus,
   parseJsonBody,
   reply,
+  timingSafeStringEqual,
   unauthorized,
 };
