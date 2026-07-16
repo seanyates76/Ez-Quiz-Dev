@@ -1,6 +1,6 @@
 'use strict';
 
-const { authorize, bearerToken, handleCors, parseJsonBody, reply, unauthorized } = require('./lib/asyncHttp.js');
+const { bearerToken, configuredBearerMatches, handleCors, parseJsonBody, reply, unauthorized } = require('./lib/asyncHttp.js');
 const {
   createGenerationJobStore,
   publicJobStatus,
@@ -27,7 +27,7 @@ exports.handler = async (event) => {
   const store = createGenerationJobStore({ event });
   const before = await store.getJob(jobId);
   if (!before) return reply(404, { error: 'Job not found' }, cors.origin);
-  if (!authorize(event) && !workerTokenMatches(before, bearerToken(event))) {
+  if (!configuredBearerMatches(event) && !workerTokenMatches(before, bearerToken(event))) {
     return unauthorized(cors.origin);
   }
   const job = await store.stopJob(jobId);

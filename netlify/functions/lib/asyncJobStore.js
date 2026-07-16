@@ -82,6 +82,7 @@ function expiredJob(jobId, job) {
     progressMessage: EXPIRED_MESSAGE,
     stopped: false,
     generationProfile: null,
+    workerTokenHash: job && job.workerTokenHash || '',
     options: {},
     plannedBatches: [],
   };

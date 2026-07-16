@@ -45,6 +45,7 @@ describe('public/index.html structure', () => {
       ['narrowSourceModal', 'DIV'],
       ['narrowSourceTitle', 'H3'],
       ['narrowSourceMessage', 'P'],
+      ['narrowSourceClose', 'BUTTON'],
       ['narrowSourceConfirm', 'BUTTON'],
       ['narrowSourceCancel', 'BUTTON'],
     ];

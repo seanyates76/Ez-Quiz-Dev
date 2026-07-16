@@ -64,6 +64,11 @@ function authorize(event) {
   return bearerToken(event) === token;
 }
 
+function configuredBearerMatches(event) {
+  const token = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
+  return !!token && bearerToken(event) === token;
+}
+
 function parseJsonBody(event) {
   try {
     return JSON.parse(event && event.body || '{}');
@@ -103,6 +108,7 @@ function handleCors(event, allowedMethods, { requireAuth = true } = {}) {
 module.exports = {
   authorize,
   bearerToken,
+  configuredBearerMatches,
   handleCors,
   normalizeHttpStatus,
   parseJsonBody,

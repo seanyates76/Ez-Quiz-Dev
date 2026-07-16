@@ -176,7 +176,7 @@ describe('async generation endpoints and job store', () => {
 
     const statusRes = await status({
       httpMethod: 'GET',
-      headers: {},
+      headers: { Authorization: `Bearer ${body.workerToken}` },
       queryStringParameters: { jobId: body.jobId },
     });
     const statusBody = json(statusRes);
@@ -331,16 +331,18 @@ describe('async generation endpoints and job store', () => {
   });
 
   test('status endpoint returns safe queued, running, partial, complete, and failed states', async () => {
-    const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
+    const { createGenerationJobStore, hashWorkerToken } = require('../lib/asyncJobStore.js');
     const { createDefaultGenerationProfile } = require('../lib/asyncGenerationPlanner.js');
     const { handler: status } = require('../generate-quiz-status.js');
     const store = createGenerationJobStore({ env: process.env });
+    const workerToken = 'status_capability_abcdefghijklmnopqrstuvwxyz';
     const job = await store.createJob({
       topic: 'States',
       requestedCount: 2,
       sourceName: 'states.md',
       options: { sourceText: 'secret source text' },
       plannedBatches: [{ batchId: 'batch-1', batchNo: 1, count: 1 }],
+      workerTokenHash: hashWorkerToken(workerToken),
     });
 
     for (const state of ['queued', 'running', 'partial', 'complete', 'failed', 'stopped']) {
@@ -355,7 +357,7 @@ describe('async generation endpoints and job store', () => {
       }));
       const res = await status({
         httpMethod: 'GET',
-        headers: {},
+        headers: { Authorization: `Bearer ${workerToken}` },
         queryStringParameters: { jobId: job.jobId },
       });
       const body = json(res);
@@ -432,20 +434,22 @@ describe('async generation endpoints and job store', () => {
   });
 
   test('expired jobs are scrubbed and reported safely', async () => {
-    const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
+    const { createGenerationJobStore, hashWorkerToken } = require('../lib/asyncJobStore.js');
     const { handler: status } = require('../generate-quiz-status.js');
     const store = createGenerationJobStore({ env: process.env });
+    const workerToken = 'expired_capability_abcdefghijklmnopqrstuvwxyz';
     const job = await store.createJob({
       topic: 'Expired',
       requestedCount: 1,
       options: { sourceText: 'private source text' },
       plannedBatches: [{ batchId: 'batch-1', batchNo: 1, count: 1 }],
+      workerTokenHash: hashWorkerToken(workerToken),
     });
     await store.saveJob({ ...job, expiresAt: new Date(Date.now() - 1000).toISOString() });
 
     const res = await status({
       httpMethod: 'GET',
-      headers: {},
+      headers: { Authorization: `Bearer ${workerToken}` },
       queryStringParameters: { jobId: job.jobId },
     });
     const body = json(res);
@@ -581,15 +585,17 @@ describe('async generation endpoints and job store', () => {
   });
 
   test('stop endpoint marks jobs stopped and keeps existing questions', async () => {
-    const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
+    const { createGenerationJobStore, hashWorkerToken } = require('../lib/asyncJobStore.js');
     const { handler: stop } = require('../generate-quiz-stop.js');
     const { handler: cancelAlias } = require('../generate-quiz-cancel.js');
     const store = createGenerationJobStore({ env: process.env });
+    const workerToken = 'stop_capability_abcdefghijklmnopqrstuvwxyz';
     const job = await store.createJob({
       topic: 'Stop',
       requestedCount: 5,
       options: { sourceText: 'private source text' },
       plannedBatches: [{ batchId: 'batch-1', batchNo: 1, count: 5 }],
+      workerTokenHash: hashWorkerToken(workerToken),
     });
     await store.updateJob(job.jobId, (current) => ({
       ...current,
@@ -598,7 +604,9 @@ describe('async generation endpoints and job store', () => {
       completedCount: 2,
     }));
 
-    const res = await stop(event({ jobId: job.jobId }));
+    const res = await stop(event({ jobId: job.jobId }, {
+      headers: { Authorization: `Bearer ${workerToken}` },
+    }));
     const body = json(res);
 
     expect(res.statusCode).toBe(200);
@@ -609,7 +617,9 @@ describe('async generation endpoints and job store', () => {
     expect(body.progressMessage).toBe('Generation stopped. 2 of 5 questions ready.');
     expect(JSON.stringify(body)).not.toContain('private source text');
 
-    const aliasRes = await cancelAlias(event({ jobId: job.jobId }));
+    const aliasRes = await cancelAlias(event({ jobId: job.jobId }, {
+      headers: { Authorization: `Bearer ${workerToken}` },
+    }));
     const aliasBody = json(aliasRes);
     expect(aliasRes.statusCode).toBe(200);
     expect(aliasBody.status).toBe('stopped');
