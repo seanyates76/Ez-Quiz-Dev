@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
   return raw.split(',').map((s) => s.trim()).filter(Boolean);
@@ -58,15 +60,21 @@ function bearerToken(event) {
   return trimmed.slice(7).trim();
 }
 
+function timingSafeStringEqual(left, right) {
+  const a = Buffer.from(String(left || ''), 'utf8');
+  const b = Buffer.from(String(right || ''), 'utf8');
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
 function authorize(event) {
   const token = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
   if (!token) return true;
-  return bearerToken(event) === token;
+  return configuredBearerMatches(event);
 }
 
 function configuredBearerMatches(event) {
   const token = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
-  return !!token && bearerToken(event) === token;
+  return !!token && timingSafeStringEqual(bearerToken(event), token);
 }
 
 function parseJsonBody(event) {
