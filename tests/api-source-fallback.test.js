@@ -177,50 +177,42 @@ describe('generateWithAI source-backed endpoint routing', () => {
     );
   });
 
-  test('triggerAsyncGeneration sends the per-job worker capability without an authorization header', async () => {
+  test('triggerAsyncGeneration verifies worker delivery with fetch', async () => {
     const { triggerAsyncGeneration } = loadApi();
-    const sendBeacon = navigator.sendBeacon;
     Object.defineProperty(navigator, 'sendBeacon', {
       configurable: true,
-      value: jest.fn(() => false),
+      value: jest.fn(() => true),
     });
     global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 202 });
 
-    try {
-      const out = await triggerAsyncGeneration(
-        'qj_abcdefghijklmnopqrstuvwxyz123456',
-        'worker_capability_abcdefghijklmnopqrstuvwxyz'
-      );
+    const out = await triggerAsyncGeneration(
+      'qj_abcdefghijklmnopqrstuvwxyz123456',
+      'worker_capability_abcdefghijklmnopqrstuvwxyz'
+    );
 
-      expect(out).toEqual({ sent: true, mode: 'fetch', status: 202 });
-      expect(global.fetch).toHaveBeenCalledWith(
-        '/.netlify/functions/generate-quiz-worker-background',
-        expect.objectContaining({
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jobId: 'qj_abcdefghijklmnopqrstuvwxyz123456',
-            workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
-          }),
-          keepalive: true,
-        })
-      );
-      expect(global.fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
-    } finally {
-      Object.defineProperty(navigator, 'sendBeacon', {
-        configurable: true,
-        value: sendBeacon,
-      });
-    }
+    expect(out).toEqual({ sent: true, mode: 'fetch', status: 202 });
+    expect(navigator.sendBeacon).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/.netlify/functions/generate-quiz-worker-background',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobId: 'qj_abcdefghijklmnopqrstuvwxyz123456',
+          workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+        }),
+        keepalive: true,
+      })
+    );
+    expect(global.fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
   });
 
   test('triggerAsyncGeneration retries a failed worker kickoff three times', async () => {
     jest.useFakeTimers();
     const { triggerAsyncGeneration } = loadApi();
-    const sendBeacon = navigator.sendBeacon;
     Object.defineProperty(navigator, 'sendBeacon', {
       configurable: true,
-      value: jest.fn(() => false),
+      value: jest.fn(() => true),
     });
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 503 });
 
@@ -236,10 +228,6 @@ describe('generateWithAI source-backed endpoint routing', () => {
       expect(out).toEqual({ sent: false, mode: 'fetch', status: 503 });
     } finally {
       jest.useRealTimers();
-      Object.defineProperty(navigator, 'sendBeacon', {
-        configurable: true,
-        value: sendBeacon,
-      });
     }
   });
 

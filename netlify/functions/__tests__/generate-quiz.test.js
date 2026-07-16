@@ -51,6 +51,40 @@ describe('generate-quiz count guarantees', () => {
     });
   });
 
+  test('bounds and flattens untrusted source reports before planning or storage', () => {
+    const {
+      MAX_SOURCE_REPORT_SECTIONS,
+      MAX_SOURCE_REPORT_TEXT_CHARS,
+      normalizeGenerationPayload,
+    } = require('../lib/generationRequest.js');
+    const request = normalizeGenerationPayload({
+      topic: 'Bounded report',
+      sourceReport: {
+        sectionCount: 999999,
+        nested: { payload: { shouldDisappear: true } },
+        sections: Array.from({ length: 140 }, (_, index) => ({
+          id: `section-${index}`,
+          heading: 'H'.repeat(500),
+          headingPath: Array(20).fill('P'.repeat(300)),
+          text: 'T'.repeat(5000),
+          score: 99,
+          reasons: Array(50).fill('definition-signal'),
+          flags: [],
+          nested: { shouldDisappear: true },
+        })),
+      },
+    }, { env: {} });
+
+    expect(request.sourceReport.sections.length).toBeLessThanOrEqual(MAX_SOURCE_REPORT_SECTIONS);
+    expect(request.sourceReport.sections.reduce((sum, section) => sum + section.text.length, 0))
+      .toBeLessThanOrEqual(MAX_SOURCE_REPORT_TEXT_CHARS);
+    expect(request.sourceReport.sectionCount).toBe(request.sourceReport.sections.length);
+    expect(request.sourceReport).not.toHaveProperty('nested');
+    expect(request.sourceReport.sections[0]).not.toHaveProperty('nested');
+    expect(request.sourceReport.sections[0].heading.length).toBeLessThanOrEqual(200);
+    expect(request.sourceReport.sections[0].headingPath).toHaveLength(8);
+  });
+
   test('caps oversized public requests to the 50-question default max', async () => {
     const { handler } = require('../generate-quiz.js');
     const res = await handler(event({ topic: 'Ports', count: 99, provider: 'echo' }));

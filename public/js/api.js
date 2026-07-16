@@ -875,14 +875,6 @@ function waitForWorkerTriggerRetry(attempt){
 
 async function triggerAsyncGenerationOnce(payload){
   try{
-    if(typeof navigator !== 'undefined' && navigator && typeof navigator.sendBeacon === 'function'){
-      const blob = new Blob([payload], { type: 'application/json' });
-      if(navigator.sendBeacon(ASYNC_GENERATION_ENDPOINTS.worker, blob)) {
-        return { sent: true, mode: 'beacon' };
-      }
-    }
-  }catch{}
-  try{
     const res = await fetch(ASYNC_GENERATION_ENDPOINTS.worker, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

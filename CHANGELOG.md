@@ -24,7 +24,7 @@ Changelog
   - Users who chose “Don’t show again” can still see a one-time lightweight What’s New panel for a new app version.
 - Maintenance
   - Version labels and package metadata prepared for v3.6.0.
-  - Asset query strings bumped to `1.5.43`; service worker cache advanced to `ezq-v1227`.
+  - Asset query strings bumped to `1.5.44`; service worker cache advanced to `ezq-v1228`.
 
 2026-05-17 — v3.5.0
 - Generation

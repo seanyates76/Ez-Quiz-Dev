@@ -3,6 +3,9 @@
 const { cleanSourceText } = require('./sourceMaterial.js');
 
 const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
+const MAX_SOURCE_REPORT_SECTIONS = 100;
+const MAX_SOURCE_REPORT_TEXT_CHARS = 60000;
+const MAX_SOURCE_SECTION_TEXT_CHARS = 4000;
 
 class GenerationRequestError extends Error {
   constructor(body, status = 400) {
@@ -80,6 +83,74 @@ function normalizeQuestionTypes(raw) {
   return filtered;
 }
 
+function boundedNumber(value, min, max, fallback = 0) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return fallback;
+  return Math.max(min, Math.min(max, numeric));
+}
+
+function boundedString(value, maxChars) {
+  return String(value == null ? '' : value).trim().slice(0, maxChars);
+}
+
+function boundedStringList(value, maxItems, maxChars) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, maxItems)
+    .map((entry) => boundedString(entry, maxChars))
+    .filter(Boolean);
+}
+
+function sanitizeSourceReport(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  let remainingTextChars = MAX_SOURCE_REPORT_TEXT_CHARS;
+  const rawSections = Array.isArray(raw.sections)
+    ? raw.sections.slice(0, MAX_SOURCE_REPORT_SECTIONS)
+    : [];
+  const sections = [];
+  for (let index = 0; index < rawSections.length && remainingTextChars > 0; index += 1) {
+    const section = rawSections[index];
+    if (!section || typeof section !== 'object' || Array.isArray(section)) continue;
+    const text = boundedString(
+      section.text,
+      Math.min(MAX_SOURCE_SECTION_TEXT_CHARS, remainingTextChars)
+    );
+    remainingTextChars -= text.length;
+    sections.push({
+      id: boundedString(section.id || `section-${index + 1}`, 80),
+      heading: boundedString(section.heading, 200),
+      headingPath: boundedStringList(section.headingPath, 8, 160),
+      text,
+      charCount: boundedNumber(section.charCount, 0, MAX_SOURCE_SECTION_TEXT_CHARS, text.length),
+      lineCount: boundedNumber(section.lineCount, 0, 10000),
+      bulletCount: boundedNumber(section.bulletCount, 0, 10000),
+      codeBlockCount: boundedNumber(section.codeBlockCount, 0, 1000),
+      listCount: boundedNumber(section.listCount, 0, 1000),
+      definitionSignal: !!section.definitionSignal,
+      termSignal: !!section.termSignal,
+      commandSignal: !!section.commandSignal,
+      score: boundedNumber(section.score, 0, 100),
+      reasons: boundedStringList(section.reasons, 20, 80),
+      flags: boundedStringList(section.flags, 20, 80),
+    });
+  }
+  const weakCount = sections.filter((section) => section.flags.includes('weak')).length;
+  const quizWorthyCount = sections.filter((section) => section.score >= 45 && !section.flags.includes('weak')).length;
+  return {
+    version: boundedNumber(raw.version, 0, 100, 1),
+    sourceCharCount: boundedNumber(raw.sourceCharCount, 0, MAX_SOURCE_REPORT_TEXT_CHARS),
+    sourceLineCount: boundedNumber(raw.sourceLineCount, 0, 100000),
+    sectionCount: sections.length,
+    quizWorthyCount,
+    weakCount,
+    largestSectionId: boundedString(raw.largestSectionId, 80),
+    largestSectionHeading: boundedString(raw.largestSectionHeading, 200),
+    largestSectionCharCount: boundedNumber(raw.largestSectionCharCount, 0, MAX_SOURCE_SECTION_TEXT_CHARS),
+    detectedSignals: boundedStringList(raw.detectedSignals, 20, 80),
+    flags: boundedStringList(raw.flags, 20, 80),
+    sections,
+  };
+}
+
 function normalizeGenerationPayload(payload, options = {}) {
   const env = options.env || process.env;
   const { maxCount } = generationLimits(env);
@@ -108,9 +179,7 @@ function normalizeGenerationPayload(payload, options = {}) {
   const provider = String(body.provider || env.AI_PROVIDER || 'gemini').trim().toLowerCase();
   const model = String(body.model || '').trim();
   const avoidStems = sanitizeAvoidStems(body.avoidStems);
-  const sourceReport = body.sourceReport && typeof body.sourceReport === 'object' && !Array.isArray(body.sourceReport)
-    ? body.sourceReport
-    : undefined;
+  const sourceReport = sanitizeSourceReport(body.sourceReport);
 
   const responseMode = String(env.QUIZ_RESPONSE || '').toLowerCase();
   const useV2 = responseMode === 'v2';
@@ -141,9 +210,13 @@ function normalizeGenerationPayload(payload, options = {}) {
 
 module.exports = {
   GenerationRequestError,
+  MAX_SOURCE_REPORT_SECTIONS,
+  MAX_SOURCE_REPORT_TEXT_CHARS,
+  MAX_SOURCE_SECTION_TEXT_CHARS,
   VALID_QUESTION_TYPES,
   generationLimits,
   normalizeGenerationPayload,
+  sanitizeSourceReport,
   sanitizeAvoidStems,
   toPositiveInt,
 };
