@@ -37,12 +37,21 @@ Netlify Functions live under `netlify/functions/`.
 
 Important functions:
 - `generate-quiz.js` — quiz generation endpoint
+- `generate-quiz-start.js` — validates, plans, and stores a queued async generation job
+- `generate-quiz-worker-background.js` — processes planned async generation batches
+- `generate-quiz-status.js` — returns public job progress and completed questions
+- `generate-quiz-stop.js` — stops a job while preserving completed questions
 - `send-feedback.js` — feedback mailer
 - `health.js` — simple health probe
 - `ingest-media.js` — media import path
 - `mcp.ts` — experimental MCP endpoint
 
 Supporting modules:
+- `netlify/functions/lib/asyncGenerationPlanner.js` — quiz lanes, scenario budgets, and batch planning
+- `netlify/functions/lib/asyncGenerationWorker.js` — batch execution, filtering, recovery, and terminal states
+- `netlify/functions/lib/asyncJobStore.js` — file-backed local jobs and Netlify Blobs production jobs
+- `netlify/functions/lib/asyncHttp.js` — shared async endpoint HTTP/CORS helpers
+- `netlify/functions/lib/generationRequest.js` — shared request normalization for sync and async generation
 - `netlify/functions/lib/providers.js` — provider selection and generation logic
 - `netlify/functions/lib/providers.explain.js` — explanation provider helpers
 - `netlify/functions/lib/normalizer.js` — quiz normalization/parsing support
@@ -102,7 +111,9 @@ Current package roles are intentional:
 
 ### Runtime dependencies
 - `@google/generative-ai`
+- `@netlify/blobs`
 - `nodemailer`
+- `yauzl`
 
 ### Dev dependencies
 - `netlify-cli`
@@ -123,12 +134,14 @@ Important points:
 - publish directory: `public`
 - functions directory: `netlify/functions`
 - Node bundler: `esbuild`
-- external runtime modules: `@google/generative-ai`, `nodemailer`
+- external runtime modules: `@google/generative-ai`, `@netlify/blobs`, `nodemailer`
 
 Key redirects:
 - `/api/generate` → `/.netlify/functions/generate-quiz`
 - `/api/health` → `/.netlify/functions/health`
 - `/api/mcp` → `/.netlify/functions/mcp`
+
+Async generation uses the direct Netlify Function paths for `generate-quiz-start`, `generate-quiz-worker-background`, `generate-quiz-status`, and `generate-quiz-stop`.
 
 Promotion note:
 - do not treat a normal `netlify dev` provider failure as proof that Dev-repo code is broken until you confirm which Netlify env supplied the key

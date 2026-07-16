@@ -3,7 +3,7 @@
 const BYTES_PER_MIB = 1024 * 1024;
 const MAX_MEDIA_BYTES = 4 * BYTES_PER_MIB;
 const MAX_BODY_BYTES = 6 * BYTES_PER_MIB;
-const MAX_EXTRACTED_TEXT_CHARS = 30000;
+const MAX_EXTRACTED_TEXT_CHARS = 60000;
 const DEFAULT_LIMIT = 20;
 const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
 const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite-preview-09-2025';
@@ -247,6 +247,15 @@ function echoAllowed(env) {
   return env.NODE_ENV === 'test' || truthy(env.ALLOW_ECHO_MEDIA_IMPORT);
 }
 
+function providerNotConfiguredMessage(kind) {
+  const normalized = String(kind || '').trim().toLowerCase();
+  if (normalized === 'pdf') return 'PDF import needs a configured Gemini media extraction provider.';
+  if (normalized === 'png' || normalized === 'jpeg' || normalized === 'gif') {
+    return 'Image import needs a configured media extraction provider.';
+  }
+  return 'Media import provider is not configured.';
+}
+
 function cleanExtractedText(text) {
   return String(text || '')
     .replace(/^\uFEFF/, '')
@@ -461,7 +470,7 @@ async function extractWithOpenAI(file, env) {
 async function extractText(file, env) {
   if (DETERMINISTIC_KINDS.has(file.kind)) return extractDeterministicText(file);
   const provider = resolveProvider(env, file.kind);
-  if (!provider) throw makeMediaError('Media import provider is not configured', 'MEDIA_PROVIDER_NOT_CONFIGURED', 503);
+  if (!provider) throw makeMediaError(providerNotConfiguredMessage(file.kind), 'MEDIA_PROVIDER_NOT_CONFIGURED', 503);
   if (provider === 'gemini') return extractWithGemini(file, env);
   if (provider === 'openai') return extractWithOpenAI(file, env);
   if (provider === 'echo') {

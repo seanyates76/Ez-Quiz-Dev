@@ -88,6 +88,14 @@ jobs:
             RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
             rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
 
+            # `public-mirror/` is a source-only staging area. Promote its README
+            # to the public mirror root without publishing the staging directory.
+            if [ ! -f public-mirror/README.md ]; then
+              echo "Missing public-mirror/README.md. The public mirror README is managed from that draft." >&2
+              exit 1
+            fi
+            cp public-mirror/README.md filtered/README.md
+
             # Allow a small, explicit set of shared public-safe workflows to flow
             # downstream even though `.publicignore` blocks the workflow directory
             # by default. This keeps dev-only automation private while still
@@ -157,6 +165,10 @@ jobs:
               PRESERVE_ARGS+=(--exclude-from=../.publicpreserve)
             fi
             rsync -a --delete --exclude=.git/ "${PRESERVE_ARGS[@]}" ../filtered/ ./
+            # `.publicpreserve` protects downstream-only files during sync.
+            # README.md is the one managed replacement: it is promoted from
+            # public-mirror/README.md into filtered/README.md above.
+            cp ../filtered/README.md ./README.md
             git add -A
             if git diff --cached --quiet; then
               echo "No changes to publish."

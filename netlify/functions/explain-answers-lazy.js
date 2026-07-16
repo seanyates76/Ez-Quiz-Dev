@@ -1,5 +1,7 @@
 'use strict';
 
+const { timingSafeStringEqual } = require('./lib/asyncHttp.js');
+
 const { explainQuestions } = require('./lib/providers.explain.js');
 
 const MC_RE = /^MC\|(.*)\|(.+?)\|([A-Za-z](?:\s*,\s*[A-Za-z])*)$/i;
@@ -137,7 +139,7 @@ const BEARER_TOKEN = process.env.EXPLAIN_BEARER_TOKEN ? String(process.env.EXPLA
 function authorize(event) {
   if (!BEARER_TOKEN) return true;
   const authHeader = event.headers?.authorization || event.headers?.Authorization || '';
-  return authHeader.replace(/^Bearer\s+/i, '') === BEARER_TOKEN;
+  return timingSafeStringEqual(authHeader.replace(/^Bearer\s+/i, ''), BEARER_TOKEN);
 }
 
 async function withTimeout(promise, ms) {

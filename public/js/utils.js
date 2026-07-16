@@ -20,7 +20,7 @@ function readGlobalMaxQuestions() {
 export function getMaxQuestions() {
   const configured = readGlobalMaxQuestions();
   if (Number.isFinite(configured)) return configured;
-  return 20;
+  return 50;
 }
 
 export function clampCount(n, options = {}) {

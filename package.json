@@ -1,6 +1,6 @@
 {
   "name": "ez-quiz-app",
-  "version": "3.5.0",
+  "version": "3.6.0",
   "private": true,
   "license": "MIT",
   "description": "Static PWA + Netlify Functions for EZ Quiz",
@@ -17,15 +17,16 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@netlify/blobs": "10.1.0",
     "nodemailer": "^9.0.1",
-    "yauzl": "^3.3.0"
+    "yauzl": "^3.4.0"
   },
   "devDependencies": {
-    "jest": "^30.3.0",
-    "jest-environment-jsdom": "^30.3.0",
-    "jsdom": "^27.0.0",
-    "netlify-cli": "^26.0.1",
-    "puppeteer": "^24.40.0"
+    "jest": "^30.4.2",
+    "jest-environment-jsdom": "^30.4.1",
+    "jsdom": "^27.4.0",
+    "netlify-cli": "^26.1.0",
+    "puppeteer": "^24.43.1"
   },
   "overrides": {
     "fast-uri": "^3.1.2"

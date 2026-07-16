@@ -1,6 +1,6 @@
 'use strict';
 
-const MAX_SOURCE_TEXT_CHARS = 30000;
+const MAX_SOURCE_TEXT_CHARS = 60000;
 
 function cleanSourceText(raw) {
   return String(raw || '')

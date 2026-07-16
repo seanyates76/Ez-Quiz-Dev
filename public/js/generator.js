@@ -1,14 +1,22 @@
 import { S } from './state.js';
 import { $, byQSA, mmSsToMs, clampCount, getMaxQuestions } from './utils.js';
 import { parseEditorInput } from './parser.js';
-import { generateWithAI } from './api.js?v=1.5.35';
+import {
+  ASYNC_GENERATION_POLL_MS,
+  generateWithAI,
+  getAsyncGenerationStatus,
+  shouldUseAsyncGeneration,
+  startAsyncGeneration,
+  stopAsyncGeneration,
+  triggerAsyncGeneration,
+} from './api.js?v=1.5.45';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.35';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.35';
-import { showVeil, hideVeil, MESSAGES } from './veil.js';
+import { announce } from './a11y-announcer.js?v=1.5.45';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.45';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.45';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
 
@@ -18,6 +26,55 @@ let __topicAffixDragHandle = null;
 function formatUnitCount(count, singular, plural = `${singular}s`){
   const n = Number(count) || 0;
   return `${n} ${n === 1 ? singular : plural}`;
+}
+
+const GENERATION_TOPIC_MESSAGES = [
+  'Planning the quiz.',
+  'Generating focused study questions.',
+  'Checking answer choices.',
+];
+
+const GENERATION_SOURCE_MESSAGES = [
+  'Planning the quiz.',
+  'Generating focused study questions.',
+  'Filling remaining questions.',
+  'Checking answer choices.',
+];
+
+const GENERATION_LARGE_SOURCE_MESSAGES = [
+  'This one has some reading to do.',
+  'Still working through the big stuff.',
+];
+
+const GENERATION_RARE_MESSAGES = [
+  'Sorting the quiz goblins.',
+  'Convincing the answers to line up.',
+  'Counting carefully this time.',
+];
+
+function hasSourcePayload(payload = {}){
+  return !!String(payload.sourceText || '').trim();
+}
+
+function stoppedGenerationMessage(payload = {}){
+  return hasSourcePayload(payload)
+    ? 'Your topic and study material are still here.'
+    : 'Your topic is still here.';
+}
+
+function shouldReduceMotion(){
+  try {
+    return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  } catch {
+    return false;
+  }
+}
+
+function syncBuildStatusVisibility(statusBox = $('status'), generationStatusCard = $('generationStatusCard')){
+  if(!statusBox) return;
+  const hasMessage = !!String(statusBox.textContent || '').trim();
+  const cardVisible = !!(generationStatusCard && !generationStatusCard.hidden && generationStatusCard.dataset.generationState !== 'idle');
+  statusBox.hidden = cardVisible || !hasMessage;
 }
 
 function hasStartableQuiz(){
@@ -94,6 +151,7 @@ export function runParseFlow(sourceText, topicLabel, fullTitle){
   if(statusBox) {
     statusBox.textContent = statusMessage;
     statusBox.setAttribute('data-build-state', limitError ? 'failed' : (questions.length ? 'ready' : 'idle'));
+    syncBuildStatusVisibility(statusBox);
   }
   try {
     const pe = document.getElementById('parseErrors');
@@ -137,16 +195,350 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   };
   const LOCAL_TEXT_KINDS = new Set(['txt', 'md', 'html', 'csv', 'json', 'rtf']);
-  const MAX_IMPORTED_SOURCE_CHARS = 30000;
+  const MAX_IMPORTED_SOURCE_CHARS = 60000;
   const MAX_LOCAL_TEXT_READ_BYTES = 128 * 1024;
+  const QUESTION_COUNT_CHOICES = [5, 10, 15, 20, 30, 50];
+  const NARROW_SOURCE_WARNING_MIN_COUNT = 30;
+  const NARROW_SOURCE_VERY_LOW_CHARS = 900;
+  const NARROW_SOURCE_SINGLE_SECTION_MAX_CHARS = 2400;
   const toolbar = document.querySelector('.gen-toolbar');
   const topicAffix = document.querySelector('.topic-affix');
   const editor = $('editor');
   const mirror = $('mirror');
   const statusBox = $('status');
+  const generationStatusCard = $('generationStatusCard');
+  const generationStatusTitle = $('generationStatusTitle');
+  const generationStatusMessage = $('generationStatusMessage');
+  const generationStatusScan = $('generationStatusScan');
+  const generationStatusMeta = $('generationStatusMeta');
+  const generationStatusSecondary = $('generationStatusSecondary');
+  const cancelGenerationBtn = $('cancelGenerationBtn');
+  const narrowSourceModal = $('narrowSourceModal');
+  const narrowSourceMessage = $('narrowSourceMessage');
+  const narrowSourceConfirm = $('narrowSourceConfirm');
+  const narrowSourceCancel = $('narrowSourceCancel');
+  const narrowSourceClose = $('narrowSourceClose');
 
+  let generationRequestSeq = 0;
+  let activeGenerationSession = null;
+  let generationStatusTimer = null;
+  let pendingNarrowSourceGeneration = null;
+  let narrowSourceWarningConfirmedKey = '';
+  let narrowSourcePreviousFocus = null;
+  let applyingSourceTopic = false;
   let countTipSeq = 0;
   const countSoftTargets = [];
+
+  function uiState(){
+    const root = (typeof window !== 'undefined')
+      ? (window.EZQ = window.EZQ || S || {})
+      : S;
+    root.ui = root.ui || S.ui || {};
+    S.ui = root.ui;
+    return root.ui;
+  }
+
+  function sourceSectionCount(payload = {}){
+    const report = payload.sourceReport || S.media?.sourceReport || null;
+    if(report && Number(report.sectionCount) > 0) return Number(report.sectionCount);
+    if(report && Array.isArray(report.sections)) return report.sections.length;
+    return 0;
+  }
+
+  function sourceCharCount(payload = {}){
+    const mediaCount = Number(S.media?.sourceCharCount || 0);
+    if(mediaCount > 0) return mediaCount;
+    const sourceText = String(payload.sourceText || '');
+    return sourceText.length;
+  }
+
+  function sourceReportForWarning(payload = {}){
+    const report = payload.sourceReport || S.media?.sourceReport || null;
+    return report && typeof report === 'object' ? report : null;
+  }
+
+  function narrowSourceWarningKey(payload = {}){
+    return JSON.stringify({
+      topic: String(payload.topic || '').trim(),
+      count: Number(payload.count || 0),
+      difficulty: String(payload.difficulty || '').trim(),
+      sourceId: mediaSourceId(),
+    });
+  }
+
+  function shouldWarnForNarrowSource(payload = {}){
+    const requestedCount = Number(payload.count || 0);
+    if(requestedCount < NARROW_SOURCE_WARNING_MIN_COUNT) return false;
+    if(!hasSourcePayload(payload)) return false;
+
+    const report = sourceReportForWarning(payload);
+    if(!report) return false;
+
+    const chars = sourceCharCount(payload);
+    if(chars > 0 && chars < NARROW_SOURCE_VERY_LOW_CHARS) return true;
+
+    const summary = summarizeSourceReport(report);
+    const quizWorthyCount = Number(summary.quizWorthyCount || 0);
+    return quizWorthyCount <= 1
+      && chars > 0
+      && chars < NARROW_SOURCE_SINGLE_SECTION_MAX_CHARS;
+  }
+
+  function isLargeGenerationSource(payload = {}){
+    return sourceCharCount(payload) >= 20000 || sourceSectionCount(payload) >= 50;
+  }
+
+  function formatGenerationMetadata(payload = {}){
+    const items = [];
+    const sourceName = String(payload.sourceName || S.media?.sourceName || '').trim();
+    const chars = sourceCharCount(payload);
+    const sections = sourceSectionCount(payload);
+    if(sourceName) items.push(sourceName);
+    if(chars > 0) items.push(`${chars.toLocaleString()} chars`);
+    if(sections > 0) items.push(`${sections.toLocaleString()} sections`);
+    return items.join(' • ');
+  }
+
+  function generationProgressText(completed, requested){
+    const wanted = Math.max(0, Number(requested || 0));
+    const ready = Math.max(0, Math.min(wanted || Number.MAX_SAFE_INTEGER, Number(completed || 0)));
+    if(wanted > 0) return `${ready.toLocaleString()} of ${wanted.toLocaleString()} questions ready.`;
+    return `${ready.toLocaleString()} questions ready.`;
+  }
+
+  function setGenerationProgress(completed = 0, requested = 0, { visible = false } = {}){
+    const wanted = Math.max(0, Number(requested || 0));
+    const ready = Math.max(0, Math.min(wanted || Number.MAX_SAFE_INTEGER, Number(completed || 0)));
+    const pct = wanted > 0 ? Math.max(0, Math.min(100, (ready / wanted) * 100)) : 0;
+    if(generationStatusScan){
+      generationStatusScan.setAttribute('aria-valuemin', '0');
+      generationStatusScan.setAttribute('aria-valuemax', String(wanted));
+      generationStatusScan.setAttribute('aria-valuenow', String(ready));
+      const fill = generationStatusScan.querySelector('span');
+      if(fill) fill.style.width = `${pct}%`;
+    }
+    if(generationStatusSecondary){
+      generationStatusSecondary.textContent = generationProgressText(ready, wanted);
+      generationStatusSecondary.hidden = !visible || wanted <= 0;
+    }
+  }
+
+  function maybeRareGenerationMessage(message, allowRare = false){
+    const base = String(message || '').trim();
+    if(!allowRare || !GENERATION_RARE_MESSAGES.length) return base;
+    try{
+      if(Math.random() < 0.1) {
+        const index = Math.floor(Math.random() * GENERATION_RARE_MESSAGES.length);
+        return GENERATION_RARE_MESSAGES[index] || base;
+      }
+    }catch{}
+    return base;
+  }
+
+  function stopGenerationStatusRotation(){
+    if(generationStatusTimer){
+      clearInterval(generationStatusTimer);
+      generationStatusTimer = null;
+    }
+  }
+
+  function setGenerationStatusState(state, options = {}){
+    const nextState = state || 'idle';
+    if(nextState !== 'generating') stopGenerationStatusRotation();
+    const ui = uiState();
+    const phase = String(options.phase || '').trim();
+    const metadata = String(options.metadata || '').trim();
+    const message = String(options.message || '').trim();
+    const requestedCount = Math.max(0, Number(options.requestedCount || 0));
+    const completedCount = Math.max(0, Number(options.completedCount || 0));
+    ui.generationStatus = {
+      state: nextState,
+      requestId: Number(options.requestId || ui.generationStatus?.requestId || 0),
+      message,
+      metadata,
+      completedCount,
+      requestedCount,
+    };
+
+    if(!generationStatusCard) {
+      syncBuildStatusVisibility(statusBox, generationStatusCard);
+      return;
+    }
+    generationStatusCard.hidden = nextState === 'idle';
+    generationStatusCard.dataset.generationState = nextState;
+    generationStatusCard.classList.toggle('is-animating', nextState === 'generating');
+    generationStatusCard.classList.toggle('is-complete', nextState === 'success');
+    generationStatusCard.classList.toggle('is-success-pulsing', nextState === 'success' && !shouldReduceMotion());
+    generationStatusCard.setAttribute('aria-busy', nextState === 'generating' ? 'true' : 'false');
+    if(options.largeSource) generationStatusCard.dataset.largeSource = 'true';
+    else delete generationStatusCard.dataset.largeSource;
+
+    if(generationStatusTitle){
+      const title = nextState === 'success' ? 'Quiz ready.'
+        : nextState === 'partial' ? 'Quiz partially ready.'
+        : nextState === 'stopped' || nextState === 'canceled' ? 'Generation stopped.'
+        : nextState === 'error' ? 'Generation failed.'
+        : 'Building your quiz...';
+      generationStatusTitle.textContent = title;
+    }
+    if(generationStatusMessage){
+      const fallback = nextState === 'success' ? 'Start Quiz is ready when you are.'
+        : nextState === 'partial' ? 'Start Quiz can use the questions that are ready.'
+        : nextState === 'stopped' || nextState === 'canceled' ? 'Your inputs are still here.'
+        : nextState === 'error' ? 'Check the message below and try again.'
+        : phase || 'Generating focused study questions.';
+      generationStatusMessage.textContent = message || fallback;
+    }
+    if(generationStatusMeta){
+      generationStatusMeta.textContent = metadata;
+      generationStatusMeta.hidden = !metadata;
+    }
+    if(generationStatusSecondary){
+      const showProgress = nextState !== 'idle' && requestedCount > 0;
+      setGenerationProgress(completedCount, requestedCount, { visible: showProgress });
+    } else {
+      setGenerationProgress(completedCount, requestedCount, { visible: false });
+    }
+    if(cancelGenerationBtn){
+      const canCancel = nextState === 'generating';
+      cancelGenerationBtn.hidden = !canCancel;
+      cancelGenerationBtn.disabled = !canCancel;
+      cancelGenerationBtn.textContent = 'Stop generation';
+    }
+    syncBuildStatusVisibility(statusBox, generationStatusCard);
+  }
+
+  function startGenerationStatusRotation(session){
+    stopGenerationStatusRotation();
+    const payload = session?.payload || {};
+    const largeSource = isLargeGenerationSource(payload);
+    const baseMessages = hasSourcePayload(payload)
+      ? GENERATION_SOURCE_MESSAGES
+      : GENERATION_TOPIC_MESSAGES;
+    const messages = largeSource
+      ? baseMessages.concat(GENERATION_LARGE_SOURCE_MESSAGES)
+      : baseMessages.slice();
+    let idx = 0;
+    const metadata = formatGenerationMetadata(payload);
+    setGenerationStatusState('generating', {
+      requestId: session.id,
+      phase: messages[idx],
+      message: messages[idx],
+      metadata,
+      largeSource,
+      completedCount: 0,
+      requestedCount: payload.count,
+    });
+    generationStatusTimer = setInterval(() => {
+      if(!activeGenerationSession || activeGenerationSession.id !== session.id) return;
+      idx = (idx + 1) % messages.length;
+      const phase = messages[idx];
+      setGenerationStatusState('generating', {
+        requestId: session.id,
+        phase,
+        message: maybeRareGenerationMessage(phase, true),
+        metadata,
+        largeSource,
+        completedCount: 0,
+        requestedCount: payload.count,
+      });
+    }, 3200);
+  }
+
+  function isActiveGeneration(requestId){
+    return !!(activeGenerationSession && activeGenerationSession.id === requestId);
+  }
+
+  function requestAsyncGenerationStop(session){
+    if(!session?.jobId) return null;
+    if(session.stopRequest) return session.stopRequest;
+    let request;
+    try{
+      request = Promise.resolve(stopAsyncGeneration(session.jobId, { workerToken: session.workerToken }));
+    }catch(err){
+      request = Promise.reject(err);
+    }
+    session.stopRequest = request;
+    request.catch(() => {
+      if(session.stopRequest === request) session.stopRequest = null;
+    });
+    return request;
+  }
+
+  function abandonGenerationSession(session){
+    if(!session) return;
+    session.superseded = true;
+    const stopRequest = requestAsyncGenerationStop(session);
+    stopRequest?.catch((err) => {
+      try{ console.debug('[ezq:async-generation] abandoned job stop failed', err); }catch{}
+    });
+    try{ session.controller?.abort(); }catch{}
+  }
+
+  function beginGenerationSession(payload){
+    if(activeGenerationSession) abandonGenerationSession(activeGenerationSession);
+    const session = {
+      id: ++generationRequestSeq,
+      controller: new AbortController(),
+      payload,
+      stopped: false,
+      superseded: false,
+    };
+    activeGenerationSession = session;
+    startGenerationStatusRotation(session);
+    return session;
+  }
+
+  function resetGenerationStatus({ abortActive = false } = {}){
+    if(abortActive && activeGenerationSession) abandonGenerationSession(activeGenerationSession);
+    activeGenerationSession = null;
+    setGenerationStatusState('idle');
+    if(abortActive && generateBtn) generateBtn.disabled = false;
+  }
+
+  async function stopActiveGeneration(){
+    const session = activeGenerationSession;
+    if(!session) return;
+    session.stopped = true;
+    session.stopRefreshPending = true;
+    setGenerationStatusState('generating', {
+      requestId: session.id,
+      metadata: formatGenerationMetadata(session.payload),
+      phase: 'Generation stopped.',
+      message: 'Stopping generation.',
+      largeSource: isLargeGenerationSource(session.payload),
+      completedCount: 0,
+      requestedCount: session.payload && session.payload.count,
+    });
+    if(session.jobId){
+      try {
+        await requestAsyncGenerationStop(session);
+      } catch (err) {
+        try{ console.debug('[ezq:async-generation] stop failed', err); }catch{}
+      } finally {
+        session.stopRefreshPending = true;
+        if(typeof session.wakePoll === 'function') session.wakePoll();
+      }
+      return;
+    }
+    activeGenerationSession = null;
+    try{ session.controller.abort(); }catch{}
+    setGenerationStatusState('stopped', {
+      requestId: session.id,
+      metadata: formatGenerationMetadata(session.payload),
+      message: stoppedGenerationMessage(session.payload),
+      largeSource: isLargeGenerationSource(session.payload),
+      completedCount: 0,
+      requestedCount: session.payload && session.payload.count,
+    });
+    setBuildStatus('idle', 'Generation stopped.');
+    if(generateBtn) generateBtn.disabled = false;
+    setPrimaryAction();
+    updateCountAvailability();
+  }
+
+  cancelGenerationBtn?.addEventListener('click', stopActiveGeneration);
+
   function registerCountSoftTarget(button){
     if(!button) return;
     if(countSoftTargets.some((entry)=> entry.button === button)) return;
@@ -187,9 +579,16 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   registerCountSoftTarget(startBtn);
   const startToolbarBtn = document.getElementById('startToolbarBtn');
   registerCountSoftTarget(startToolbarBtn);
-  function getCountInvalidMessage(){
+  function availableCountChoices(){
     const max = getMaxQuestions();
-    return `Choose 5, 10, 15, or 20 questions before creating.`;
+    return QUESTION_COUNT_CHOICES.filter((value) => value <= max);
+  }
+  function getCountInvalidMessage(){
+    const choices = availableCountChoices();
+    const label = choices.length > 1
+      ? `${choices.slice(0, -1).join(', ')}, or ${choices[choices.length - 1]}`
+      : String(choices[0] || getMaxQuestions());
+    return `Choose ${label} questions before creating.`;
   }
   function updateCountHint(){
     const max = getMaxQuestions();
@@ -322,7 +721,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }catch{}
   }
   function ensureMediaState(){
-    S.media = S.media || { sourceText: '', sourceName: '', sourceKind: '', sourceCharCount: 0 };
+    S.media = S.media || { sourceText: '', sourceName: '', sourceKind: '', sourceCharCount: 0, sourceReport: null };
+    if (!Object.prototype.hasOwnProperty.call(S.media, 'sourceReport')) S.media.sourceReport = null;
     return S.media;
   }
   function cleanImportedSource(raw){
@@ -344,9 +744,27 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     return !!mediaSourceId();
   }
   function sourceTopicLabel(name){
-    const raw = String(name || '').trim();
+    const raw = String(name || '').split(/[\\/]/).pop().trim();
     if(!raw) return 'Imported source';
-    return raw.replace(/\.[a-z0-9]{1,8}$/i, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Imported source';
+    return raw
+      .replace(/\.[a-z0-9]{1,12}$/i, '')
+      .replace(/^\s*\d{1,3}\s*[-_. ]+\s*/, '')
+      .replace(/[_-]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim() || 'Imported source';
+  }
+  function setTopicFromSourceName(name){
+    if(!topicInput) return false;
+    const ui = uiState();
+    const label = sourceTopicLabel(name);
+    topicInput.value = label;
+    ui.topicSourceDerived = true;
+    ui.topicSourceTopic = label;
+    applyingSourceTopic = true;
+    try{ topicInput.dispatchEvent(new Event('input', { bubbles: true })); }
+    catch{ markDirtyIfChanged(); }
+    finally{ applyingSourceTopic = false; }
+    return true;
   }
   function renderMediaSourceStatus(){
     const media = ensureMediaState();
@@ -354,35 +772,55 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!mediaSourceStatus || !mediaSourceLabel) return;
     if(!text.trim()){
       mediaSourceLabel.textContent = '';
+      mediaSourceLabel.removeAttribute('title');
+      mediaSourceLabel.removeAttribute('aria-label');
+      mediaSourceStatus.removeAttribute('title');
+      delete mediaSourceStatus.dataset.sectionCount;
+      delete mediaSourceStatus.dataset.quizWorthyCount;
+      delete mediaSourceStatus.dataset.weakSectionCount;
       mediaSourceStatus.hidden = true;
       return;
     }
     const name = media.sourceName || 'Imported source';
     const chars = Number(media.sourceCharCount || text.length);
     const kind = media.sourceKind ? String(media.sourceKind).toUpperCase() : 'MEDIA';
-    mediaSourceLabel.textContent = `${kind} ready: ${name} · ${chars.toLocaleString()} chars extracted`;
+    const report = media.sourceReport || analyzeSourceText(text);
+    const summary = summarizeSourceReport(report);
+    const sectionSummary = formatSourceSectionSummary(report);
+    mediaSourceStatus.dataset.sectionCount = String(summary.sectionCount || 0);
+    mediaSourceStatus.dataset.quizWorthyCount = String(summary.quizWorthyCount || 0);
+    mediaSourceStatus.dataset.weakSectionCount = String(summary.weakCount || 0);
+    const details = [
+      kind ? `${kind} file` : '',
+      `${chars.toLocaleString()} chars extracted`,
+      sectionSummary,
+    ].filter(Boolean).join(' • ');
+    const fullDetails = details ? `${name} • ${details}` : name;
+    mediaSourceLabel.textContent = name;
+    mediaSourceLabel.title = fullDetails;
+    mediaSourceLabel.setAttribute('aria-label', fullDetails);
+    mediaSourceStatus.title = fullDetails;
     mediaSourceStatus.hidden = false;
   }
   function setImportedSource({ text, name, kind, size, charCount } = {}){
     const cleaned = cleanImportedSource(text);
+    const report = analyzeSourceText(cleaned);
     const media = ensureMediaState();
     media.sourceText = cleaned;
     media.sourceName = String(name || '').trim();
     media.sourceKind = String(kind || '').trim();
     media.sourceSize = Number(size || 0);
     media.sourceCharCount = cleaned.length;
-    if(topicInput && !(topicInput.value || '').trim()){
-      topicInput.value = sourceTopicLabel(media.sourceName);
-      try{ topicInput.dispatchEvent(new Event('input', { bubbles: true })); }catch{}
-    }
+    media.sourceReport = report;
+    setTopicFromSourceName(media.sourceName);
     renderMediaSourceStatus();
   }
   function clearImportedSource({ announceChange = false } = {}){
-    S.media = { sourceText: '', sourceName: '', sourceKind: '', sourceSize: 0, sourceCharCount: 0 };
+    S.media = { sourceText: '', sourceName: '', sourceKind: '', sourceSize: 0, sourceCharCount: 0, sourceReport: null };
     renderMediaSourceStatus();
     markDirtyIfChanged();
     if(announceChange){
-      setBuildStatus('idle', 'Imported source removed. Add a topic or study material, then create a quiz.');
+      setBuildStatus('idle', 'Imported source removed.');
       setHint('Imported source removed.');
       try{ announce('Imported source removed.', 'polite'); }catch{}
     }
@@ -392,8 +830,227 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(payload.sourceText){
       opts.sourceText = payload.sourceText;
       if(payload.sourceName) opts.sourceName = payload.sourceName;
+      if(payload.sourceReport) opts.sourceReport = payload.sourceReport;
     }
     return opts;
+  }
+
+  function asyncGenerationOptions(payload, types){
+    return generationOptions(payload, types);
+  }
+
+  function waitForAsyncPollDelay(session){
+    return new Promise((resolve, reject) => {
+      if(!isActiveGeneration(session.id)) {
+        resolve();
+        return;
+      }
+      if(session.stopRefreshPending) {
+        session.stopRefreshPending = false;
+        resolve();
+        return;
+      }
+      const timer = setTimeout(resolve, ASYNC_GENERATION_POLL_MS);
+      const abort = () => {
+        clearTimeout(timer);
+        reject(new DOMException('Aborted', 'AbortError'));
+      };
+      session.wakePoll = () => {
+        clearTimeout(timer);
+        session.wakePoll = null;
+        resolve();
+      };
+      try{
+        if(session.controller.signal.aborted) abort();
+        else session.controller.signal.addEventListener('abort', abort, { once: true });
+      }catch{}
+    });
+  }
+
+  function asyncProgressMessage(status = {}){
+    const state = String(status.status || '').toLowerCase();
+    const completed = Number(status.completedCount || 0);
+    const requested = Number(status.requestedCount || 0);
+    if(state === 'partial' || state === 'complete') return '';
+    if(state === 'queued') return 'Starting generation job.';
+    if(state === 'running') {
+      const progress = String(status.progressMessage || '');
+      if(/filling/i.test(progress)) return 'Filling remaining questions.';
+      return 'Generating focused study questions.';
+    }
+    if(state === 'stopped' || state === 'canceled') {
+      if(completed > 0) return '';
+      return 'Generation stopped before any questions were ready.';
+    }
+    if(state === 'failed') return 'Generation failed before any usable questions were created.';
+    if(status.progressMessage) return String(status.progressMessage);
+    return 'Checking generation status.';
+  }
+
+  function asyncProgressPhase(status = {}){
+    const state = String(status.status || '').toLowerCase();
+    const progress = String(status.progressMessage || '');
+    if(state === 'queued') return 'Planning the quiz.';
+    if(state === 'running' && /filling/i.test(progress)) return 'Filling remaining questions.';
+    if(state === 'running') return 'Generating focused study questions.';
+    if(state === 'partial') return 'Quiz partially ready.';
+    if(state === 'complete') return 'Quiz ready.';
+    if(state === 'stopped' || state === 'canceled') return 'Generation stopped.';
+    return 'Planning the quiz.';
+  }
+
+  function formatGenerationReadyMessage(completed, requested){
+    const ready = Math.max(0, Number(completed || 0));
+    const wanted = Math.max(0, Number(requested || 0));
+    if(wanted > ready) return `${ready.toLocaleString()} of ${wanted.toLocaleString()} questions ready.`;
+    return `${formatUnitCount(ready, 'question')} ready.`;
+  }
+
+  function asyncStatusToOutput(status = {}){
+    const lines = Array.isArray(status.questions)
+      ? status.questions.join('\n')
+      : String(status.lines || '').trim();
+    const completed = Number(status.completedCount || (lines ? lines.split('\n').filter(Boolean).length : 0) || 0);
+    const requested = Number(status.requestedCount || completed || 0);
+    return {
+      title: String(status.title || ''),
+      lines,
+      partial: status.status === 'partial' || (completed > 0 && requested > 0 && completed < requested),
+      stopped: status.status === 'stopped' || status.status === 'canceled' || !!status.stopped,
+      completedCount: completed,
+      requestedCount: requested,
+      warning: completed > 0 && requested > 0 && completed < requested
+        ? formatGenerationReadyMessage(completed, requested)
+        : '',
+    };
+  }
+
+  async function pollAsyncGenerationJob(session, payload){
+    let pollingFailures = 0;
+    while(isActiveGeneration(session.id)){
+      let status;
+      try{
+        status = await getAsyncGenerationStatus(session.jobId, {
+          signal: session.controller.signal,
+          workerToken: session.workerToken,
+        });
+        pollingFailures = 0;
+      }catch(err){
+        if(!isActiveGeneration(session.id)){
+          const aborted = new Error('Aborted');
+          aborted.name = 'AbortError';
+          throw aborted;
+        }
+        if(err && err.name === 'AbortError') throw err;
+        pollingFailures += 1;
+        if(pollingFailures > 3){
+          const failed = new Error('Lost contact with generation status. The job may still finish; try again in a moment.');
+          failed.name = 'AsyncGenerationPollingError';
+          throw failed;
+        }
+        setGenerationStatusState('generating', {
+          requestId: session.id,
+          metadata: formatGenerationMetadata(payload),
+          phase: 'Planning the quiz.',
+          message: 'Still checking generation status.',
+          largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
+        });
+        await waitForAsyncPollDelay(session);
+        continue;
+      }
+      if(!isActiveGeneration(session.id)){
+        const err = new Error('Aborted');
+        err.name = 'AbortError';
+        throw err;
+      }
+
+      const state = String(status && status.status || '').toLowerCase();
+      const completed = Number(status && status.completedCount || 0);
+      const requested = Number(status && status.requestedCount || payload.count || 0);
+      setGenerationStatusState('generating', {
+        requestId: session.id,
+        metadata: formatGenerationMetadata(payload),
+        phase: asyncProgressPhase(status),
+        message: asyncProgressMessage(status),
+        largeSource: isLargeGenerationSource(payload),
+        completedCount: completed,
+        requestedCount: requested,
+      });
+
+      if(state === 'complete' || state === 'partial' || state === 'failed' || state === 'stopped' || state === 'canceled' || state === 'expired'){
+        return status;
+      }
+      if(session.stopRefreshPending) {
+        session.stopRefreshPending = false;
+        continue;
+      }
+      await waitForAsyncPollDelay(session);
+    }
+    const err = new Error('Aborted');
+    err.name = 'AbortError';
+    throw err;
+  }
+
+  async function runAsyncGenerationJob(session, payload, types){
+    stopGenerationStatusRotation();
+    setGenerationStatusState('generating', {
+      requestId: session.id,
+      metadata: formatGenerationMetadata(payload),
+      phase: 'Planning the quiz.',
+      message: 'Starting generation job.',
+      largeSource: isLargeGenerationSource(payload),
+      completedCount: 0,
+      requestedCount: payload.count,
+    });
+
+    let started = false;
+    try{
+      const start = await startAsyncGeneration(payload.topic, payload.count, {
+        ...asyncGenerationOptions(payload, types),
+        signal: session.controller.signal,
+      });
+      started = true;
+      session.jobId = start && start.jobId;
+      session.workerToken = start && start.workerToken;
+      if(!session.jobId) throw new Error('Async generation did not return a job ID.');
+      const triggerResult = await triggerAsyncGeneration(session.jobId, session.workerToken);
+      if(!isActiveGeneration(session.id)){
+        const aborted = new Error('Aborted');
+        aborted.name = 'AbortError';
+        throw aborted;
+      }
+      if(!triggerResult || triggerResult.sent === false){
+        try{ console.debug('[ezq:async-generation] worker trigger failed', triggerResult); }catch{}
+        try{ await requestAsyncGenerationStop(session); }catch(err){
+          try{ console.debug('[ezq:async-generation] queued job cleanup failed', err); }catch{}
+        }
+        const err = new Error('Could not start the async generation worker. Trying the standard path.');
+        err.name = 'AsyncGenerationWorkerStartError';
+        err.asyncStartFailed = true;
+        throw err;
+      }
+      setGenerationStatusState('generating', {
+        requestId: session.id,
+        metadata: formatGenerationMetadata(payload),
+        phase: 'Planning the quiz.',
+        message: 'Generation job queued.',
+        largeSource: isLargeGenerationSource(payload),
+        completedCount: 0,
+        requestedCount: payload.count,
+      });
+      const status = await pollAsyncGenerationJob(session, payload);
+      if(status && status.status === 'expired'){
+        throw new Error('Generation job expired. Start a new quiz.');
+      }
+      return asyncStatusToOutput(status);
+    }catch(err){
+      if(!started && err && err.name !== 'AbortError'){
+        err.asyncStartFailed = true;
+      }
+      throw err;
+    }
   }
   function cleanLocalSourceText(raw){
     return cleanImportedSource(String(raw || '').replace(/^\uFEFF/, ''));
@@ -458,6 +1115,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(!statusBox) return;
     statusBox.setAttribute('data-build-state', state || 'idle');
     statusBox.textContent = String(message || '').trim();
+    syncBuildStatusVisibility(statusBox, generationStatusCard);
+  }
+  if(statusBox && statusBox.textContent.trim() === 'Add a topic or study material, then create a quiz.'){
+    setBuildStatus('idle', '');
   }
   function withMediaSource(snapshot){
     const media = ensureMediaState();
@@ -465,6 +1126,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       ...snapshot,
       sourceText: media.sourceText || '',
       sourceName: media.sourceName || '',
+      sourceReport: media.sourceReport || null,
     };
   }
   // Improve accessible label on import button
@@ -631,7 +1293,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         });
         setPrimaryAction();
         updatePrimaryHint();
-        setBuildStatus('source-ready', `Study material ready: ${file.name || 'source text'}.`);
+        setBuildStatus('source-ready', '');
         setHint(`Imported ${file.name || 'source text'}. Create a quiz from it.`);
         try { announce('Imported source ready. Create a quiz from it.', 'polite'); } catch {}
         return;
@@ -662,7 +1324,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
           });
           setPrimaryAction();
           updatePrimaryHint();
-          setBuildStatus('source-ready', `Study material ready: ${file.name || 'media'}.`);
+          setBuildStatus('source-ready', '');
           setHint(`Imported ${file.name || 'media'}. Create a quiz from it.`);
           try { announce('Imported source ready. Create a quiz from it.', 'polite'); } catch {}
         }
@@ -891,11 +1553,25 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const curr = getParamsSnapshot();
     const changed = snapshotChanged(last, curr);
     ui.genDirty = !!changed;
+    if(changed && !activeGenerationSession){
+      setGenerationStatusState('idle');
+      setGenerationProgress(0, curr.count, { visible: false });
+    }
     updatePrimaryHint();
     setPrimaryAction();
   }
   // Mark dirty when topic, count, or difficulty changes after a generation
-  topicInput?.addEventListener('input', markDirtyIfChanged);
+  topicInput?.addEventListener('input', ()=>{
+    const ui = uiState();
+    if(applyingSourceTopic){
+      ui.topicSourceDerived = true;
+      ui.topicSourceTopic = String(topicInput?.value || '').trim();
+    } else {
+      ui.topicSourceDerived = false;
+      delete ui.topicSourceTopic;
+    }
+    markDirtyIfChanged();
+  });
   countInput?.addEventListener('input', ()=>{ markDirtyIfChanged(); updateCountAvailability(); });
   difficultySlider?.addEventListener('input', markDirtyIfChanged);
   countInput?.addEventListener('focus', updateCountAvailability);
@@ -904,6 +1580,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   loadBtn?.addEventListener('click', ()=> fileInput?.click());
   fileInput?.addEventListener('change', ()=>{
     const f = fileInput.files && fileInput.files[0]; if(!f) return;
+    resetGenerationStatus({ abortActive: true });
     const reader = new FileReader();
     reader.onload = () => { const text = String(reader.result || ''); setEditorText(text); try{ setMirrorVisible(true); }catch{}; runParseFlow(text, f.name || 'Imported', ''); statusBox && (statusBox.textContent = `Loaded ${f.name} (${text.length} chars)`); };
     reader.onerror = () => { statusBox && (statusBox.textContent = 'Failed to read file'); };
@@ -919,14 +1596,16 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       'MT|Match ports to services.|1) 22;2) 53|A) SSH;B) DNS|1-A,2-B',
       'TF|Lightning never strikes the same place twice.|F',
     ].join('\n');
+    resetGenerationStatus({ abortActive: true });
     setEditorText(demo); try{ setMirrorVisible(true); }catch{}; runParseFlow(demo, 'Demo', '');
   });
 
   clearBtn?.addEventListener('click', ()=>{
+    resetGenerationStatus({ abortActive: true });
     setEditorText('');
     clearImportedSource();
     setStartButtonsDisabled(true);
-    setBuildStatus('idle', 'Cleared. Add a topic or study material, then create a quiz.');
+    setBuildStatus('idle', 'Cleared.');
     try{
       const ui = (window.EZQ.ui = window.EZQ.ui || {});
       ui.lastGeneratedParams = null;
@@ -937,9 +1616,9 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     setPrimaryAction();
     updateCountAvailability();
   });
-  loadLastBtn?.addEventListener('click', ()=>{ try{ const last = localStorage.getItem('ezq.last')||''; if(!last){ statusBox && (statusBox.textContent='No previous quiz found.'); return; } setEditorText(last); try{ setMirrorVisible(true); }catch{}; runParseFlow(last, topicInput?.value||'Last', ''); statusBox && (statusBox.textContent = 'Loaded last quiz.'); }catch{} });
+  loadLastBtn?.addEventListener('click', ()=>{ try{ const last = localStorage.getItem('ezq.last')||''; if(!last){ statusBox && (statusBox.textContent='No previous quiz found.'); return; } resetGenerationStatus({ abortActive: true }); setEditorText(last); try{ setMirrorVisible(true); }catch{}; runParseFlow(last, topicInput?.value||'Last', ''); statusBox && (statusBox.textContent = 'Loaded last quiz.'); }catch{} });
 
-  generateBtn?.addEventListener('click', async ()=>{
+  function createGenerationAttempt(){
     // Create never starts the quiz. The previous valid quiz remains available until
     // a new response validates successfully.
     const snap = getParamsSnapshot();
@@ -952,22 +1631,143 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const types = [ qtMC?.checked ? 'MC':null, qtTF?.checked? 'TF':null, qtYN?.checked? 'YN':null, qtMT?.checked? 'MT':null ].filter(Boolean);
     const difficulty = getDifficultyKey();
     const payload = buildGeneratorPayload(withMediaSource({ topic, difficulty, count: snap.count }));
+    return { payload, types };
+  }
+
+  function onNarrowSourceWarningKeydown(evt){
+    if(evt && (evt.key === 'Escape' || evt.key === 'Esc')){
+      try{ evt.preventDefault(); }catch{}
+      closeNarrowSourceWarning();
+    }
+  }
+
+  function closeNarrowSourceWarning({ restoreFocus = true } = {}){
+    if(!narrowSourceModal) return;
+    narrowSourceModal.classList.remove('is-open');
+    narrowSourceModal.setAttribute('aria-hidden', 'true');
+    try{ document.removeEventListener('keydown', onNarrowSourceWarningKeydown, true); }catch{}
+    pendingNarrowSourceGeneration = null;
+    const focusTarget = narrowSourcePreviousFocus;
+    narrowSourcePreviousFocus = null;
+    if(restoreFocus && focusTarget && typeof focusTarget.focus === 'function'){
+      try{ focusTarget.focus(); }catch{}
+    }
+  }
+
+  function openNarrowSourceWarning(attempt){
+    if(!narrowSourceModal || !attempt || !attempt.payload) return false;
+    const count = Number(attempt.payload.count || 0);
+    pendingNarrowSourceGeneration = {
+      key: narrowSourceWarningKey(attempt.payload),
+    };
+    if(narrowSourceMessage){
+      narrowSourceMessage.textContent = `This source looks narrow for a ${count}-question quiz. EZ Quiz can still try, but some questions may feel repetitive. For more variety, add more study material or choose fewer questions.`;
+    }
+    narrowSourcePreviousFocus = document.activeElement;
+    narrowSourceModal.classList.add('is-open');
+    narrowSourceModal.setAttribute('aria-hidden', 'false');
+    try{ document.addEventListener('keydown', onNarrowSourceWarningKeydown, true); }catch{}
+    const focusTarget = narrowSourceClose || narrowSourceCancel || narrowSourceConfirm;
+    if(focusTarget && typeof focusTarget.focus === 'function'){
+      try{ focusTarget.focus(); }catch{}
+    }
+    return true;
+  }
+
+  async function startGenerationFromCurrentForm(){
+    const attempt = createGenerationAttempt();
+    const warningKey = narrowSourceWarningKey(attempt.payload);
+    if(shouldWarnForNarrowSource(attempt.payload) && narrowSourceWarningConfirmedKey !== warningKey){
+      if(openNarrowSourceWarning(attempt)) return;
+    }
+    await runGenerationAttempt(attempt);
+  }
+
+  async function runGenerationAttempt({ payload, types }){
+    const session = beginGenerationSession(payload);
     try{
-      setBuildStatus('creating', payload.sourceText ? 'Creating quiz from study material...' : 'Creating quiz from topic...');
+      setBuildStatus('creating', '');
       generateBtn.disabled = true;
-      showVeil(Math.floor(Math.random()*MESSAGES.length));
-      const out = await generateWithAI(payload.topic, payload.count, generationOptions(payload, types));
+      const options = generationOptions(payload, types);
+      let out;
+      if(shouldUseAsyncGeneration(payload.count, options)){
+        try{
+          out = await runAsyncGenerationJob(session, payload, types);
+        }catch(err){
+          if(!isActiveGeneration(session.id)) return;
+          if(err && err.asyncStartFailed){
+            try{ console.debug('[ezq:async-generation] falling back to sync generation', err); }catch{}
+            setGenerationStatusState('generating', {
+              requestId: session.id,
+              metadata: formatGenerationMetadata(payload),
+              phase: 'Generating focused study questions.',
+              message: 'Async start failed. Trying the standard path.',
+              largeSource: isLargeGenerationSource(payload),
+              completedCount: 0,
+              requestedCount: payload.count,
+            });
+            out = await generateWithAI(payload.topic, payload.count, {
+              ...options,
+              signal: session.controller.signal,
+            });
+          } else {
+            throw err;
+          }
+        }
+      } else {
+        out = await generateWithAI(payload.topic, payload.count, {
+          ...options,
+          signal: session.controller.signal,
+        });
+      }
+      if(!isActiveGeneration(session.id)) return;
       const lines = out && out.lines || '';
       if(!lines){
+        if(out && out.stopped){
+          setGenerationStatusState('stopped', {
+            requestId: session.id,
+            metadata: formatGenerationMetadata(payload),
+            message: 'Generation stopped before any questions were ready.',
+            largeSource: isLargeGenerationSource(payload),
+            completedCount: 0,
+            requestedCount: payload.count,
+          });
+          setBuildStatus('idle', 'Generation stopped.');
+          return;
+        }
+        setGenerationStatusState('error', {
+          requestId: session.id,
+          metadata: formatGenerationMetadata(payload),
+          message: 'No usable quiz questions were returned.',
+          largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
+        });
         setBuildStatus('failed', 'Could not create a valid quiz. Try fewer questions, a smaller source, or Demo Set.');
-        generateBtn.disabled = false;
-        hideVeil('Nothing yet...');
         return;
       }
+      setGenerationStatusState('generating', {
+        requestId: session.id,
+        metadata: formatGenerationMetadata(payload),
+        phase: 'Generating focused study questions.',
+        message: 'Checking answer choices.',
+        largeSource: isLargeGenerationSource(payload),
+        completedCount: 0,
+        requestedCount: payload.count,
+      });
       setBuildStatus('validating', 'Checking the quiz before Start Quiz unlocks...');
       const parsed = parseEditorInput(lines);
+      if(!isActiveGeneration(session.id)) return;
       if(parsed.error || !parsed.questions.length){
         const reason = parsed.error || 'No valid quiz questions were returned.';
+        setGenerationStatusState('error', {
+          requestId: session.id,
+          metadata: formatGenerationMetadata(payload),
+          message: reason,
+          largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
+        });
         setBuildStatus('failed', `Could not create a valid quiz: ${reason}`);
         return;
       }
@@ -977,15 +1777,76 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const title = (out && out.title) ? out.title : '';
       runParseFlow(lines, payload.topic, title);
       setLastGen(payload);
+      const requested = Number(payload.count || parsed.questions.length);
+      const completed = parsed.questions.length;
+      const finalState = out && out.stopped
+        ? 'stopped'
+        : (completed > 0 && requested > completed ? 'partial' : 'success');
+      setGenerationStatusState(finalState, {
+        requestId: session.id,
+        metadata: formatGenerationMetadata(payload),
+        message: '',
+        largeSource: isLargeGenerationSource(payload),
+        completedCount: completed,
+        requestedCount: requested,
+      });
       setPrimaryAction();
     }catch(err){
+      if(!isActiveGeneration(session.id)) return;
+      if(err && err.name === 'AbortError'){
+        setGenerationStatusState('stopped', {
+          requestId: session.id,
+          metadata: formatGenerationMetadata(payload),
+          message: stoppedGenerationMessage(payload),
+          largeSource: isLargeGenerationSource(payload),
+          completedCount: 0,
+          requestedCount: payload.count,
+        });
+        setBuildStatus('idle', 'Generation stopped.');
+        return;
+      }
       const pretty = formatGenerationError(err);
+      setGenerationStatusState('error', {
+        requestId: session.id,
+        metadata: formatGenerationMetadata(payload),
+        message: pretty,
+        largeSource: isLargeGenerationSource(payload),
+        completedCount: 0,
+        requestedCount: payload.count,
+      });
       setBuildStatus('failed', `Could not create a valid quiz: ${pretty}`);
     }finally{
-      generateBtn.disabled = false;
-      hideVeil('Done');
+      narrowSourceWarningConfirmedKey = '';
+      if(isActiveGeneration(session.id)){
+        activeGenerationSession = null;
+        generateBtn.disabled = false;
+        stopGenerationStatusRotation();
+        setPrimaryAction();
+        updateCountAvailability();
+      }
+    }
+  }
+
+  narrowSourceConfirm?.addEventListener('click', ()=>{
+    const pending = pendingNarrowSourceGeneration;
+    if(!pending){
+      closeNarrowSourceWarning();
+      return;
+    }
+    narrowSourceWarningConfirmedKey = pending.key;
+    closeNarrowSourceWarning({ restoreFocus: false });
+    startGenerationFromCurrentForm();
+  });
+  narrowSourceCancel?.addEventListener('click', ()=> closeNarrowSourceWarning());
+  narrowSourceClose?.addEventListener('click', ()=> closeNarrowSourceWarning());
+  narrowSourceModal?.addEventListener('click', (evt)=>{
+    const target = evt.target;
+    if(target && target.matches && target.matches('.modal__backdrop')){
+      closeNarrowSourceWarning();
     }
   });
+
+  generateBtn?.addEventListener('click', ()=>{ startGenerationFromCurrentForm(); });
 
   // Options drop-down toggle
   function reflectOptionsFromSettings(){
@@ -1109,7 +1970,13 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
   resetDefaultsBtn?.addEventListener('click', ()=>{ if(defaultsStatus){ defaultsStatus.textContent = 'Defaults cleared.'; } });
 
   // Start button in Quiz Editor
-  startBtn2?.addEventListener('click', ()=>{ if(S.quiz?.questions?.length){ syncSettingsFromUI(); beginQuiz(); } });
+  startBtn2?.addEventListener('click', ()=>{
+    if(S.quiz?.questions?.length){
+      resetGenerationStatus({ abortActive: true });
+      syncSettingsFromUI();
+      beginQuiz();
+    }
+  });
   // Copy / Export actions in Quiz Editor
   function getMirrorText(){ return (mirror?.value || '').trim(); }
   copyPromptsBtn?.addEventListener('click', ()=>{ const t=getMirrorText(); if(!t){ setBuildStatus('idle', 'Nothing to copy. Create a quiz first.'); return; } navigator.clipboard.writeText(t).then(()=>{ statusBox && (statusBox.textContent='Copied prompts.'); }).catch(()=>{ statusBox && (statusBox.textContent='Copy failed.'); }); });
@@ -1162,7 +2029,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
   function adjustCount(delta){
     if(!countInput) return;
-    const choices = [5, 10, 15, 20].filter((value) => value <= getMaxQuestions());
+    const choices = availableCountChoices();
     const current = clampCount(countInput.value, { fallback: 10 });
     const at = choices.indexOf(current);
     const baseIndex = at >= 0 ? at : choices.findIndex((value) => value >= current);

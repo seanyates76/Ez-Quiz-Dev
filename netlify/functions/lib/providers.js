@@ -2,30 +2,185 @@
 
 const { normalizeLegacyLines } = require('./normalizer.js');
 const { cleanSourceText: cleanSourceMaterial } = require('./sourceMaterial.js');
+const { isSemanticDuplicateStem } = require('./semanticDuplicates.js');
+
+const PRIVATE_KNOWLEDGE_START = 'PRIVATE INSTRUCTOR KNOWLEDGE START';
+const PRIVATE_KNOWLEDGE_END = 'PRIVATE INSTRUCTOR KNOWLEDGE END';
+const DEFAULT_PROVIDER_TIMEOUT_MS = 22000;
+const DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS = 90000;
+
+function providerTimeoutMs(env = process.env){
+  const raw = env && (env.GENERATE_PROVIDER_TIMEOUT_MS || env.PROVIDER_TIMEOUT_MS);
+  const parsed = parseInt(raw, 10);
+  if(!Number.isFinite(parsed)) return DEFAULT_PROVIDER_TIMEOUT_MS;
+  return Math.max(1000, Math.min(26000, parsed));
+}
+
+function asyncProviderTimeoutMs(env = process.env){
+  const raw = env && (env.ASYNC_PROVIDER_TIMEOUT_MS || env.ASYNC_GENERATE_PROVIDER_TIMEOUT_MS);
+  const parsed = parseInt(raw, 10);
+  if(!Number.isFinite(parsed)) return DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS;
+  return Math.max(1000, Math.min(120000, parsed));
+}
+
+function providerTimeoutError(provider, timeoutMs){
+  const err = new Error(`${provider} provider timed out after ${timeoutMs}ms`);
+  err.status = 504;
+  err.code = 'PROVIDER_TIMEOUT';
+  return err;
+}
+
+function isProviderTimeoutError(err){
+  return !!(err && (err.code === 'PROVIDER_TIMEOUT' || err.status === 504));
+}
+
+function isAbortLikeError(err){
+  const name = String(err && err.name || '');
+  const message = String(err && err.message || '');
+  return /abort/i.test(name) || /aborted|abort/i.test(message);
+}
+
+function withTimeout(promiseFactory, timeoutMs, timeoutErrorFactory, onTimeout){
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if(settled) return;
+      settled = true;
+      try { if(typeof onTimeout === 'function') onTimeout(); } catch {}
+      reject(timeoutErrorFactory());
+    }, timeoutMs);
+
+    let promise;
+    try {
+      promise = promiseFactory();
+    } catch (err) {
+      settled = true;
+      clearTimeout(timer);
+      reject(err);
+      return;
+    }
+
+    Promise.resolve(promise).then(
+      (value) => {
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        if(settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(err);
+      }
+    );
+  });
+}
+
+function privateInstructorKnowledgeBlock(source){
+  const framedSource = String(source || '')
+    .replaceAll(PRIVATE_KNOWLEDGE_START, '[PRIVATE KNOWLEDGE START TOKEN REMOVED]')
+    .replaceAll(PRIVATE_KNOWLEDGE_END, '[PRIVATE KNOWLEDGE END TOKEN REMOVED]');
+  return [
+    `Private instructor knowledge follows. Use it only to determine subject-matter facts, vocabulary, constraints, and correct answers. It is hidden from the learner.`,
+    PRIVATE_KNOWLEDGE_START,
+    framedSource,
+    PRIVATE_KNOWLEDGE_END,
+  ].join('\n');
+}
+
+function sourceFramingInstructions(){
+  return [
+    `Learner framing: Use the private instructor knowledge only as hidden teacher knowledge for the subject matter.`,
+    `Do not mention or imply the existence of private instructor knowledge, source material, notes, lesson, documentation, provided information, provided text, workflow guidance, excerpts, handouts, readings, passages, or documents.`,
+    `Every question, answer choice, and explanation must stand alone as a normal subject-matter quiz item.`,
+    `Prefer real troubleshooting scenarios, device/config behavior questions, conceptual networking questions, command-output interpretation questions, and design/tradeoff questions.`,
+    `If a draft only makes sense by referencing the private instructor knowledge, rewrite it into one of those subject-matter frames or discard it.`,
+    `Do not use document-framing phrases such as "according to", "based solely on", "provided documentation", "provided material", or "the source material".`,
+    `MC answer choices: each option must be a complete standalone answer choice. No option may begin with a dangling connector such as "however," "because," "therefore," or "although".`,
+    `TF/YN statements: test one claim at a time. Avoid multi-claim sentences joined by "and," "while," "although," or "because" unless the relationship itself is being tested.`,
+  ].join('\n');
+}
+
+function difficultyGuidance(difficulty){
+  const diff = difficulty
+    ? String(difficulty).trim().toLowerCase().replace(/[-_\s]+/g, ' ')
+    : '';
+  const prettyDiff = diff
+    ? diff.split(/[-_\s]+/).map((w) => w ? w.charAt(0).toUpperCase() + w.slice(1) : '').join(' ')
+    : '';
+
+  if(!diff) return '';
+
+  const shared = [
+    `Difficulty target: ${prettyDiff}. Difficulty should come from the thinking required, not from dense wording.`,
+    `Use clear subject-matter language. Keep stems concise unless the scenario genuinely needs detail.`,
+    `Use technical terms when the topic requires them, but do not make the wording artificially dense.`,
+    `Avoid making questions harder by using inflated phrasing, vague abstractions, or excessive absolute traps.`,
+    `Do not overuse words like "solely", "exclusively", "guarantee", "inherently", "unequivocally", or "definitively" unless that exact absolute meaning is the concept being tested.`,
+  ];
+
+  if(diff === 'very easy'){
+    return [
+      ...shared,
+      `Very Easy: test one obvious fact, term, definition, purpose, command/function, or basic behavior. Use short direct stems and obvious distractors.`,
+    ].join('\n');
+  }
+
+  if(diff === 'easy'){
+    return [
+      ...shared,
+      `Easy: test one direct fact, definition, purpose, command/function, or basic behavior. Use short stems. Avoid trick wording.`,
+    ].join('\n');
+  }
+
+  if(diff === 'medium'){
+    return [
+      ...shared,
+      `Medium: test applied understanding. Use compact realistic scenarios that require one inference, comparison, or cause/effect link. Distractors should be plausible but not sneaky.`,
+    ].join('\n');
+  }
+
+  if(diff === 'hard'){
+    return [
+      ...shared,
+      `Hard: test applied judgment, important distinctions, cause/effect, classification, chronology, troubleshooting, design tradeoffs, or multi-step reasoning.`,
+      `Use the subject's real context.`,
+      `For technical topics, this may include device behavior, command output, configuration choices, protocols, procedures, or failure diagnosis.`,
+      `For nontechnical topics, this may include meaningful comparisons, timeline/order relationships, role/status distinctions, evidence-based interpretation, or choosing the best action in a realistic scenario.`,
+      `Prefer useful difficulty over obscure trivia. Avoid making Hard depend mainly on niche names, one-off facts, or fan-lore minutiae unless the provided material clearly emphasizes them.`,
+      `For TF/YN, do not make most questions hinge on one sneaky absolute word.`,
+    ].join('\n');
+  }
+
+  if(diff === 'expert'){
+    return [
+      ...shared,
+      `Expert: test edge cases, competing interpretations, multi-step diagnosis, subtle distinctions, or advanced subject-matter relationships.`,
+      `For technical topics, protocol/device behavior and command-output interpretation are appropriate when relevant.`,
+      `Keep language clear even when reasoning is demanding.`,
+    ].join('\n');
+  }
+
+  return [
+    ...shared,
+    `Match the requested level with appropriate reasoning depth and fair distractors.`,
+  ].join('\n');
+}
 
 // Utility: build strict prompt compatible with front-end parser
 function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
   const allowLine = `Allowed question types: ${allowed.join(', ')} (use only these).`;
-  const diff = (difficulty && String(difficulty).toLowerCase()) || '';
-  const prettyDiff = diff ? diff.split(/[-_\s]+/).map(w=> w ? w.charAt(0).toUpperCase()+w.slice(1) : '').join(' ') : '';
-  const diffLine = diff
-    ? `Difficulty guidance: scale is Very Easy < Easy < Medium < Hard < Expert. Target level: ${prettyDiff}. Match question complexity, vocabulary, and expected knowledge to this level.`
-    : '';
+  const diffLine = difficultyGuidance(difficulty);
   const avoid = Array.isArray(avoidStems) && avoidStems.length
     ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
     : '';
   const source = cleanSourceMaterial(sourceText);
-  const sourceBlock = source
-    ? [
-        `Source material is provided below. Base every question and answer on this source material; do not invent facts outside it.`,
-        `SOURCE MATERIAL START`,
-        source,
-        `SOURCE MATERIAL END`,
-      ].join('\n')
-    : '';
+  const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   return [
-    source ? `Task: Produce a quiz from the source material. Topic label: ${topic}.` : `Task: Produce a quiz about ${topic}.`,
+    source ? `Task: Produce a normal subject-matter quiz about ${topic}.` : `Task: Produce a quiz about ${topic}.`,
+    source ? sourceFramingInstructions() : '',
     sourceBlock,
     allowLine,
     diffLine,
@@ -51,22 +206,12 @@ function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
 
 function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
-  const diff = (difficulty && String(difficulty).toLowerCase()) || '';
-  const prettyDiff = diff ? diff.split(/[-_\s]+/).map(w=> w ? w.charAt(0).toUpperCase()+w.slice(1) : '').join(' ') : '';
-  const diffLine = diff
-    ? `Match difficulty to ${prettyDiff} on a scale of Very Easy < Easy < Medium < Hard < Expert.`
-    : '';
+  const diffLine = difficultyGuidance(difficulty);
   const source = cleanSourceMaterial(sourceText);
-  const sourceBlock = source
-    ? [
-        `Use only the source material below for factual content.`,
-        `SOURCE MATERIAL START`,
-        source,
-        `SOURCE MATERIAL END`,
-      ].join('\n')
-    : '';
+  const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   return [
-    source ? `You are generating a structured quiz from source material. Topic label: ${topic}.` : `You are generating a structured quiz about ${topic}.`,
+    source ? `You are generating a structured normal subject-matter quiz about ${topic}.` : `You are generating a structured quiz about ${topic}.`,
+    source ? sourceFramingInstructions() : '',
     sourceBlock,
     diffLine,
     `Allowed question types: ${allowed.join(', ')}. Use only these codes.`,
@@ -92,6 +237,75 @@ function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
   ].filter(Boolean).join('\n');
 }
 
+function normalizeLaneContract(input = {}, count, types) {
+  input = input || {};
+  const quizLane = ['TRIVIA', 'EXACT_STUDY', 'ABSTRACT_STUDY'].includes(input.quizLane) ? input.quizLane : '';
+  if (!quizLane) return null;
+  const requestedType = String(input.questionType || (Array.isArray(types) && types[0]) || '').trim().toUpperCase();
+  const questionType = /^(MC|TF|YN|MT)$/.test(requestedType) ? requestedType : 'TF';
+  const requestedCount = Math.max(1, Math.min(50, parseInt(count || input.count || 1, 10) || 1));
+  return {
+    quizLane,
+    contractFlavor: String(input.contractFlavor || 'fact_recall').trim().slice(0, 80) || 'fact_recall',
+    questionType,
+    count: requestedCount,
+    scenario: !!input.scenario,
+    curveball: !!input.curveball,
+    curveballCount: Math.max(0, Math.min(requestedCount, parseInt(input.curveballCount || (input.curveball ? 1 : 0), 10) || 0)),
+  };
+}
+
+function lineFormatForType(type) {
+  if (type === 'MC') return 'MC|Question?|A) Option 1;B) Option 2;C) Option 3;D) Option 4|A';
+  if (type === 'TF') return 'TF|A true/false statement.|T';
+  if (type === 'YN') return 'YN|A yes/no question?|Y';
+  return 'MT|Match.|1) L1;2) L2;3) L3|A) R1;B) R2;C) R3|1-A,2-B,3-C';
+}
+
+function laneTaskLine(contract) {
+  if (contract.quizLane === 'TRIVIA') return 'Create recall questions that check facts, definitions, labels, commands, or acronyms.';
+  if (contract.quizLane === 'ABSTRACT_STUDY') return 'Create conceptual study questions that check principles, comparisons, tradeoffs, or conceptual application.';
+  return `Create deterministic study questions about ${contract.contractFlavor.replace(/_/g, ' ')}.`;
+}
+
+function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText, laneContract) {
+  const contract = normalizeLaneContract(laneContract, count, types);
+  if (!contract) return '';
+  const source = cleanSourceMaterial(sourceText);
+  const avoid = Array.isArray(avoidStems) && avoidStems.length
+    ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
+    : '';
+  const curveballLine = contract.curveball
+    ? `Curveball: create exactly ${Math.max(1, contract.curveballCount)} fair expert curveball in this batch. It must be source-grounded, test an edge case, exception, misleading assumption, or hidden dependency, and have one clearly correct answer.`
+    : 'Curveball: OFF';
+  return [
+    'You are generating an EZ Quiz batch.',
+    '',
+    `Quiz lane: ${contract.quizLane}`,
+    `Contract flavor: ${contract.contractFlavor}`,
+    `Question type: ${contract.questionType}`,
+    `Count: ${contract.count}`,
+    `Scenario framing: ${contract.scenario ? 'ON' : 'OFF'}`,
+    curveballLine,
+    '',
+    'Task:',
+    `${laneTaskLine(contract)} about ${topic}.`,
+    source ? 'Use only the source excerpts below.' : '',
+    contract.scenario ? 'Keep scenarios short and answerable.' : 'Do not add scenario framing; use direct standalone stems.',
+    `Return only valid EZ Quiz ${contract.questionType} lines.`,
+    'No explanations.',
+    'No markdown.',
+    'No extra text.',
+    avoid,
+    '',
+    'Output format:',
+    lineFormatForType(contract.questionType),
+    source ? '' : '',
+    source ? 'Source excerpts:' : '',
+    source || '',
+  ].filter((line) => line !== '').join('\n');
+}
+
 function splitNormalizedLines(lines){
   if(!lines) return [];
   return String(lines)
@@ -114,42 +328,77 @@ function stemKeyFromLine(line){
     .toLowerCase();
 }
 
+function stemFromLine(line){
+  if(!line) return '';
+  const raw = String(line).trim();
+  if(!raw) return '';
+  const parts = raw.split('|');
+  return (parts.length > 1 ? parts[1] : raw).trim();
+}
+
 function outputTokenBudget(count, kind = 'legacy'){
   const n = Math.max(1, Math.min(50, parseInt(count || 10, 10) || 10));
   const perQuestion = kind === 'structured' ? 220 : 260;
   return Math.max(2500, Math.min(12000, 900 + (n * perQuestion)));
 }
 
-async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024 }){
+async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
   if(!apiKey) throw new Error('Missing GEMINI_API_KEY');
-  const { GoogleGenerativeAI } = await import('@google/generative-ai');
+  const { GoogleGenerativeAI } = require('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(apiKey);
   const m = genAI.getGenerativeModel({ model });
-  const result = await m.generateContent({
+  const controller = new AbortController();
+  const request = {
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens },
-  });
-  return (result?.response?.text?.() || '').trim();
+  };
+  try {
+    const result = await withTimeout(
+      () => m.generateContent(request, { timeout: timeoutMs, signal: controller.signal }),
+      timeoutMs,
+      () => providerTimeoutError('Gemini', timeoutMs),
+      () => controller.abort()
+    );
+    return (result?.response?.text?.() || '').trim();
+  } catch (err) {
+    if(isProviderTimeoutError(err)) throw err;
+    if(isAbortLikeError(err)) throw providerTimeoutError('Gemini', timeoutMs);
+    throw err;
+  }
 }
 
-async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800 }){
+async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
   if(!apiKey) throw new Error('Missing OPENAI_API_KEY');
-  const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: 'system', content: 'You are a quiz line generator. Follow rules exactly.' },
-        { role: 'user', content: prompt },
-      ],
-      temperature: 0.6,
-      max_tokens: maxTokens,
-    }),
-  });
+  const controller = new AbortController();
+  let resp;
+  try {
+    resp = await withTimeout(
+      () => fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: 'system', content: 'You are a quiz line generator. Follow rules exactly.' },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.6,
+          max_tokens: maxTokens,
+        }),
+        signal: controller.signal,
+      }),
+      timeoutMs,
+      () => providerTimeoutError('OpenAI', timeoutMs),
+      () => controller.abort()
+    );
+  } catch (err) {
+    if(isProviderTimeoutError(err)) throw err;
+    if(isAbortLikeError(err)) throw providerTimeoutError('OpenAI', timeoutMs);
+    throw err;
+  }
   if(!resp.ok){
     let detail = await resp.text().catch(()=>String(resp.status));
     try { detail = JSON.parse(detail); } catch {}
@@ -216,21 +465,25 @@ function echoGenerate({ topic, count, types, kind, avoidStems }){
   return out.join('\n');
 }
 
-async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems }){
+async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems, timeoutMs, laneContract }){
   const selected = (provider || (env.AI_PROVIDER || 'gemini')).toLowerCase();
   const normalizedCount = Math.max(1, Math.min(50, parseInt(count || 10, 10)));
-  const resolvedPrompt = prompt || buildPrompt(topic, normalizedCount, types, difficulty, undefined, sourceText);
+  const resolvedPrompt = prompt || buildLanePrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText, laneContract)
+    || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText);
+  const resolvedTimeoutMs = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
+    ? Number(timeoutMs)
+    : providerTimeoutMs(env);
   // [quiz-v2: hook] provider call surface — swap prompt/response handling when structured default graduates.
 
   try {
     if (selected === 'gemini') {
       const resolvedModel = model || env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025';
-      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind) });
+      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind), timeoutMs: resolvedTimeoutMs });
       return { provider: 'gemini', model: resolvedModel, text };
     }
     if (selected === 'openai') {
       const resolvedModel = model || env.OPENAI_MODEL || 'gpt-4o-mini';
-      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind) });
+      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind), timeoutMs: resolvedTimeoutMs });
       return { provider: 'openai', model: resolvedModel, text };
     }
     if (selected === 'echo') {
@@ -242,19 +495,21 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
     const e = new Error(String((err && err.message) || err));
     e.status = err && err.status;
     e.details = err && err.details;
+    e.code = err && err.code;
     throw e;
   }
 }
 
-async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText }){
+async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract }){
   const n = Math.max(1, Math.min(50, parseInt(count||10,10)));
-  const prompt = buildPrompt(topic, n, types, difficulty, avoidStems, sourceText);
-  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems });
+  const prompt = buildLanePrompt(topic, n, types, difficulty, avoidStems, sourceText, laneContract)
+    || buildPrompt(topic, n, types, difficulty, avoidStems, sourceText);
+  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems, timeoutMs: explicitProviderTimeoutMs, laneContract });
   const { title, lines } = normalizeLegacyLines(text, n);
   return { provider: usedProvider, model: usedModel, title, lines };
 }
 
-async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText }){
+async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems, providerTimeoutMs: explicitProviderTimeoutMs, laneContract }){
   const targetRaw = count == null ? 10 : count;
   let target = parseInt(targetRaw, 10);
   if(!Number.isFinite(target)) target = 10;
@@ -276,6 +531,16 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   passes = Math.max(2, Math.min(12, passes));
 
   const seen = new Set();
+  const avoidList = [];
+  if(Array.isArray(avoidStems)){
+    for(const stem of avoidStems){
+      const rawStem = String(stem || '').trim();
+      const key = stemKeyFromLine(rawStem);
+      if(!rawStem || !key || seen.has(key)) continue;
+      seen.add(key);
+      avoidList.push(rawStem);
+    }
+  }
   const collected = [];
   let resolvedTitle = '';
   let resolvedProvider = '';
@@ -284,7 +549,7 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   for(let attempt = 0; attempt < passes && collected.length < target; attempt++){
     const remaining = target - collected.length;
     const ask = Math.min(batch, remaining);
-    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: Array.from(seen), sourceText });
+    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract });
 
     if(!resolvedTitle && title) resolvedTitle = title;
     if(usedProvider) resolvedProvider = usedProvider;
@@ -294,7 +559,10 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
     for(const line of chunkLines){
       const key = stemKeyFromLine(line);
       if(!key || seen.has(key)) continue;
+      const stem = stemFromLine(line);
+      if(isSemanticDuplicateStem(stem, avoidList)) continue;
       seen.add(key);
+      if(stem) avoidList.push(stem);
       collected.push(line);
       if(collected.length >= target) break;
     }
@@ -308,4 +576,18 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   };
 }
 
-module.exports = { generateLines, generateInBatches, callProvider, buildPrompt, buildStructuredPrompt, cleanSourceMaterial, outputTokenBudget };
+module.exports = {
+  DEFAULT_ASYNC_PROVIDER_TIMEOUT_MS,
+  DEFAULT_PROVIDER_TIMEOUT_MS,
+  asyncProviderTimeoutMs,
+  generateLines,
+  generateInBatches,
+  callProvider,
+  buildLanePrompt,
+  buildPrompt,
+  buildStructuredPrompt,
+  cleanSourceMaterial,
+  outputTokenBudget,
+  providerTimeoutMs,
+  isSemanticDuplicateStem,
+};

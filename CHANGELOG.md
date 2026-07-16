@@ -1,6 +1,31 @@
 Changelog
 =========
 
+2026-07-14 — v3.6.0
+- Generation
+  - Quiz creation now runs as asynchronous jobs with bounded quiz-level lanes and compact provider contracts.
+  - Completed questions are retained across batches; stopping generation preserves everything already ready.
+  - Bounded recovery fills shortfalls when possible and returns an explicit partial quiz when it cannot reach the requested count.
+  - Public quiz lengths now include 30 and 50 questions.
+  - Topic-only quizzes now build in smaller batches for better quality while preserving requested count.
+  - Larger study material uses section-aware planning when source reports are available.
+  - Difficulty guidance is subject-agnostic across Very Easy, Easy, Medium, Hard, and Expert while preserving technical examples when relevant.
+  - Hard and Expert generation uses scenario budgets, with exactly one curveball question per Expert quiz.
+  - Questions from study material avoid references to notes, readings, passages, or source material.
+- UI
+  - The generation status card keeps a broad active title, shows the changing phase separately, and retains clear complete, partial, stopped, and failed terminal states.
+  - Determinate progress reflects completed usable questions only and keeps the true ready/requested count visible.
+  - Version-aware What's New and landing intro polish adds compact feature cards while keeping "Don't show again" behavior.
+- Import
+  - Covered release import formats with focused tests: PDF provider path, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, images, and unsupported legacy `.doc`.
+  - PDF import now reports a clearer provider-configuration message when Gemini media extraction is unavailable.
+- Update behavior
+  - Landing intro dismissal and last-seen app version are tracked separately.
+  - Users who chose “Don’t show again” can still see a one-time lightweight What’s New panel for a new app version.
+- Maintenance
+  - Version labels and package metadata prepared for v3.6.0.
+  - Asset query strings bumped to `1.5.45`; service worker cache advanced to `ezq-v1229`.
+
 2026-05-17 — v3.5.0
 - Generation
   - Create Quiz now builds first; Start Quiz unlocks only after a valid quiz is ready.

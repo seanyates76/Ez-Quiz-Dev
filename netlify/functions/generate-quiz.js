@@ -9,9 +9,19 @@
 - Requires env: GEMINI_API_KEY
   */
 
-const { generateLines, generateInBatches, callProvider, buildStructuredPrompt } = require('./lib/providers.js');
+const providers = require('./lib/providers.js');
+const {
+  generateLines,
+  generateInBatches,
+  callProvider,
+  buildStructuredPrompt,
+} = providers;
+const providerTimeoutMs = providers.providerTimeoutMs || (() => 22000);
+const asyncProviderTimeoutMs = providers.asyncProviderTimeoutMs || (() => 90000);
 const { normalizeQuizV2, parseLegacyQuestion, quizToLegacyLines } = require('./lib/normalizer.js');
-const { cleanSourceText } = require('./lib/sourceMaterial.js');
+const { normalizeGenerationPayload, sanitizeAvoidStems } = require('./lib/generationRequest.js');
+const { rateLimited, retryAfterSeconds } = require('./lib/generationRateLimit.js');
+const { timingSafeStringEqual } = require('./lib/asyncHttp.js');
 
 function parseAllowedOrigins() {
   const raw = process.env.ALLOWED_ORIGINS || '';
@@ -32,56 +42,41 @@ function makeCorsHeaders(origin) {
   return H;
 }
 
-function reply(statusCode, body, origin) {
-  const headers = makeCorsHeaders(origin);
+function normalizeHttpStatus(value, fallback = 500) {
+  const numeric = typeof value === 'number' ? value : Number(value);
+  if (!Number.isInteger(numeric) || numeric < 100 || numeric > 599) return fallback;
+  return numeric;
+}
+
+function generationFailureStatus(err, { is429 = false, isTimeout = false, fallback = 502 } = {}) {
+  if (isTimeout) return 504;
+  if (is429) return 429;
+  const status = normalizeHttpStatus(err && err.status, fallback);
+  if (status === 504) return 504;
+  if (status === 404 || status >= 500) return 502;
+  return status;
+}
+
+function errorCode(err) {
+  const code = err && err.code ? String(err.code).trim() : '';
+  return code || undefined;
+}
+
+function reply(statusCode, body, origin, extraHeaders = {}) {
+  const isJson = typeof body !== 'string';
+  const headers = {
+    ...makeCorsHeaders(origin),
+    ...(isJson ? { 'Content-Type': 'application/json' } : {}),
+    ...extraHeaders,
+  };
   return {
-    statusCode,
+    statusCode: normalizeHttpStatus(statusCode),
     headers,
-    body: typeof body === 'string' ? body : JSON.stringify(body),
+    body: isJson ? JSON.stringify(body) : body,
   };
 }
 
-// Sliding window rate limit per IP (defaults: 60 requests / 15 minutes)
-const RL = new Map(); // ip -> [timestamps]
-const DEFAULT_LIMIT = 60;
-const DEFAULT_WINDOW_MS = 15 * 60 * 1000;
-
-function toPositiveInt(value, fallback) {
-  const parsed = parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
-}
-
-const LIMIT = toPositiveInt(process.env.GENERATE_LIMIT, DEFAULT_LIMIT);
-const WINDOW_MS = toPositiveInt(process.env.GENERATE_WINDOW_MS, DEFAULT_WINDOW_MS);
-const CLIENT_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_CLIENT_MAX || process.env.CLIENT_MAX_QUESTIONS, 20)));
-const CONFIGURED_MAX = Math.max(1, Math.min(100, toPositiveInt(process.env.GENERATE_MAX_COUNT, CLIENT_MAX)));
-const MAX_COUNT = Math.min(CLIENT_MAX, CONFIGURED_MAX);
 const BEARER_TOKEN = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
-
-function clientIp(event) {
-  const h = event.headers || {};
-  const xf = h['x-forwarded-for'] || h['X-Forwarded-For'] || '';
-  const ip = (Array.isArray(xf) ? xf[0] : String(xf).split(',')[0]).trim() || h['client-ip'] || h['x-nf-client-connection-ip'] || 'unknown';
-  return String(ip);
-}
-
-function rateLimited(event) {
-  if (!LIMIT) return false;
-  const now = Date.now();
-  const ip = clientIp(event);
-  const arr = RL.get(ip) || [];
-  const fresh = arr.filter(ts => now - ts < WINDOW_MS);
-  if (fresh.length >= LIMIT) return true;
-  fresh.push(now);
-  RL.set(ip, fresh);
-  if (RL.size > 500) {
-    for (const [k, list] of RL.entries()) {
-      const keep = list.filter(ts => now - ts < WINDOW_MS);
-      if (keep.length) RL.set(k, keep); else RL.delete(k);
-    }
-  }
-  return false;
-}
 
 function authorize(event) {
   if (!BEARER_TOKEN) return true;
@@ -91,16 +86,36 @@ function authorize(event) {
   const trimmed = raw.trim();
   if (!trimmed.toLowerCase().startsWith('bearer ')) return false;
   const token = trimmed.slice(7).trim();
-  return token === BEARER_TOKEN;
+  return timingSafeStringEqual(token, BEARER_TOKEN);
+}
+
+function safeInternalLaneContract(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const quizLane = ['TRIVIA', 'EXACT_STUDY', 'ABSTRACT_STUDY'].includes(raw.quizLane) ? raw.quizLane : '';
+  const questionType = /^(MC|TF|YN|MT)$/.test(String(raw.questionType || '').toUpperCase())
+    ? String(raw.questionType).toUpperCase()
+    : '';
+  if (!quizLane || !questionType) return null;
+  return {
+    quizLane,
+    contractFlavor: String(raw.contractFlavor || '').replace(/[^a-z0-9_-]+/gi, '').slice(0, 80),
+    questionType,
+    scenario: !!raw.scenario,
+    curveball: !!raw.curveball,
+    curveballCount: Math.max(0, Math.min(50, parseInt(raw.curveballCount || 0, 10) || 0)),
+  };
 }
 
 function countQuizLines(lines) {
+  return usableQuizLines(lines).length;
+}
+
+function usableQuizLines(lines) {
   return String(lines || '')
     .split('\n')
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => !!parseLegacyQuestion(line))
-    .length;
+    .filter((line) => !!parseLegacyQuestion(line));
 }
 
 function underCountError(actual, expected) {
@@ -112,7 +127,18 @@ function underCountError(actual, expected) {
   return err;
 }
 
-exports.handler = async (event) => {
+function partialLegacyResult(result, actual, expected) {
+  return {
+    ...result,
+    lines: usableQuizLines(result && result.lines).join('\n'),
+    partial: true,
+    completedCount: actual,
+    requestedCount: expected,
+    warning: `${actual} of ${expected} questions ready.`,
+  };
+}
+
+async function handleGenerateQuiz(event, options = {}) {
   const allowedOrigins = parseAllowedOrigins();
   const origin = getOrigin(event.headers);
   const originAllowed = !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin);
@@ -128,14 +154,15 @@ exports.handler = async (event) => {
 
   if (event.httpMethod !== 'POST') return reply(405, { error: 'Method Not Allowed' }, responseOrigin);
 
-  if (!authorize(event)) {
+  const trustedInternalRequest = options.trustedInternalRequest === true;
+  if (!trustedInternalRequest && !authorize(event)) {
     const res = reply(401, { error: 'Unauthorized' }, responseOrigin);
     res.headers['WWW-Authenticate'] = 'Bearer';
     return res;
   }
 
-  if (rateLimited(event)) {
-    const retry = Math.ceil(WINDOW_MS / 1000);
+  if (!options.skipRateLimit && rateLimited(event)) {
+    const retry = retryAfterSeconds();
     const res = reply(429, { error: 'Rate limited' }, responseOrigin);
     res.headers['Retry-After'] = String(retry);
     return res;
@@ -146,43 +173,31 @@ exports.handler = async (event) => {
     return reply(400, { error: 'Invalid JSON' }, responseOrigin);
   }
 
-  // Normalization + validation (non‑breaking)
-  const topicRaw = (payload.topic == null ? '' : String(payload.topic)).trim();
-  const topic = topicRaw || 'General knowledge';
-  const sourceText = cleanSourceText(payload.sourceText);
-  const sourceName = String(payload.sourceName || '').trim().slice(0, 160);
-
-  let count = payload.count;
-  if (count == null) { count = 10; }
-  const parsedCount = parseInt(count, 10);
-  if (!Number.isFinite(parsedCount)) {
-    return reply(400, { error: `Invalid count: must be a number between 1 and ${MAX_COUNT}` }, responseOrigin);
-  }
-  count = Math.max(1, Math.min(MAX_COUNT, parsedCount));
-
-  let types = undefined;
-  if (payload.types !== undefined) {
-    if (!Array.isArray(payload.types)) {
-      return reply(400, { error: 'Invalid types: must be an array of MC|TF|YN|MT' }, responseOrigin);
-    }
-    const filtered = payload.types.filter(t => /^(MC|TF|YN|MT)$/i.test(String(t)));
-    if (payload.types.length && filtered.length === 0) {
-      return reply(400, { error: 'Invalid types: use MC, TF, YN, MT' }, responseOrigin);
-    }
-    types = filtered;
+  let normalized;
+  try {
+    normalized = normalizeGenerationPayload(payload, {
+      env: process.env,
+      queryStringParameters: event.queryStringParameters,
+      headers: event.headers,
+    });
+  } catch (err) {
+    return reply(normalizeHttpStatus(err && err.status, 400), err && err.body ? err.body : { error: 'Invalid request' }, responseOrigin);
   }
 
-  const difficulty = (payload.difficulty && String(payload.difficulty).toLowerCase()) || undefined;
-  const provider = String(payload.provider || process.env.AI_PROVIDER || 'gemini');
-  const model = String(payload.model || '');
-
-  const responseMode = String(process.env.QUIZ_RESPONSE || '').toLowerCase();
-  const useV2 = responseMode === 'v2';
-  const queryFormat = (event.queryStringParameters && event.queryStringParameters.format) || '';
-  const headerFormat = (event.headers && (event.headers['x-quiz-format'] || event.headers['X-Quiz-Format'])) || '';
-  const requestedFormat = String(payload.format || headerFormat || queryFormat).toLowerCase();
-  const wantsLegacyOnly = requestedFormat === 'legacy-lines';
-  const wantsStructured = useV2 && !wantsLegacyOnly && (requestedFormat === 'quiz-json' || requestedFormat === 'quiz-v2' || requestedFormat === 'json');
+  const {
+    topic,
+    count,
+    sourceText,
+    sourceName,
+    types,
+    difficulty,
+    provider,
+    model,
+    avoidStems,
+    wantsLegacyOnly,
+    wantsStructured,
+  } = normalized;
+  const laneContract = trustedInternalRequest ? safeInternalLaneContract(options.laneContract) : null;
   const structuredPrompt = wantsStructured ? buildStructuredPrompt(topic, count, types, difficulty, sourceText) : null;
   // [quiz-v2: hook] structured payload remains opt-in; default path keeps legacy lines for compatibility.
 
@@ -209,6 +224,25 @@ exports.handler = async (event) => {
     return response;
   }
 
+  function buildLegacyResponse(result, meta = {}) {
+    const lines = usableQuizLines(result && result.lines).slice(0, count);
+    const body = {
+      ...meta,
+      title: result.title,
+      lines: lines.join('\n'),
+      provider: result.provider,
+      model: result.model,
+    };
+    if (result.partial) {
+      body.partial = true;
+      body.completedCount = result.completedCount;
+      body.requestedCount = result.requestedCount;
+      body.warning = result.warning;
+    }
+    if (sourceText) body.source = { name: sourceName, charCount: sourceText.length };
+    return body;
+  }
+
   // Timeout guard so the function never hangs on upstream calls
   function withTimeout(promise, ms) {
     return new Promise((resolve, reject) => {
@@ -217,7 +251,15 @@ exports.handler = async (event) => {
     });
   }
 
-  const TIMEOUT_MS = Math.max(8000, Math.min(30000, parseInt(process.env.GENERATE_TIMEOUT_MS || '25000', 10)));
+  const asyncWorkerMode = !!(options.asyncWorker || options.timeoutMode === 'async-worker');
+  const providerCallTimeoutMs = asyncWorkerMode
+    ? asyncProviderTimeoutMs(process.env)
+    : providerTimeoutMs(process.env);
+  const syncTimeoutMs = Math.max(8000, Math.min(30000, parseInt(process.env.GENERATE_TIMEOUT_MS || '25000', 10)));
+  const asyncTimeoutRaw = parseInt(process.env.ASYNC_GENERATE_TIMEOUT_MS || process.env.ASYNC_FUNCTION_TIMEOUT_MS || '', 10);
+  const TIMEOUT_MS = asyncWorkerMode
+    ? Math.max(providerCallTimeoutMs + 1000, Math.min(125000, Number.isFinite(asyncTimeoutRaw) ? asyncTimeoutRaw : providerCallTimeoutMs + 5000))
+    : syncTimeoutMs;
 
   const corsHeaders = makeCorsHeaders(responseOrigin);
   const selectGenerator = (providerName) => {
@@ -226,21 +268,28 @@ exports.handler = async (event) => {
   };
   const runGeneratorExact = async (args) => {
     let generator = selectGenerator(args.provider);
-    let result = await withTimeout(generator(args), TIMEOUT_MS);
+    let result = await withTimeout(generator({ ...args, providerTimeoutMs: providerCallTimeoutMs }), TIMEOUT_MS);
     let actual = countQuizLines(result.lines);
+    let bestPartial = actual > 0 ? { result, actual } : null;
     if (actual < count && generator !== generateInBatches) {
       generator = generateInBatches;
-      result = await withTimeout(generator(args), TIMEOUT_MS);
+      result = await withTimeout(generator({ ...args, providerTimeoutMs: providerCallTimeoutMs }), TIMEOUT_MS);
       actual = countQuizLines(result.lines);
+      if (actual > (bestPartial ? bestPartial.actual : 0)) {
+        bestPartial = { result, actual };
+      }
     }
-    if (actual < count) throw underCountError(actual, count);
+    if (actual < count) {
+      if (bestPartial) return partialLegacyResult(bestPartial.result, bestPartial.actual, count);
+      throw underCountError(actual, count);
+    }
     return result;
   };
 
   try {
     if(wantsStructured){
       const primary = await withTimeout(
-        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText }),
+        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText, timeoutMs: providerCallTimeoutMs }),
         TIMEOUT_MS
       );
       const quiz = normalizeQuizV2(primary.text, { topic, count, types });
@@ -252,16 +301,18 @@ exports.handler = async (event) => {
       };
     }
 
-    const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, env: process.env });
+    const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, laneContract, env: process.env });
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
+      body: JSON.stringify(buildLegacyResponse(result, { fallbackUsed: false })),
     };
   } catch (err) {
     const msg = String((err && err.message) || err || 'Error');
-    const is429 = msg.includes('429') || /quota|rate limit/i.test(msg) || (err && err.status === 429);
-    const isTimeout = err && (err.status === 504 || /timeout/i.test(msg));
+    const errStatus = normalizeHttpStatus(err && err.status, 0);
+    const errCode = errorCode(err);
+    const is429 = msg.includes('429') || /quota|rate limit/i.test(msg) || errStatus === 429;
+    const isTimeout = err && (errStatus === 504 || errCode === 'PROVIDER_TIMEOUT' || /timeout/i.test(msg));
 
     // Fallback to Gemini if primary provider failed and Gemini credentials exist
     const primary = (provider || '').toLowerCase();
@@ -270,7 +321,7 @@ exports.handler = async (event) => {
       if (canFallbackToGemini && !isTimeout) {
         try {
           const fallback = await withTimeout(
-            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText }),
+            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText, timeoutMs: providerCallTimeoutMs }),
             TIMEOUT_MS
           );
           const fallbackLen = typeof fallback.text === 'string' ? fallback.text.length : 0;
@@ -292,67 +343,97 @@ exports.handler = async (event) => {
         } catch (fallbackErr) {
           console.warn('[quiz-v2]', { reason: 'provider-fallback-failed', len: 0 });
           const fbMsg = String((fallbackErr && fallbackErr.message) || fallbackErr || 'Error');
-          return {
-            statusCode: isTimeout ? 504 : ((err && err.status) || (fallbackErr && fallbackErr.status) || (is429 ? 429 : 502)),
-            headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-            body: JSON.stringify({ error: 'Generation failed', details: msg, fallback: { tried: 'gemini', details: fbMsg } }),
-          };
+          const fallbackStatus = generationFailureStatus(fallbackErr);
+          return reply(
+            generationFailureStatus(err, { is429, isTimeout, fallback: fallbackStatus }),
+            { error: 'Generation failed', details: msg, provider, code: errorCode(err), fallback: { tried: 'gemini', details: fbMsg, code: errorCode(fallbackErr) } },
+            responseOrigin,
+            { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+          );
         }
       }
 
-      const statusFromError = err && err.status;
-      let statusCode = isTimeout ? 504 : (is429 ? 429 : statusFromError || 502);
-      if (statusCode === 404) {
-        statusCode = 502;
+      const statusCode = generationFailureStatus(err, { is429, isTimeout });
+      if (isTimeout) {
+        return reply(
+          statusCode,
+          { error: 'Generation timed out', details: msg, provider, code: errCode },
+          responseOrigin,
+          { 'Retry-After': '15' }
+        );
       }
 
       // Structured path failed entirely; fall back to legacy generator so the UI still renders a quiz.
       try {
-        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, env: process.env });
+        const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, laneContract, env: process.env });
         console.warn('[quiz-v2]', { reason: 'structured-fallback-legacy' });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: false, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
+          body: JSON.stringify(buildLegacyResponse(result, { fallbackUsed: false })),
         };
       } catch (legacyErr) {
         const legacyMsg = String((legacyErr && legacyErr.message) || legacyErr || 'Error');
-        return {
+        return reply(
           statusCode,
-          headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-          body: JSON.stringify({ error: isTimeout ? 'Generation timed out' : 'Generation failed', details: legacyMsg, provider }),
-        };
+          { error: isTimeout ? 'Generation timed out' : 'Generation failed', details: legacyMsg, provider, code: errorCode(legacyErr) || errorCode(err) },
+          responseOrigin,
+          { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+        );
       }
     }
 
     if (canFallbackToGemini && !isTimeout) {
       try {
-        const { title, lines, provider: usedProvider, model: usedModel } = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, env: process.env });
+        const result = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, avoidStems, laneContract, env: process.env });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title, lines, provider: usedProvider, model: usedModel, fallbackUsed: true, fallbackFrom: primary, errorPrimary: msg, ...(sourceText ? { source: { name: sourceName, charCount: sourceText.length } } : {}) }),
+          body: JSON.stringify(buildLegacyResponse(result, { fallbackUsed: true, fallbackFrom: primary, errorPrimary: msg })),
         };
       } catch (fallbackErr) {
         const fbMsg = String((fallbackErr && fallbackErr.message) || fallbackErr || 'Error');
-        return {
-          statusCode: isTimeout ? 504 : ((err && err.status) || (fallbackErr && fallbackErr.status) || (is429 ? 429 : 502)),
-          headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-          body: JSON.stringify({ error: 'Generation failed', details: msg, fallback: { tried: 'gemini', details: fbMsg } }),
-        };
+        const fallbackStatus = generationFailureStatus(fallbackErr);
+        return reply(
+          generationFailureStatus(err, { is429, isTimeout, fallback: fallbackStatus }),
+          { error: 'Generation failed', details: msg, provider, code: errorCode(err), fallback: { tried: 'gemini', details: fbMsg, code: errorCode(fallbackErr) } },
+          responseOrigin,
+          { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+        );
       }
     }
 
-    const statusFromError = err && err.status;
-    let statusCode = isTimeout ? 504 : (is429 ? 429 : statusFromError || 502);
-    if (statusCode === 404) {
-      statusCode = 502;
-    }
-
-    return {
-      statusCode,
-      headers: { ...corsHeaders, ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) },
-      body: JSON.stringify({ error: isTimeout ? 'Generation timed out' : 'Generation failed', details: msg, provider }),
-    };
+    return reply(
+      generationFailureStatus(err, { is429, isTimeout }),
+      { error: isTimeout ? 'Generation timed out' : 'Generation failed', details: msg, provider, code: errorCode(err) },
+      responseOrigin,
+      { ...(is429 ? { 'Retry-After': '30' } : {}), ...(isTimeout ? { 'Retry-After': '15' } : {}) }
+    );
   }
+}
+
+exports.handler = async (event) => {
+  try {
+    return await handleGenerateQuiz(event);
+  } catch (err) {
+    const allowedOrigins = parseAllowedOrigins();
+    const origin = getOrigin(event && event.headers);
+    const originAllowed = !origin || allowedOrigins.length === 0 || allowedOrigins.includes(origin);
+    const responseOrigin = originAllowed ? (origin || (allowedOrigins.length === 0 ? '*' : '')) : '';
+    const msg = String((err && err.message) || err || 'Unhandled error');
+    return reply(
+      normalizeHttpStatus(err && err.status, 500),
+      { error: 'Generation failed', details: msg, code: errorCode(err) || 'UNHANDLED_GENERATE_QUIZ_ERROR' },
+      responseOrigin
+    );
+  }
+};
+
+exports.handleGenerateQuiz = handleGenerateQuiz;
+exports._private = {
+  countQuizLines,
+  handleGenerateQuiz,
+  safeInternalLaneContract,
+  sanitizeAvoidStems,
+  usableQuizLines,
 };

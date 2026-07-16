@@ -1,16 +1,49 @@
 Release-Prep Notes
 ==================
 
-Date: 2026-05-15
+Date: 2026-07-14
+
+EZ Quiz Web v3.6.0 release review notes
+---------------------------------------
 
 Current-state source of truth
 - Create Quiz builds a valid quiz; Start Quiz begins taking it.
-- Public quiz lengths are 5, 10, 15, and 20 questions.
-- Larger 30/50-question generation is future reliability work.
-- For best results, paste a focused section of notes, a lesson, or a short study guide. Full course notes may work better when split into smaller chunks.
+- Generation runs as asynchronous jobs with bounded quiz-level lanes and compact provider contracts.
+- Completed usable questions are retained between batches, and Stop generation preserves everything already ready.
+- Bounded recovery fills remaining questions when possible and returns an explicit partial state when it cannot reach the requested count.
+- The generation status card keeps the broad active title "Building your quiz...", shows the changing phase in its detail line, and uses broad complete, partial, stopped, and failed terminal titles.
+- The progress bar and bottom count are based only on completed usable questions divided by the requested count.
+- Public quiz lengths are 5, 10, 15, 20, 30, and 50 questions.
+- Topic-only quizzes build in smaller batches for better quality while preserving requested count.
+- Larger study material uses section-aware planning when source reports are available.
+- Difficulty guidance is subject-agnostic while keeping technical examples when relevant.
+- Hard and Expert generation uses scenario budgets, with exactly one curveball question per Expert quiz.
+- Questions from study material should read like normal quiz items and avoid mentioning notes, readings, passages, or source material.
+- The landing intro has version-aware What's New behavior with compact feature cards; "Don't show again" remains unchanged.
+- Supported import formats: PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.
+- PDF/image extraction requires a configured media provider; DOCX and text-like formats are deterministic first. If media extraction is unavailable, the app should show the provider-configuration message.
+
+Deferred BYOK plan
+- Add a Settings section for a user-provided Gemini API key.
+- Link to Google’s official Gemini API key documentation: https://ai.google.dev/gemini-api/docs/api-key
+- Require an explicit “Remember on this device” choice before storing the key.
+- Store remembered keys locally only, never in repo code, analytics, logs, feedback, or Netlify env.
+- Provide a visible “Forget key” control.
+- Make Reset App clear the remembered key.
+- Show honest privacy copy: requests sent with the remembered key go directly to Google’s Gemini API under the user’s Google project/quota/billing rules.
+- Expand source caps only when BYOK is enabled and validated.
+- Security risks to handle before implementation: key theft from local device/browser profile, accidental logs, extension access to local storage, quota/billing abuse, and unclear responsibility if a user shares a device.
+
+Docs and media still needed
+- Screenshot/GIF: 50-question generation flow.
+- Screenshot/GIF: generation status card during generation and in ready/canceled/error states.
+- Screenshot/GIF: What's New feature cards in the landing intro.
+- Screenshot/GIF: supported import formats and source-ready message.
+- Screenshot/GIF: source too large/provider unavailable message.
+- Later, if BYOK ships: Settings key field, Remember on this device, Forget key, and Reset App behavior.
 
 Beta hardening notes
-- Study-material import and Results explanations are promoted into the production-facing flow.
+- Study-material import and Results explanations are production-facing flow.
 - The `/beta` route remains available for separate experimental endpoints such as MCP.
 
 EZ Quiz Web v3.3

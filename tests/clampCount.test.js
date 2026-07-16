@@ -66,7 +66,7 @@ describe('clampCount', () => {
     global.window = undefined;
     global.__EZQ__ = undefined;
     try {
-      expect(getMaxQuestions()).toBe(20);
+      expect(getMaxQuestions()).toBe(50);
     } finally {
       global.window = savedWindow;
       global.__EZQ__ = savedGlobalEzq;

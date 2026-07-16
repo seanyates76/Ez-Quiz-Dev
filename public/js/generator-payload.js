@@ -1,6 +1,6 @@
 import { clampCount } from './utils.js';
 
-const MAX_SOURCE_TEXT_CHARS = 30000;
+const MAX_SOURCE_TEXT_CHARS = 60000;
 
 function cleanSourceText(raw) {
   return String(raw || '')
@@ -10,6 +10,10 @@ function cleanSourceText(raw) {
     .filter(Boolean)
     .join('\n')
     .slice(0, MAX_SOURCE_TEXT_CHARS);
+}
+
+function isUsableSourceReport(report) {
+  return !!(report && typeof report === 'object' && Array.isArray(report.sections));
 }
 
 export function buildGeneratorPayload(snapshot = {}) {
@@ -24,6 +28,7 @@ export function buildGeneratorPayload(snapshot = {}) {
     payload.sourceText = sourceText;
     const sourceName = String(snapshot.sourceName || '').trim();
     if (sourceName) payload.sourceName = sourceName.slice(0, 160);
+    if (isUsableSourceReport(snapshot.sourceReport)) payload.sourceReport = snapshot.sourceReport;
   }
   return payload;
 }
