@@ -207,7 +207,6 @@ function scrubStoredJobPayload(job) {
   const {
     workerLeaseId,
     workerLeaseExpiresAt,
-    workerTokenHash,
     ...safeJob
   } = job || {};
   return {

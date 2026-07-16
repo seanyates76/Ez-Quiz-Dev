@@ -9,14 +9,14 @@ import {
   startAsyncGeneration,
   stopAsyncGeneration,
   triggerAsyncGeneration,
-} from './api.js?v=1.5.42';
+} from './api.js?v=1.5.43';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.42';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.42';
-import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.42';
+import { announce } from './a11y-announcer.js?v=1.5.43';
+import { buildGeneratorPayload } from './generator-payload.js?v=1.5.43';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.43';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
 
@@ -454,7 +454,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     if(session.stopRequest) return session.stopRequest;
     let request;
     try{
-      request = Promise.resolve(stopAsyncGeneration(session.jobId));
+      request = Promise.resolve(stopAsyncGeneration(session.jobId, { workerToken: session.workerToken }));
     }catch(err){
       request = Promise.reject(err);
     }
@@ -930,7 +930,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     while(isActiveGeneration(session.id)){
       let status;
       try{
-        status = await getAsyncGenerationStatus(session.jobId, { signal: session.controller.signal });
+        status = await getAsyncGenerationStatus(session.jobId, {
+          signal: session.controller.signal,
+          workerToken: session.workerToken,
+        });
         pollingFailures = 0;
       }catch(err){
         if(!isActiveGeneration(session.id)){
@@ -1012,11 +1015,22 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       session.jobId = start && start.jobId;
       session.workerToken = start && start.workerToken;
       if(!session.jobId) throw new Error('Async generation did not return a job ID.');
-      triggerAsyncGeneration(session.jobId, session.workerToken).then((result) => {
-        if(result && result.sent === false) {
-          try{ console.debug('[ezq:async-generation] worker trigger failed', result); }catch{}
+      const triggerResult = await triggerAsyncGeneration(session.jobId, session.workerToken);
+      if(!isActiveGeneration(session.id)){
+        const aborted = new Error('Aborted');
+        aborted.name = 'AbortError';
+        throw aborted;
+      }
+      if(!triggerResult || triggerResult.sent === false){
+        try{ console.debug('[ezq:async-generation] worker trigger failed', triggerResult); }catch{}
+        try{ await requestAsyncGenerationStop(session); }catch(err){
+          try{ console.debug('[ezq:async-generation] queued job cleanup failed', err); }catch{}
         }
-      });
+        const err = new Error('Could not start the async generation worker. Trying the standard path.');
+        err.name = 'AsyncGenerationWorkerStartError';
+        err.asyncStartFailed = true;
+        throw err;
+      }
       setGenerationStatusState('generating', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload),

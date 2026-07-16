@@ -49,15 +49,19 @@ function reply(statusCode, body, origin, extraHeaders = {}) {
   };
 }
 
+function bearerToken(event) {
+  const h = event && event.headers || {};
+  const raw = h.authorization || h.Authorization || '';
+  if (!raw || typeof raw !== 'string') return '';
+  const trimmed = raw.trim();
+  if (!trimmed.toLowerCase().startsWith('bearer ')) return '';
+  return trimmed.slice(7).trim();
+}
+
 function authorize(event) {
   const token = process.env.GENERATE_BEARER_TOKEN ? String(process.env.GENERATE_BEARER_TOKEN) : '';
   if (!token) return true;
-  const h = event && event.headers || {};
-  const raw = h.authorization || h.Authorization || '';
-  if (!raw || typeof raw !== 'string') return false;
-  const trimmed = raw.trim();
-  if (!trimmed.toLowerCase().startsWith('bearer ')) return false;
-  return trimmed.slice(7).trim() === token;
+  return bearerToken(event) === token;
 }
 
 function parseJsonBody(event) {
@@ -98,6 +102,7 @@ function handleCors(event, allowedMethods, { requireAuth = true } = {}) {
 
 module.exports = {
   authorize,
+  bearerToken,
   handleCors,
   normalizeHttpStatus,
   parseJsonBody,

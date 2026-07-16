@@ -1004,6 +1004,35 @@ describe('generator media import overlap regression', () => {
     expect(document.getElementById('startBtn').disabled).toBe(false);
   });
 
+  test('failed async worker kickoff stops the queued job and falls back instead of polling forever', async () => {
+    setMediaSource({
+      text: 'R'.repeat(25000),
+      name: 'retry-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    triggerAsyncGeneration.mockResolvedValue({ sent: false, mode: 'fetch', status: 503 });
+
+    document.getElementById('topicInput').value = 'worker retry';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flush();
+    await flush();
+    await flush();
+
+    expect(triggerAsyncGeneration).toHaveBeenCalledWith(
+      'qj_abcdefghijklmnopqrstuvwxyz123456',
+      'worker_capability_abcdefghijklmnopqrstuvwxyz'
+    );
+    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456', {
+      workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+    });
+    expect(getAsyncGenerationStatus).not.toHaveBeenCalled();
+    expect(generateWithAI).toHaveBeenCalledWith('worker retry', 50, expect.objectContaining({
+      sourceText: 'R'.repeat(25000),
+    }));
+  });
+
   test('async partial result enables Start with usable questions', async () => {
     const lines = generatedTfLines(12);
     setMediaSource({
@@ -1150,7 +1179,9 @@ describe('generator media import overlap regression', () => {
     document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
     await flush();
-    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456', {
+      workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+    });
 
     firstStatus.resolve({
       status: 'running',
@@ -1188,7 +1219,9 @@ describe('generator media import overlap regression', () => {
     await flush();
 
     expect(stopAsyncGeneration).toHaveBeenCalledTimes(1);
-    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456', {
+      workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+    });
     expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('idle');
     expect(document.getElementById('editor').value).toBe('');
 
@@ -1237,7 +1270,9 @@ describe('generator media import overlap regression', () => {
     document.getElementById('cancelGenerationBtn').dispatchEvent(new Event('click', { bubbles: true }));
     await flush();
     await flush();
-    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456');
+    expect(stopAsyncGeneration).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz123456', {
+      workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+    });
 
     firstStatus.resolve({
       status: 'running',

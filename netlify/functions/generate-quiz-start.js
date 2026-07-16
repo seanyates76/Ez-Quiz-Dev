@@ -12,7 +12,10 @@ const { normalizeGenerationPayload } = require('./lib/generationRequest.js');
 const { rateLimited, retryAfterSeconds } = require('./lib/generationRateLimit.js');
 
 exports.handler = async (event) => {
-  const cors = handleCors(event, ['POST']);
+  // Browser clients cannot safely receive the optional shared generation bearer.
+  // This endpoint is origin-checked and rate-limited; the returned high-entropy
+  // job ID and one-time worker capability protect the remaining job flow.
+  const cors = handleCors(event, ['POST'], { requireAuth: false });
   if (cors.done) return cors.response;
 
   if (rateLimited(event)) {

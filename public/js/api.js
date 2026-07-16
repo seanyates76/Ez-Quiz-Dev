@@ -867,50 +867,72 @@ export async function startAsyncGeneration(topic, count, opts = {}){
   }
 }
 
-export function triggerAsyncGeneration(jobId, workerToken){
-  const body = { jobId };
-  const capability = String(workerToken || '').trim();
-  if(capability) body.workerToken = capability;
-  const payload = JSON.stringify(body);
+const ASYNC_WORKER_TRIGGER_MAX_ATTEMPTS = 3;
+
+function waitForWorkerTriggerRetry(attempt){
+  return new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+}
+
+async function triggerAsyncGenerationOnce(payload){
   try{
     if(typeof navigator !== 'undefined' && navigator && typeof navigator.sendBeacon === 'function'){
       const blob = new Blob([payload], { type: 'application/json' });
       if(navigator.sendBeacon(ASYNC_GENERATION_ENDPOINTS.worker, blob)) {
-        return Promise.resolve({ sent: true, mode: 'beacon' });
+        return { sent: true, mode: 'beacon' };
       }
     }
   }catch{}
   try{
-    return fetch(ASYNC_GENERATION_ENDPOINTS.worker, {
+    const res = await fetch(ASYNC_GENERATION_ENDPOINTS.worker, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: payload,
       keepalive: true,
-    }).then((res) => ({ sent: res.ok, mode: 'fetch', status: res.status }))
-      .catch((err) => ({ sent: false, mode: 'fetch', error: String(err && err.message || err || 'Network error') }));
+    });
+    return { sent: res.ok, mode: 'fetch', status: res.status };
   }catch(err){
-    return Promise.resolve({ sent: false, mode: 'fetch', error: String(err && err.message || err || 'Network error') });
+    return { sent: false, mode: 'fetch', error: String(err && err.message || err || 'Network error') };
   }
 }
 
-export async function getAsyncGenerationStatus(jobId, { signal } = {}){
+export async function triggerAsyncGeneration(jobId, workerToken){
+  const body = { jobId };
+  const capability = String(workerToken || '').trim();
+  if(capability) body.workerToken = capability;
+  const payload = JSON.stringify(body);
+  let result = { sent: false, mode: 'fetch', error: 'Worker trigger was not attempted.' };
+  for(let attempt = 1; attempt <= ASYNC_WORKER_TRIGGER_MAX_ATTEMPTS; attempt += 1){
+    result = await triggerAsyncGenerationOnce(payload);
+    if(result.sent) return result;
+    if(attempt < ASYNC_WORKER_TRIGGER_MAX_ATTEMPTS) await waitForWorkerTriggerRetry(attempt);
+  }
+  return result;
+}
+
+export async function getAsyncGenerationStatus(jobId, { signal, workerToken } = {}){
   const url = `${ASYNC_GENERATION_ENDPOINTS.status}?jobId=${encodeURIComponent(String(jobId || ''))}`;
+  const capability = String(workerToken || '').trim();
+  const headers = { 'Accept': 'application/json' };
+  if(capability) headers.Authorization = `Bearer ${capability}`;
   const res = await fetch(url, {
     method: 'GET',
-    headers: { 'Accept': 'application/json' },
+    headers,
     signal,
   });
   return parseJsonResponse(res, [410]);
 }
 
-export async function stopAsyncGeneration(jobId, { signal } = {}){
+export async function stopAsyncGeneration(jobId, { signal, workerToken } = {}){
   const endpoints = [ASYNC_GENERATION_ENDPOINTS.stop, ASYNC_GENERATION_ENDPOINTS.cancel];
   let lastError = null;
   for(let i = 0; i < endpoints.length; i += 1){
     try{
+      const capability = String(workerToken || '').trim();
+      const headers = { 'Content-Type': 'application/json' };
+      if(capability) headers.Authorization = `Bearer ${capability}`;
       const res = await fetch(endpoints[i], {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ jobId }),
         signal,
       });

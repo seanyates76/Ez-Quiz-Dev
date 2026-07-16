@@ -256,7 +256,78 @@ describe('async generation endpoints and job store', () => {
     expect(acceptedBody.completedCount).toBe(1);
     expect(JSON.stringify(acceptedBody)).not.toContain(started.workerToken);
     expect(acceptedBody).not.toHaveProperty('workerTokenHash');
-    expect(stored).not.toHaveProperty('workerTokenHash');
+    expect(stored.workerTokenHash).toBe(stillQueued.workerTokenHash);
+  });
+
+  test('bearer-protected deployments keep browser start, status, and stop usable', async () => {
+    process.env.GENERATE_BEARER_TOKEN = 'test-browser-flow-secret';
+    jest.resetModules();
+    const { handler: start } = require('../generate-quiz-start.js');
+    const { handler: status } = require('../generate-quiz-status.js');
+    const { handler: stop } = require('../generate-quiz-stop.js');
+
+    const startRes = await start(event({
+      topic: 'Protected browser flow',
+      count: 1,
+      provider: 'echo',
+      types: ['TF'],
+    }));
+    const started = json(startRes);
+    const deniedStatus = await status({
+      httpMethod: 'GET',
+      headers: {},
+      queryStringParameters: { jobId: started.jobId },
+    });
+    const authHeaders = { Authorization: `Bearer ${started.workerToken}` };
+    const statusRes = await status({
+      httpMethod: 'GET',
+      headers: authHeaders,
+      queryStringParameters: { jobId: started.jobId },
+    });
+    const deniedStop = await stop(event({ jobId: started.jobId }));
+    const stopRes = await stop(event({ jobId: started.jobId }, { headers: authHeaders }));
+    const terminalStatus = await status({
+      httpMethod: 'GET',
+      headers: authHeaders,
+      queryStringParameters: { jobId: started.jobId },
+    });
+
+    expect(startRes.statusCode).toBe(202);
+    expect(started.jobId).toMatch(/^qj_[A-Za-z0-9_-]+$/);
+    expect(deniedStatus.statusCode).toBe(401);
+    expect(statusRes.statusCode).toBe(200);
+    expect(json(statusRes)).toMatchObject({ jobId: started.jobId, status: 'queued' });
+    expect(deniedStop.statusCode).toBe(401);
+    expect(stopRes.statusCode).toBe(200);
+    expect(json(stopRes)).toMatchObject({ jobId: started.jobId, status: 'stopped', stopped: true });
+    expect(terminalStatus.statusCode).toBe(200);
+    expect(json(terminalStatus)).toMatchObject({ jobId: started.jobId, status: 'stopped', stopped: true });
+  });
+
+  test('topic-only async jobs preserve explicitly selected question types', async () => {
+    const { createGenerationJobStore } = require('../lib/asyncJobStore.js');
+    const { buildPlannedBatches } = require('../lib/asyncGenerationPlanner.js');
+    const { processGenerationJob } = require('../lib/asyncGenerationWorker.js');
+    const store = createGenerationJobStore({ env: process.env });
+    const plannedBatches = buildPlannedBatches({
+      topic: 'Ports',
+      count: 5,
+      types: ['YN'],
+      difficulty: 'medium',
+      sourceText: '',
+    });
+    const job = await store.createJob({
+      topic: 'Ports',
+      requestedCount: 5,
+      options: { topic: 'Ports', count: 5, types: ['YN'], provider: 'echo' },
+      plannedBatches,
+    });
+
+    const done = await processGenerationJob(job.jobId, { store, workerId: 'topic-type-test' });
+
+    expect(done.status).toBe('complete');
+    expect(done.questions).toHaveLength(5);
+    expect(done.questions.every((line) => line.startsWith('YN|'))).toBe(true);
   });
 
   test('status endpoint returns safe queued, running, partial, complete, and failed states', async () => {

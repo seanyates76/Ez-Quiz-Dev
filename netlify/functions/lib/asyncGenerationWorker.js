@@ -218,7 +218,9 @@ function errorFromGenerateResponse(response) {
 async function runGenerateBatch(job, batch, state) {
   const options = job.options || {};
   const requestedCount = Math.max(1, parseInt(batch && batch.count || 1, 10) || 1);
-  const questionType = normalizeQuestionType(batch && batch.questionType || (Array.isArray(batch && batch.types) && batch.types[0]));
+  const questionType = batch && batch.questionType
+    ? normalizeQuestionType(batch.questionType, '')
+    : '';
   const payload = {
     topic: job.topic,
     count: requestedCount,

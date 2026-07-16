@@ -1,10 +1,17 @@
 'use strict';
 
-const { handleCors, parseJsonBody, reply } = require('./lib/asyncHttp.js');
-const { createGenerationJobStore, publicJobStatus, sanitizeJobId } = require('./lib/asyncJobStore.js');
+const { authorize, bearerToken, handleCors, parseJsonBody, reply, unauthorized } = require('./lib/asyncHttp.js');
+const {
+  createGenerationJobStore,
+  publicJobStatus,
+  sanitizeJobId,
+  workerTokenMatches,
+} = require('./lib/asyncJobStore.js');
 
 exports.handler = async (event) => {
-  const cors = handleCors(event, ['POST']);
+  // The browser uses the per-job capability; the shared server bearer remains
+  // valid for trusted callers and is never exposed to client code.
+  const cors = handleCors(event, ['POST'], { requireAuth: false });
   if (cors.done) return cors.response;
 
   let payload;
@@ -18,6 +25,11 @@ exports.handler = async (event) => {
   if (!jobId) return reply(400, { error: 'Invalid jobId' }, cors.origin);
 
   const store = createGenerationJobStore({ event });
+  const before = await store.getJob(jobId);
+  if (!before) return reply(404, { error: 'Job not found' }, cors.origin);
+  if (!authorize(event) && !workerTokenMatches(before, bearerToken(event))) {
+    return unauthorized(cors.origin);
+  }
   const job = await store.stopJob(jobId);
   if (!job) return reply(404, { error: 'Job not found' }, cors.origin);
   const statusCode = job.status === 'expired' ? 410 : 200;

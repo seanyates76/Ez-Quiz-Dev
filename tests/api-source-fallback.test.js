@@ -6,6 +6,7 @@ const { loadBrowserModule } = require('./utils');
 function loadApi() {
   return loadBrowserModule('public/js/api.js', [
     'generateWithAI',
+    'getAsyncGenerationStatus',
     'stopAsyncGeneration',
     'triggerAsyncGeneration',
     'ASYNC_GENERATION_POLL_MS',
@@ -138,13 +139,42 @@ describe('generateWithAI source-backed endpoint routing', () => {
         json: async () => ({ status: 'stopped', stopped: true }),
       });
 
-    const out = await stopAsyncGeneration('qj_abcdefghijklmnopqrstuvwxyz123456');
+    const out = await stopAsyncGeneration('qj_abcdefghijklmnopqrstuvwxyz123456', {
+      workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+    });
 
     expect(out).toEqual({ status: 'stopped', stopped: true });
     expect(global.fetch.mock.calls.map(([url]) => url)).toEqual([
       '/.netlify/functions/generate-quiz-stop',
       '/.netlify/functions/generate-quiz-cancel',
     ]);
+    expect(global.fetch.mock.calls.every(([, options]) => (
+      options.headers.Authorization === 'Bearer worker_capability_abcdefghijklmnopqrstuvwxyz'
+    ))).toBe(true);
+  });
+
+  test('getAsyncGenerationStatus sends the per-job capability as a bearer', async () => {
+    const { getAsyncGenerationStatus } = loadApi();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ status: 'queued' }),
+    });
+
+    await getAsyncGenerationStatus('qj_abcdefghijklmnopqrstuvwxyz123456', {
+      workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz',
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/.netlify/functions/generate-quiz-status?jobId=qj_abcdefghijklmnopqrstuvwxyz123456',
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: 'Bearer worker_capability_abcdefghijklmnopqrstuvwxyz',
+        },
+      })
+    );
   });
 
   test('triggerAsyncGeneration sends the per-job worker capability without an authorization header', async () => {
@@ -177,6 +207,35 @@ describe('generateWithAI source-backed endpoint routing', () => {
       );
       expect(global.fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
     } finally {
+      Object.defineProperty(navigator, 'sendBeacon', {
+        configurable: true,
+        value: sendBeacon,
+      });
+    }
+  });
+
+  test('triggerAsyncGeneration retries a failed worker kickoff three times', async () => {
+    jest.useFakeTimers();
+    const { triggerAsyncGeneration } = loadApi();
+    const sendBeacon = navigator.sendBeacon;
+    Object.defineProperty(navigator, 'sendBeacon', {
+      configurable: true,
+      value: jest.fn(() => false),
+    });
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 503 });
+
+    try {
+      const pending = triggerAsyncGeneration(
+        'qj_abcdefghijklmnopqrstuvwxyz123456',
+        'worker_capability_abcdefghijklmnopqrstuvwxyz'
+      );
+      await jest.runAllTimersAsync();
+      const out = await pending;
+
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(out).toEqual({ sent: false, mode: 'fetch', status: 503 });
+    } finally {
+      jest.useRealTimers();
       Object.defineProperty(navigator, 'sendBeacon', {
         configurable: true,
         value: sendBeacon,
