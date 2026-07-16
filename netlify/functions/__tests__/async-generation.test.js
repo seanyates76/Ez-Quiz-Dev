@@ -259,18 +259,22 @@ describe('async generation endpoints and job store', () => {
     expect(stored.workerTokenHash).toBe(stillQueued.workerTokenHash);
   });
 
-  test('bearer-protected deployments keep browser start, status, and stop usable', async () => {
+  test('bearer-protected deployments require shared auth to start and job auth afterward', async () => {
     process.env.GENERATE_BEARER_TOKEN = 'test-browser-flow-secret';
     jest.resetModules();
     const { handler: start } = require('../generate-quiz-start.js');
     const { handler: status } = require('../generate-quiz-status.js');
     const { handler: stop } = require('../generate-quiz-stop.js');
 
-    const startRes = await start(event({
+    const request = {
       topic: 'Protected browser flow',
       count: 1,
       provider: 'echo',
       types: ['TF'],
+    };
+    const deniedStart = await start(event(request));
+    const startRes = await start(event(request, {
+      headers: { Authorization: 'Bearer test-browser-flow-secret' },
     }));
     const started = json(startRes);
     const deniedStatus = await status({
@@ -292,6 +296,7 @@ describe('async generation endpoints and job store', () => {
       queryStringParameters: { jobId: started.jobId },
     });
 
+    expect(deniedStart.statusCode).toBe(401);
     expect(startRes.statusCode).toBe(202);
     expect(started.jobId).toMatch(/^qj_[A-Za-z0-9_-]+$/);
     expect(deniedStatus.statusCode).toBe(401);

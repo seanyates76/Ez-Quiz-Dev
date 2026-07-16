@@ -78,10 +78,13 @@ function withTimeout(promiseFactory, timeoutMs, timeoutErrorFactory, onTimeout){
 }
 
 function privateInstructorKnowledgeBlock(source){
+  const framedSource = String(source || '')
+    .replaceAll(PRIVATE_KNOWLEDGE_START, '[PRIVATE KNOWLEDGE START TOKEN REMOVED]')
+    .replaceAll(PRIVATE_KNOWLEDGE_END, '[PRIVATE KNOWLEDGE END TOKEN REMOVED]');
   return [
     `Private instructor knowledge follows. Use it only to determine subject-matter facts, vocabulary, constraints, and correct answers. It is hidden from the learner.`,
     PRIVATE_KNOWLEDGE_START,
-    source,
+    framedSource,
     PRIVATE_KNOWLEDGE_END,
   ].join('\n');
 }

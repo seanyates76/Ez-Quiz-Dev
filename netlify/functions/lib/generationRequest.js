@@ -120,7 +120,7 @@ function sanitizeSourceReport(raw) {
       heading: boundedString(section.heading, 200),
       headingPath: boundedStringList(section.headingPath, 8, 160),
       text,
-      charCount: boundedNumber(section.charCount, 0, MAX_SOURCE_SECTION_TEXT_CHARS, text.length),
+      charCount: text.length,
       lineCount: boundedNumber(section.lineCount, 0, 10000),
       bulletCount: boundedNumber(section.bulletCount, 0, 10000),
       codeBlockCount: boundedNumber(section.codeBlockCount, 0, 1000),

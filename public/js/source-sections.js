@@ -168,7 +168,7 @@ function splitTextSafely(raw, maxChars, minChars) {
       continue;
     }
     const next = `${current}\n\n${block}`;
-    if (next.length <= maxChars || current.length < minChars) {
+    if (next.length <= maxChars) {
       current = next;
       continue;
     }

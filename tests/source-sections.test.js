@@ -133,6 +133,16 @@ describe('source section visibility', () => {
     expect(new Set(report.sections.map((section) => section.partCount)).size).toBe(1);
   });
 
+  test('a short leading block never makes the next section exceed maxChars', () => {
+    const report = analyzeSourceText(`# Boundary\n${'A'.repeat(100)}\n\n${'B'.repeat(500)}`, {
+      minSectionChars: 160,
+      maxSectionChars: 520,
+    });
+
+    expect(report.sections).toHaveLength(2);
+    expect(report.sections.every((section) => section.charCount <= 520)).toBe(true);
+  });
+
   test('source-section report and section shapes are stable', () => {
     const report = analyzeSourceText([
       '# Terms',
