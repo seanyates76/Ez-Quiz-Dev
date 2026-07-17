@@ -267,6 +267,7 @@ class NetlifyBlobsJobAdapter {
     }
     this.store = blobs.getStore(STORE_NAME);
     this.recentReads = new Map();
+    this.recentVersions = new Map();
     this.recentWrites = new Map();
   }
 
@@ -295,7 +296,12 @@ class NetlifyBlobsJobAdapter {
     if (!safe) return null;
     const result = await this.store.getWithMetadata(safe, { type: 'json' });
     const remote = result ? { job: result.data, version: result.etag } : null;
-    return this.newerRecord(remote, this.recentWrites.get(safe));
+    const visible = this.newerRecord(remote, this.recentVersions.get(safe));
+    if (visible) {
+      this.recentReads.set(safe, { job: visible.job });
+      this.recentVersions.set(safe, visible);
+    }
+    return this.newerRecord(visible, this.recentWrites.get(safe));
   }
 
   async set(jobId, job) {
@@ -308,7 +314,10 @@ class NetlifyBlobsJobAdapter {
       },
     });
     this.recentReads.set(safe, { job });
-    if (result && result.etag) this.recentWrites.set(safe, { job, version: result.etag });
+    if (result && result.etag) {
+      this.recentVersions.set(safe, { job, version: result.etag });
+      this.recentWrites.set(safe, { job, version: result.etag });
+    }
   }
 
   async setIfVersion(jobId, job, version) {
@@ -323,8 +332,14 @@ class NetlifyBlobsJobAdapter {
     });
     const modified = !!(result && result.modified);
     if (modified) this.recentReads.set(safe, { job });
-    if (modified && result.etag) this.recentWrites.set(safe, { job, version: result.etag });
-    if (!modified) this.recentWrites.delete(safe);
+    if (modified && result.etag) {
+      this.recentVersions.set(safe, { job, version: result.etag });
+      this.recentWrites.set(safe, { job, version: result.etag });
+    }
+    if (!modified) {
+      this.recentVersions.delete(safe);
+      this.recentWrites.delete(safe);
+    }
     return modified;
   }
 
@@ -332,6 +347,7 @@ class NetlifyBlobsJobAdapter {
     const safe = sanitizeJobId(jobId);
     if (!safe) return;
     this.recentReads.delete(safe);
+    this.recentVersions.delete(safe);
     this.recentWrites.delete(safe);
     await this.store.delete(safe);
   }
@@ -397,11 +413,25 @@ class GenerationJobStore {
   }
 
   async getJobWithRetry(jobId, options = {}) {
-    const attempts = Math.max(1, Number(options.attempts || 1));
-    const delayMs = Math.max(0, Number(options.delayMs || 0));
+    const safe = sanitizeJobId(jobId);
+    if (!safe) return null;
+    const parsedAttempts = Number(options.attempts);
+    const parsedDelayMs = Number(options.delayMs);
+    const attempts = Number.isFinite(parsedAttempts) ? Math.max(1, Math.floor(parsedAttempts)) : 1;
+    const delayMs = Number.isFinite(parsedDelayMs) ? Math.max(0, parsedDelayMs) : 0;
+    const supportsVersionedRead = typeof this.adapter.getVersioned === 'function';
     for (let attempt = 0; attempt < attempts; attempt += 1) {
-      const job = await this.getJob(jobId);
-      if (job) return job;
+      const versioned = supportsVersionedRead ? await this.adapter.getVersioned(safe) : null;
+      const job = supportsVersionedRead
+        ? versioned && versioned.job
+        : await this.adapter.get(safe);
+      if (job) {
+        if (jobExpired(job)) {
+          await this.adapter.delete(safe);
+          return expiredJob(safe, job);
+        }
+        return job;
+      }
       if (attempt < attempts - 1 && delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
       }

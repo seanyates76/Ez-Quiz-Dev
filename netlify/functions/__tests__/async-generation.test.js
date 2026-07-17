@@ -477,6 +477,86 @@ describe('async generation endpoints and job store', () => {
     expect(adapter.get).toHaveBeenCalledTimes(3);
   });
 
+  test('a successful versioned retry remains usable when the next Blob read is stale', async () => {
+    const queuedJob = {
+      jobId: 'qj_versionedvisibility123456789',
+      status: 'queued',
+      requestedCount: 1,
+      updatedAt: '2026-07-17T00:00:00.000Z',
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+    };
+    const blobStore = {
+      get: jest.fn(),
+      getWithMetadata: jest.fn()
+        .mockResolvedValueOnce({ data: queuedJob, etag: 'etag-1', metadata: {} })
+        .mockResolvedValueOnce({
+          data: { ...queuedJob, updatedAt: '2026-07-16T23:59:59.000Z' },
+          etag: 'etag-stale',
+          metadata: {},
+        }),
+      setJSON: jest.fn(async () => ({ modified: true, etag: 'etag-2' })),
+      delete: jest.fn(),
+    };
+    jest.doMock('@netlify/blobs', () => ({
+      connectLambda: jest.fn(),
+      getStore: jest.fn(() => blobStore),
+    }));
+
+    try {
+      const { GenerationJobStore, NetlifyBlobsJobAdapter } = require('../lib/asyncJobStore.js');
+      const adapter = new NetlifyBlobsJobAdapter();
+      const store = new GenerationJobStore({ env: process.env, adapter });
+      const loaded = await store.getJobWithRetry(queuedJob.jobId, { attempts: 3, delayMs: 0 });
+      const updated = await store.updateJob(queuedJob.jobId, (job) => ({ ...job, status: 'running' }));
+
+      expect(loaded).toEqual(queuedJob);
+      expect(updated).toMatchObject({ status: 'running' });
+      expect(blobStore.getWithMetadata).toHaveBeenCalledTimes(2);
+      expect(blobStore.setJSON).toHaveBeenCalledWith(
+        queuedJob.jobId,
+        expect.objectContaining({ status: 'running' }),
+        expect.objectContaining({ onlyIfMatch: 'etag-1' })
+      );
+    } finally {
+      jest.dontMock('@netlify/blobs');
+    }
+  });
+
+  test('invalid retry options safely fall back to one immediate attempt', async () => {
+    const adapter = { get: jest.fn().mockResolvedValue(null) };
+    const { GenerationJobStore } = require('../lib/asyncJobStore.js');
+    const store = new GenerationJobStore({ env: process.env, adapter });
+
+    const loaded = await store.getJobWithRetry('qj_invalidretryoptions123456789', {
+      attempts: 'not-a-number',
+      delayMs: 'also-not-a-number',
+    });
+
+    expect(loaded).toBeNull();
+    expect(adapter.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('versioned retry reads preserve expiry cleanup and response state', async () => {
+    const expired = {
+      jobId: 'qj_expiredversionedretry123456',
+      status: 'queued',
+      options: { sourceText: 'private material' },
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    };
+    const adapter = {
+      getVersioned: jest.fn().mockResolvedValue({ job: expired, version: 'etag-expired' }),
+      delete: jest.fn().mockResolvedValue(undefined),
+    };
+    const { GenerationJobStore } = require('../lib/asyncJobStore.js');
+    const store = new GenerationJobStore({ env: process.env, adapter });
+
+    const loaded = await store.getJobWithRetry(expired.jobId, { attempts: 3, delayMs: 0 });
+
+    expect(loaded).toMatchObject({ status: 'expired', jobId: expired.jobId });
+    expect(JSON.stringify(loaded)).not.toContain('private material');
+    expect(adapter.delete).toHaveBeenCalledWith(expired.jobId);
+  });
+
   test('conditional updates retry while Blob metadata is not yet visible', async () => {
     const queuedJob = {
       jobId: 'qj_eventualmetadata123456789012',
