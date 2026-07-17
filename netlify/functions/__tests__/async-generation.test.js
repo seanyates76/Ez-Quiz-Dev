@@ -396,7 +396,7 @@ describe('async generation endpoints and job store', () => {
     });
   });
 
-  test('Netlify Blobs adapter uses strong reads and ETag-conditional updates', async () => {
+  test('Netlify Blobs adapter uses compatible reads and ETag-conditional updates', async () => {
     const blobStore = {
       get: jest.fn(),
       getWithMetadata: jest.fn(async () => ({
@@ -415,6 +415,7 @@ describe('async generation endpoints and job store', () => {
     try {
       const { NetlifyBlobsJobAdapter } = require('../lib/asyncJobStore.js');
       const adapter = new NetlifyBlobsJobAdapter();
+      await adapter.get('qj_abcdefghijklmnopqrstuvwxyz');
       const versioned = await adapter.getVersioned('qj_abcdefghijklmnopqrstuvwxyz');
       const modified = await adapter.setIfVersion(
         'qj_abcdefghijklmnopqrstuvwxyz',
@@ -423,10 +424,8 @@ describe('async generation endpoints and job store', () => {
       );
 
       expect(versioned).toMatchObject({ version: 'etag-1', job: { status: 'queued' } });
-      expect(blobStore.getWithMetadata).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz', {
-        type: 'json',
-        consistency: 'strong',
-      });
+      expect(blobStore.get).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz', { type: 'json' });
+      expect(blobStore.getWithMetadata).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz', { type: 'json' });
       expect(blobStore.setJSON).toHaveBeenCalledWith(
         'qj_abcdefghijklmnopqrstuvwxyz',
         expect.objectContaining({ status: 'running' }),

@@ -271,13 +271,13 @@ class NetlifyBlobsJobAdapter {
   async get(jobId) {
     const safe = sanitizeJobId(jobId);
     if (!safe) return null;
-    return this.store.get(safe, { type: 'json', consistency: 'strong' });
+    return this.store.get(safe, { type: 'json' });
   }
 
   async getVersioned(jobId) {
     const safe = sanitizeJobId(jobId);
     if (!safe) return null;
-    const result = await this.store.getWithMetadata(safe, { type: 'json', consistency: 'strong' });
+    const result = await this.store.getWithMetadata(safe, { type: 'json' });
     if (!result) return null;
     return { job: result.data, version: result.etag };
   }
