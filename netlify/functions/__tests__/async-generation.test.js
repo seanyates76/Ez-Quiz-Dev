@@ -532,6 +532,27 @@ describe('async generation endpoints and job store', () => {
     expect(adapter.get).toHaveBeenCalledTimes(1);
   });
 
+  test('versioned retry reads preserve expiry cleanup and response state', async () => {
+    const expired = {
+      jobId: 'qj_expiredversionedretry123456',
+      status: 'queued',
+      options: { sourceText: 'private material' },
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    };
+    const adapter = {
+      getVersioned: jest.fn().mockResolvedValue({ job: expired, version: 'etag-expired' }),
+      delete: jest.fn().mockResolvedValue(undefined),
+    };
+    const { GenerationJobStore } = require('../lib/asyncJobStore.js');
+    const store = new GenerationJobStore({ env: process.env, adapter });
+
+    const loaded = await store.getJobWithRetry(expired.jobId, { attempts: 3, delayMs: 0 });
+
+    expect(loaded).toMatchObject({ status: 'expired', jobId: expired.jobId });
+    expect(JSON.stringify(loaded)).not.toContain('private material');
+    expect(adapter.delete).toHaveBeenCalledWith(expired.jobId);
+  });
+
   test('conditional updates retry while Blob metadata is not yet visible', async () => {
     const queuedJob = {
       jobId: 'qj_eventualmetadata123456789012',

@@ -425,7 +425,13 @@ class GenerationJobStore {
       const job = supportsVersionedRead
         ? versioned && versioned.job
         : await this.adapter.get(safe);
-      if (job) return job;
+      if (job) {
+        if (jobExpired(job)) {
+          await this.adapter.delete(safe);
+          return expiredJob(safe, job);
+        }
+        return job;
+      }
       if (attempt < attempts - 1 && delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
       }
