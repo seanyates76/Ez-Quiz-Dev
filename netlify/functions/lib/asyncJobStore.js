@@ -296,11 +296,11 @@ class NetlifyBlobsJobAdapter {
     if (!safe) return null;
     const result = await this.store.getWithMetadata(safe, { type: 'json' });
     const remote = result ? { job: result.data, version: result.etag } : null;
-    if (remote) {
-      this.recentReads.set(safe, { job: remote.job });
-      this.recentVersions.set(safe, remote);
-    }
     const visible = this.newerRecord(remote, this.recentVersions.get(safe));
+    if (visible) {
+      this.recentReads.set(safe, { job: visible.job });
+      this.recentVersions.set(safe, visible);
+    }
     return this.newerRecord(visible, this.recentWrites.get(safe));
   }
 

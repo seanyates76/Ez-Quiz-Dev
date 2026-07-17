@@ -489,7 +489,11 @@ describe('async generation endpoints and job store', () => {
       get: jest.fn(),
       getWithMetadata: jest.fn()
         .mockResolvedValueOnce({ data: queuedJob, etag: 'etag-1', metadata: {} })
-        .mockResolvedValueOnce(null),
+        .mockResolvedValueOnce({
+          data: { ...queuedJob, updatedAt: '2026-07-16T23:59:59.000Z' },
+          etag: 'etag-stale',
+          metadata: {},
+        }),
       setJSON: jest.fn(async () => ({ modified: true, etag: 'etag-2' })),
       delete: jest.fn(),
     };
