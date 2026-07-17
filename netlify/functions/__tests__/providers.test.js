@@ -180,9 +180,17 @@ describe('providers helpers', () => {
     expect(out).toContain('Scenario framing: ON');
     expect(out).toContain('Curveball: OFF');
     expect(out).toContain('Create deterministic study questions about config behavior.');
-    expect(out).toContain('Use only the source excerpts below.');
+    expect(out).not.toContain('about CCNA Notes');
+    expect(out).not.toContain('Use only the source excerpts below.');
+    expect(out).toContain('Use only the private instructor knowledge below for factual content.');
+    expect(out).toContain('PRIVATE INSTRUCTOR KNOWLEDGE START');
+    expect(out).toContain('PRIVATE INSTRUCTOR KNOWLEDGE END');
+    expectSourceHiddenFraming(out);
+    expectSharedDifficultyGuidance(out, 'Hard');
+    expect(out).toContain('Hard: test applied judgment');
     expect(out).toContain('Return only valid EZ Quiz YN lines.');
     expect(out).toContain('Avoid repeating these already-used question stems: Old config stem?.');
+    expect(out).toContain('do not merely paraphrase an avoided stem');
     expect(out).toContain('YN|A yes/no question?|Y');
     expect(out).not.toContain('Allowed question types');
     expect(out).not.toContain('use scenarios where appropriate');

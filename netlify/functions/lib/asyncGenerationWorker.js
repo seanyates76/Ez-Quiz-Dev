@@ -136,7 +136,13 @@ function summarizeRejections(reasons) {
   }, {});
 }
 
-function collectUniqueQuizLines(rawLines, state, limit) {
+function hasSourceFraming(stem) {
+  const text = String(stem || '');
+  return /\b(?:according to|based (?:solely )?on)\s+(?:the\s+)?(?:provided\s+)?(?:[\w-]+\s+){0,3}(?:notes?|source material|study material|documentation|document|text|excerpts?|handout|reading|lesson)\b/i.test(text)
+    || /\b(?:the\s+)?(?:[\w-]+\s+){0,2}notes?\s+(?:state|states|say|says|indicate|indicates)\b/i.test(text);
+}
+
+function collectUniqueQuizLines(rawLines, state, limit, options = {}) {
   const raw = splitLines(rawLines);
   const accepted = [];
   const acceptedRecords = [];
@@ -155,6 +161,10 @@ function collectUniqueQuizLines(rawLines, state, limit) {
     const key = normalizedStem(stem);
     if (!stem || !key) {
       rejectedReasons.push('missing_stem');
+      continue;
+    }
+    if (options.sourceBacked && hasSourceFraming(stem)) {
+      rejectedReasons.push('source_framing');
       continue;
     }
     if (localSeen.has(key)) {
@@ -587,7 +597,9 @@ async function processOneBatch(store, job, batch, state, options = {}) {
     if (target <= 0 || requestedCount <= 0) return { stopped: false };
     const providerBatch = alignPlannedBatchForProvider(batch, requestedCount);
     const body = await runGenerateBatch(job, providerBatch, state);
-    const collection = collectUniqueQuizLines(body.lines, state, target);
+    const collection = collectUniqueQuizLines(body.lines, state, target, {
+      sourceBacked: !!providerBatch.sourceText,
+    });
     const accepted = collection.accepted;
     state.acceptedCount += accepted.length;
     if (accepted.length) {

@@ -1165,6 +1165,29 @@ describe('async generation worker', () => {
     });
   });
 
+  test('source-framed stems are rejected and replaced during source-backed generation', async () => {
+    const framed = 'YN|According to the CCNA Notes, does a router separate broadcast domains?|Y';
+    const standalone = 'YN|Does a router separate broadcast domains?|Y';
+    handleGenerateQuiz
+      .mockResolvedValueOnce(okLines([framed]))
+      .mockResolvedValueOnce(okLines([standalone]));
+    const job = await createWorkerJob([
+      plannedSectionBatch(1, 1, ['YN']),
+    ], { requestedCount: 1, options: { difficulty: 'hard' } });
+
+    const done = await processGenerationJob(job.jobId, { store });
+
+    expect(done.status).toBe('complete');
+    expect(done.questions).toEqual([standalone]);
+    expect(done.questions).not.toContain(framed);
+    expect(done.failedBatches[0]).toMatchObject({
+      rawLineCount: 1,
+      acceptedCount: 0,
+      rejectedCount: 1,
+      rejectedReasons: { source_framing: 1 },
+    });
+  });
+
   test('one failed batch is recorded and fill pass runs after later planned batches', async () => {
     handleGenerateQuiz
       .mockResolvedValueOnce(timeoutResponse())

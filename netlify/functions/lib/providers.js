@@ -272,8 +272,13 @@ function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText
   const contract = normalizeLaneContract(laneContract, count, types);
   if (!contract) return '';
   const source = cleanSourceMaterial(sourceText);
+  const diffLine = difficultyGuidance(difficulty);
+  const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   const avoid = Array.isArray(avoidStems) && avoidStems.length
-    ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
+    ? [
+      `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`,
+      `Test a meaningfully different underlying concept, answer, command, or behavior; do not merely paraphrase an avoided stem.`,
+    ].join('\n')
     : '';
   const curveballLine = contract.curveball
     ? `Curveball: create exactly ${Math.max(1, contract.curveballCount)} fair expert curveball in this batch. It must be source-grounded, test an edge case, exception, misleading assumption, or hidden dependency, and have one clearly correct answer.`
@@ -289,8 +294,11 @@ function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText
     curveballLine,
     '',
     'Task:',
-    `${laneTaskLine(contract)} about ${topic}.`,
-    source ? 'Use only the source excerpts below.' : '',
+    laneTaskLine(contract),
+    source ? '' : `Quiz topic: ${topic}.`,
+    source ? sourceFramingInstructions() : '',
+    source ? 'Use only the private instructor knowledge below for factual content.' : '',
+    diffLine,
     contract.scenario ? 'Keep scenarios short and answerable.' : 'Do not add scenario framing; use direct standalone stems.',
     `Return only valid EZ Quiz ${contract.questionType} lines.`,
     'No explanations.',
@@ -300,9 +308,7 @@ function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText
     '',
     'Output format:',
     lineFormatForType(contract.questionType),
-    source ? '' : '',
-    source ? 'Source excerpts:' : '',
-    source || '',
+    sourceBlock,
   ].filter((line) => line !== '').join('\n');
 }
 
