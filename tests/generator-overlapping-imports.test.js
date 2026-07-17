@@ -1033,6 +1033,38 @@ describe('generator media import overlap regression', () => {
     }));
   });
 
+  test('queued async jobs are retriggered and stopped instead of polling forever', async () => {
+    setMediaSource({
+      text: 'Q'.repeat(25000),
+      name: 'queued-notes.md',
+      charCount: 25000,
+      report: makeSourceReport({ charCount: 25000, sectionCount: 55, quizWorthyCount: 50 }),
+    });
+    getAsyncGenerationStatus.mockResolvedValue({
+      status: 'queued',
+      completedCount: 0,
+      requestedCount: 50,
+      progressMessage: 'Generation job queued.',
+    });
+
+    document.getElementById('topicInput').value = 'queued worker';
+    document.getElementById('countInput').value = '50';
+    document.getElementById('generateBtn').dispatchEvent(new Event('click', { bubbles: true }));
+    await flushUntil(() => stopAsyncGeneration.mock.calls.length > 0);
+    await flush();
+
+    expect(getAsyncGenerationStatus).toHaveBeenCalledTimes(9);
+    expect(triggerAsyncGeneration).toHaveBeenCalledTimes(3);
+    expect(stopAsyncGeneration).toHaveBeenCalledWith(
+      'qj_abcdefghijklmnopqrstuvwxyz123456',
+      { workerToken: 'worker_capability_abcdefghijklmnopqrstuvwxyz' }
+    );
+    expect(generateWithAI).not.toHaveBeenCalled();
+    expect(document.getElementById('generationStatusCard').dataset.generationState).toBe('error');
+    expect(document.getElementById('generationStatusMessage').textContent)
+      .toContain('Generation worker did not start');
+  });
+
   test('async partial result enables Start with usable questions', async () => {
     const lines = generatedTfLines(12);
     setMediaSource({

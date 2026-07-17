@@ -927,6 +927,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
   async function pollAsyncGenerationJob(session, payload){
     let pollingFailures = 0;
+    let queuedPolls = 0;
     while(isActiveGeneration(session.id)){
       let status;
       try{
@@ -969,6 +970,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       const state = String(status && status.status || '').toLowerCase();
       const completed = Number(status && status.completedCount || 0);
       const requested = Number(status && status.requestedCount || payload.count || 0);
+      queuedPolls = state === 'queued' && completed === 0 ? queuedPolls + 1 : 0;
       setGenerationStatusState('generating', {
         requestId: session.id,
         metadata: formatGenerationMetadata(payload),
@@ -981,6 +983,15 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
 
       if(state === 'complete' || state === 'partial' || state === 'failed' || state === 'stopped' || state === 'canceled' || state === 'expired'){
         return status;
+      }
+      if(queuedPolls > 0 && queuedPolls % 3 === 0 && queuedPolls < 9){
+        try{ await triggerAsyncGeneration(session.jobId, session.workerToken); }catch{}
+      }
+      if(queuedPolls >= 9){
+        try{ await requestAsyncGenerationStop(session); }catch{}
+        const failed = new Error('Generation worker did not start. Please try again.');
+        failed.name = 'AsyncGenerationWorkerTimeout';
+        throw failed;
       }
       if(session.stopRefreshPending) {
         session.stopRefreshPending = false;

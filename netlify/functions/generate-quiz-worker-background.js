@@ -24,7 +24,10 @@ exports.handler = async (event) => {
   if (!jobId) return reply(400, { error: 'Invalid jobId' }, cors.origin);
 
   const store = createGenerationJobStore({ event });
-  const before = await store.getJob(jobId);
+  // Blobs reads are eventually consistent in some function environments. The
+  // browser receives the background-function 202 before this handler runs, so
+  // retry a newly-created job here instead of silently abandoning it as missing.
+  const before = await store.getJobWithRetry(jobId, { attempts: 6, delayMs: 250 });
   if (!before) return reply(404, { error: 'Job not found' }, cors.origin);
   if (!configuredBearerMatches(event) && !workerTokenMatches(before, payload && payload.workerToken)) {
     return unauthorized(cors.origin);

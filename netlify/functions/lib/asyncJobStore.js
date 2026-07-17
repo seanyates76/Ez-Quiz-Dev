@@ -266,31 +266,49 @@ class NetlifyBlobsJobAdapter {
       blobs.connectLambda(options.event);
     }
     this.store = blobs.getStore(STORE_NAME);
+    this.recentReads = new Map();
+    this.recentWrites = new Map();
+  }
+
+  newerRecord(remote, cached) {
+    if (!cached) return remote;
+    if (!remote) return cached;
+    const remoteUpdated = Date.parse(remote.job && remote.job.updatedAt || '');
+    const cachedUpdated = Date.parse(cached.job && cached.job.updatedAt || '');
+    return Number.isFinite(cachedUpdated) && (!Number.isFinite(remoteUpdated) || cachedUpdated >= remoteUpdated)
+      ? cached
+      : remote;
   }
 
   async get(jobId) {
     const safe = sanitizeJobId(jobId);
     if (!safe) return null;
-    return this.store.get(safe, { type: 'json' });
+    const job = await this.store.get(safe, { type: 'json' });
+    if (job) this.recentReads.set(safe, { job });
+    const visible = job ? { job } : this.recentReads.get(safe);
+    const record = this.newerRecord(visible, this.recentWrites.get(safe));
+    return record && record.job || null;
   }
 
   async getVersioned(jobId) {
     const safe = sanitizeJobId(jobId);
     if (!safe) return null;
     const result = await this.store.getWithMetadata(safe, { type: 'json' });
-    if (!result) return null;
-    return { job: result.data, version: result.etag };
+    const remote = result ? { job: result.data, version: result.etag } : null;
+    return this.newerRecord(remote, this.recentWrites.get(safe));
   }
 
   async set(jobId, job) {
     const safe = sanitizeJobId(jobId);
     if (!safe) throw new Error('Invalid jobId');
-    await this.store.setJSON(safe, job, {
+    const result = await this.store.setJSON(safe, job, {
       metadata: {
         expiresAt: job && job.expiresAt || '',
         status: job && job.status || '',
       },
     });
+    this.recentReads.set(safe, { job });
+    if (result && result.etag) this.recentWrites.set(safe, { job, version: result.etag });
   }
 
   async setIfVersion(jobId, job, version) {
@@ -303,12 +321,18 @@ class NetlifyBlobsJobAdapter {
         status: job && job.status || '',
       },
     });
-    return !!(result && result.modified);
+    const modified = !!(result && result.modified);
+    if (modified) this.recentReads.set(safe, { job });
+    if (modified && result.etag) this.recentWrites.set(safe, { job, version: result.etag });
+    if (!modified) this.recentWrites.delete(safe);
+    return modified;
   }
 
   async delete(jobId) {
     const safe = sanitizeJobId(jobId);
     if (!safe) return;
+    this.recentReads.delete(safe);
+    this.recentWrites.delete(safe);
     await this.store.delete(safe);
   }
 }
@@ -372,6 +396,19 @@ class GenerationJobStore {
     return job;
   }
 
+  async getJobWithRetry(jobId, options = {}) {
+    const attempts = Math.max(1, Number(options.attempts || 1));
+    const delayMs = Math.max(0, Number(options.delayMs || 0));
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      const job = await this.getJob(jobId);
+      if (job) return job;
+      if (attempt < attempts - 1 && delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs * (attempt + 1)));
+      }
+    }
+    return null;
+  }
+
   async saveJob(job) {
     const safe = sanitizeJobId(job && job.jobId);
     if (!safe) throw new Error('Invalid jobId');
@@ -387,12 +424,18 @@ class GenerationJobStore {
       const supportsConditionalWrite = typeof this.adapter.getVersioned === 'function'
         && typeof this.adapter.setIfVersion === 'function';
       const attempts = supportsConditionalWrite ? 8 : 1;
+      let sawCurrent = false;
       for (let attempt = 0; attempt < attempts; attempt += 1) {
         const versioned = supportsConditionalWrite ? await this.adapter.getVersioned(safe) : null;
+        if (supportsConditionalWrite && !versioned) {
+          await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+          continue;
+        }
         const current = supportsConditionalWrite
           ? versioned && versioned.job
           : await this.getJob(safe);
         if (!current) return null;
+        sawCurrent = true;
         if (jobExpired(current)) {
           await this.adapter.delete(safe);
           return expiredJob(safe, current);
@@ -407,7 +450,9 @@ class GenerationJobStore {
           return next;
         }
         if (await this.adapter.setIfVersion(safe, next, versioned.version)) return next;
+        await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
       }
+      if (!sawCurrent) return null;
       const err = new Error('Generation job changed too many times; retry the request.');
       err.code = 'JOB_UPDATE_CONFLICT';
       throw err;
