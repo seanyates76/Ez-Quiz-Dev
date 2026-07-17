@@ -397,10 +397,17 @@ describe('async generation endpoints and job store', () => {
   });
 
   test('Netlify Blobs adapter uses compatible reads and ETag-conditional updates', async () => {
+    const queuedJob = {
+      jobId: 'qj_abcdefghijklmnopqrstuvwxyz',
+      status: 'queued',
+      updatedAt: '2026-07-17T00:00:00.000Z',
+    };
     const blobStore = {
-      get: jest.fn(),
+      get: jest.fn()
+        .mockResolvedValueOnce(queuedJob)
+        .mockResolvedValue(null),
       getWithMetadata: jest.fn(async () => ({
-        data: { jobId: 'qj_abcdefghijklmnopqrstuvwxyz', status: 'queued' },
+        data: queuedJob,
         etag: 'etag-1',
         metadata: {},
       })),
@@ -417,13 +424,22 @@ describe('async generation endpoints and job store', () => {
       const adapter = new NetlifyBlobsJobAdapter();
       await adapter.get('qj_abcdefghijklmnopqrstuvwxyz');
       const versioned = await adapter.getVersioned('qj_abcdefghijklmnopqrstuvwxyz');
+      const repeatedRead = await adapter.get('qj_abcdefghijklmnopqrstuvwxyz');
+      const runningJob = {
+        ...queuedJob,
+        status: 'running',
+        updatedAt: '2026-07-17T00:00:01.000Z',
+      };
       const modified = await adapter.setIfVersion(
         'qj_abcdefghijklmnopqrstuvwxyz',
-        { jobId: 'qj_abcdefghijklmnopqrstuvwxyz', status: 'running', expiresAt: 'later' },
+        { ...runningJob, expiresAt: 'later' },
         versioned.version
       );
+      const readAfterWrite = await adapter.get('qj_abcdefghijklmnopqrstuvwxyz');
+      const versionedAfterWrite = await adapter.getVersioned('qj_abcdefghijklmnopqrstuvwxyz');
 
       expect(versioned).toMatchObject({ version: 'etag-1', job: { status: 'queued' } });
+      expect(repeatedRead).toMatchObject({ status: 'queued' });
       expect(blobStore.get).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz', { type: 'json' });
       expect(blobStore.getWithMetadata).toHaveBeenCalledWith('qj_abcdefghijklmnopqrstuvwxyz', { type: 'json' });
       expect(blobStore.setJSON).toHaveBeenCalledWith(
@@ -432,9 +448,57 @@ describe('async generation endpoints and job store', () => {
         expect.objectContaining({ onlyIfMatch: 'etag-1' })
       );
       expect(modified).toBe(true);
+      expect(readAfterWrite).toMatchObject({ status: 'running' });
+      expect(versionedAfterWrite).toMatchObject({ version: 'etag-2', job: { status: 'running' } });
     } finally {
       jest.dontMock('@netlify/blobs');
     }
+  });
+
+  test('job reads retry while a newly-created Blob is not yet visible', async () => {
+    const queuedJob = {
+      jobId: 'qj_eventualvisibility1234567890',
+      status: 'queued',
+      requestedCount: 1,
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+    };
+    const adapter = {
+      get: jest.fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(queuedJob),
+    };
+    const { GenerationJobStore } = require('../lib/asyncJobStore.js');
+    const store = new GenerationJobStore({ env: process.env, adapter });
+
+    const loaded = await store.getJobWithRetry(queuedJob.jobId, { attempts: 3, delayMs: 0 });
+
+    expect(loaded).toEqual(queuedJob);
+    expect(adapter.get).toHaveBeenCalledTimes(3);
+  });
+
+  test('conditional updates retry while Blob metadata is not yet visible', async () => {
+    const queuedJob = {
+      jobId: 'qj_eventualmetadata123456789012',
+      status: 'queued',
+      requestedCount: 1,
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+    };
+    const adapter = {
+      getVersioned: jest.fn()
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null)
+        .mockResolvedValue({ job: queuedJob, version: 'etag-1' }),
+      setIfVersion: jest.fn().mockResolvedValue(true),
+    };
+    const { GenerationJobStore } = require('../lib/asyncJobStore.js');
+    const store = new GenerationJobStore({ env: process.env, adapter });
+
+    const updated = await store.updateJob(queuedJob.jobId, (job) => ({ ...job, status: 'running' }));
+
+    expect(updated).toMatchObject({ status: 'running' });
+    expect(adapter.getVersioned).toHaveBeenCalledTimes(3);
+    expect(adapter.setIfVersion).toHaveBeenCalledTimes(1);
   });
 
   test('expired jobs are scrubbed and reported safely', async () => {
