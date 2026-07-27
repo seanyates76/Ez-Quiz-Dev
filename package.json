@@ -17,8 +17,8 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
-    "@netlify/blobs": "10.7.9",
-    "nodemailer": "^9.0.1",
+    "@netlify/blobs": "10.7.10",
+    "nodemailer": "^9.0.3",
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
