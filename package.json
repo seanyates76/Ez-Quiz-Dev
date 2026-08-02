@@ -29,6 +29,6 @@
     "puppeteer": "^24.43.1"
   },
   "overrides": {
-    "fast-uri": "^3.1.2"
+    "fast-uri": "^3.1.5"
   }
 }
