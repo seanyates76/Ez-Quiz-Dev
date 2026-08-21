@@ -8,6 +8,32 @@ const SERVER_INFO = { name: 'ez-quiz', version: '1.0.0' };
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
 const VALID_TYPES = new Set(['MC', 'TF', 'YN', 'MT']);
 
+const generateInputSchema = {
+  type: 'object',
+  properties: {
+    topic: { type: 'string', minLength: 1, maxLength: 240, description: 'The subject or title for the quiz.' },
+    source_text: { type: 'string', maxLength: 30000, description: 'Optional user-provided notes or extracted attachment text to ground every question.' },
+    source_name: { type: 'string', maxLength: 160, description: 'Optional name of the source supplied by the user.' },
+    count: { type: 'integer', minimum: 1, maximum: 20, default: 10, description: 'Number of questions.' },
+    types: { type: 'array', minItems: 1, maxItems: 4, uniqueItems: true, items: { type: 'string', enum: ['MC', 'TF', 'YN', 'MT'] }, description: 'Allowed question formats: multiple choice, true/false, yes/no, and matching.' },
+    difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'], default: 'medium' },
+  },
+  required: ['topic'],
+  additionalProperties: false,
+};
+
+const generationStartSchema = {
+  type: 'object',
+  properties: {
+    status: { type: 'string', enum: ['loading'] },
+    topic: { type: 'string' },
+    count: { type: 'integer' },
+    difficulty: { type: 'string' },
+  },
+  required: ['status', 'topic', 'count', 'difficulty'],
+  additionalProperties: false,
+};
+
 const quizOutputSchema = {
   type: 'object',
   properties: {
@@ -26,26 +52,29 @@ const tools = [
   {
     name: 'generate_quiz',
     title: 'Generate an EZ Quiz',
-    description: 'Create and immediately display an interactive quiz from a topic or user-provided source text. Use source_text when the user supplies notes or file contents. The result works with or without the visual quiz interface.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        topic: { type: 'string', minLength: 1, maxLength: 240, description: 'The subject or title for the quiz.' },
-        source_text: { type: 'string', maxLength: 30000, description: 'Optional user-provided notes or extracted attachment text to ground every question.' },
-        source_name: { type: 'string', maxLength: 160, description: 'Optional name of the source supplied by the user.' },
-        count: { type: 'integer', minimum: 1, maximum: 20, default: 10, description: 'Number of questions.' },
-        types: { type: 'array', minItems: 1, maxItems: 4, uniqueItems: true, items: { type: 'string', enum: ['MC', 'TF', 'YN', 'MT'] }, description: 'Allowed question formats: multiple choice, true/false, yes/no, and matching.' },
-        difficulty: { type: 'string', enum: ['easy', 'medium', 'hard'], default: 'medium' },
-      },
-      required: ['topic'],
-      additionalProperties: false,
-    },
-    outputSchema: quizOutputSchema,
+    description: 'Create and display an interactive quiz from a topic or user-provided source text. Use source_text when the user supplies notes or file contents.',
+    inputSchema: generateInputSchema,
+    outputSchema: generationStartSchema,
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true, idempotentHint: false },
     _meta: {
       ui: { resourceUri: QUIZ_WIDGET_URI },
       'openai/outputTemplate': QUIZ_WIDGET_URI,
       'openai/toolInvocation/invoking': 'Building your quiz…',
+      'openai/toolInvocation/invoked': 'Quiz ready.',
+    },
+  },
+  {
+    name: 'build_quiz',
+    title: 'Build the current EZ Quiz',
+    description: 'Completes quiz generation requested by the EZ Quiz interface. This tool is available only to the app UI.',
+    inputSchema: generateInputSchema,
+    outputSchema: quizOutputSchema,
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: true, idempotentHint: false },
+    _meta: {
+      ui: { visibility: ['app'] },
+      'openai/visibility': 'private',
+      'openai/widgetAccessible': true,
+      'openai/toolInvocation/invoking': 'Writing questions…',
       'openai/toolInvocation/invoked': 'Quiz ready.',
     },
   },
@@ -176,7 +205,20 @@ function quizToolResult(quiz, message) {
   };
 }
 
-async function generateQuiz(args, event) {
+function startQuiz(args) {
+  try {
+    const payload = validateGenerateArgs(args);
+    return {
+      structuredContent: { status: 'loading', topic: payload.topic, count: payload.count, difficulty: payload.difficulty },
+      content: [{ type: 'text', text: `Building an interactive ${payload.count}-question quiz about ${payload.topic}.` }],
+      _meta: { generateRequest: args },
+    };
+  } catch (error) {
+    return { isError: true, content: [{ type: 'text', text: `I could not build that quiz: ${error.message}.` }] };
+  }
+}
+
+async function buildQuiz(args, event) {
   let payload;
   try {
     payload = validateGenerateArgs(args);
@@ -220,7 +262,8 @@ function renderQuiz(args) {
 }
 
 async function callTool(name, args, event) {
-  if (name === 'generate_quiz') return generateQuiz(args, event);
+  if (name === 'generate_quiz') return startQuiz(args);
+  if (name === 'build_quiz') return buildQuiz(args, event);
   if (name === 'render_quiz') return renderQuiz(args);
   return { isError: true, content: [{ type: 'text', text: `Unknown tool: ${safeString(name, 80, '(missing)')}.` }] };
 }
