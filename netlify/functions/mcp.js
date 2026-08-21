@@ -2,7 +2,7 @@
 
 const { handleGenerateQuiz } = require('./generate-quiz.js');
 const { parseLegacyQuestion } = require('./lib/normalizer.js');
-const { QUIZ_WIDGET_MIME_TYPE, QUIZ_WIDGET_URI, quizWidgetHtml } = require('./lib/mcpQuizWidget.js');
+const { QUIZ_WIDGET_ALIASES, QUIZ_WIDGET_MIME_TYPE, QUIZ_WIDGET_URI, quizWidgetHtml } = require('./lib/mcpQuizWidget.js');
 
 const SERVER_INFO = { name: 'ez-quiz', version: '1.0.0' };
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
@@ -268,11 +268,11 @@ async function callTool(name, args, event) {
   return { isError: true, content: [{ type: 'text', text: `Unknown tool: ${safeString(name, 80, '(missing)')}.` }] };
 }
 
-function widgetResource() {
+function widgetResource(uri = QUIZ_WIDGET_URI) {
   const widgetOrigin = safeString(process.env.EZQ_PLUGIN_WIDGET_ORIGIN, 300, 'https://ez-quiz.app');
   return {
     contents: [{
-      uri: QUIZ_WIDGET_URI,
+      uri,
       name: 'EZ Quiz interactive player',
       mimeType: QUIZ_WIDGET_MIME_TYPE,
       text: quizWidgetHtml(),
@@ -310,11 +310,12 @@ async function dispatch(message, event) {
     return rpcResult(id, await callTool(params.name, params.arguments || {}, event));
   }
   if (message.method === 'resources/list') {
-    return rpcResult(id, { resources: [{ uri: QUIZ_WIDGET_URI, name: 'EZ Quiz interactive player', mimeType: QUIZ_WIDGET_MIME_TYPE }] });
+    return rpcResult(id, { resources: QUIZ_WIDGET_ALIASES.map((uri) => ({ uri, name: 'EZ Quiz interactive player', mimeType: QUIZ_WIDGET_MIME_TYPE })) });
   }
   if (message.method === 'resources/read') {
-    if (!message.params || message.params.uri !== QUIZ_WIDGET_URI) return rpcError(id, -32002, 'Resource not found');
-    return rpcResult(id, widgetResource());
+    const uri = message.params && message.params.uri;
+    if (!QUIZ_WIDGET_ALIASES.includes(uri)) return rpcError(id, -32002, 'Resource not found');
+    return rpcResult(id, widgetResource(uri));
   }
   return rpcError(id, -32601, 'Method not found');
 }
