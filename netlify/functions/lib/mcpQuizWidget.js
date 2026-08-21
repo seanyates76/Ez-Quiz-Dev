@@ -1,6 +1,13 @@
 'use strict';
 
-const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v2.html';
+// Keep the original URI stable because ChatGPT caches the tool template URI
+// when an app connection is created. New widget revisions are content updates,
+// not breaking resource renames.
+const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v1.html';
+const QUIZ_WIDGET_ALIASES = Object.freeze([
+  QUIZ_WIDGET_URI,
+  'ui://ez-quiz/quiz-v2.html',
+]);
 const QUIZ_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app';
 
 function quizWidgetHtml() {
@@ -58,4 +65,4 @@ function quizWidgetHtml() {
 </html>`;
 }
 
-module.exports = { QUIZ_WIDGET_MIME_TYPE, QUIZ_WIDGET_URI, quizWidgetHtml };
+module.exports = { QUIZ_WIDGET_ALIASES, QUIZ_WIDGET_MIME_TYPE, QUIZ_WIDGET_URI, quizWidgetHtml };
