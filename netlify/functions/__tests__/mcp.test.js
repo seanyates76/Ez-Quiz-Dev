@@ -29,7 +29,7 @@ describe('EZ Quiz MCP server', () => {
     const listed = await handler(event({ jsonrpc: '2.0', id: 2, method: 'tools/list' }));
     const listedTools = json(listed).result.tools;
     expect(listedTools.map((tool) => tool.name)).toEqual(['generate_quiz', 'build_quiz', 'render_quiz']);
-    expect(listedTools[0]._meta.ui.resourceUri).toBe('ui://ez-quiz/quiz-v2.html');
+    expect(listedTools[0]._meta.ui.resourceUri).toBe('ui://ez-quiz/quiz-v1.html');
     expect(listedTools[0].annotations.openWorldHint).toBe(true);
     expect(listedTools[1]._meta.ui.visibility).toEqual(['app']);
     expect(listedTools[1]._meta['openai/visibility']).toBe('private');
@@ -37,7 +37,7 @@ describe('EZ Quiz MCP server', () => {
 
   test('serves a self-contained MCP Apps quiz component', async () => {
     const { handler } = require('../mcp.js');
-    const res = await handler(event({ jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri: 'ui://ez-quiz/quiz-v2.html' } }));
+    const res = await handler(event({ jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri: 'ui://ez-quiz/quiz-v1.html' } }));
     const resource = json(res).result.contents[0];
     expect(resource.mimeType).toBe('text/html;profile=mcp-app');
     expect(resource._meta.ui).toMatchObject({ domain: 'https://ez-quiz.app', csp: { connectDomains: [], resourceDomains: [] } });
@@ -48,6 +48,20 @@ describe('EZ Quiz MCP server', () => {
     expect(resource.text).toContain("name:'build_quiz'");
     expect(resource.text).toContain('@media(max-width:370px)');
     expect(resource.text).not.toMatch(/<script[^>]+src=/i);
+  });
+
+  test('keeps cached widget template URIs compatible across revisions', async () => {
+    const { handler } = require('../mcp.js');
+    const listed = await handler(event({ jsonrpc: '2.0', id: 31, method: 'resources/list' }));
+    expect(json(listed).result.resources.map((resource) => resource.uri)).toEqual([
+      'ui://ez-quiz/quiz-v1.html',
+      'ui://ez-quiz/quiz-v2.html',
+    ]);
+
+    for (const uri of ['ui://ez-quiz/quiz-v1.html', 'ui://ez-quiz/quiz-v2.html']) {
+      const read = await handler(event({ jsonrpc: '2.0', id: 32, method: 'resources/read', params: { uri } }));
+      expect(json(read).result.contents[0]).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app' });
+    }
   });
 
   test('the component runs a quiz and checks an answer', () => {
