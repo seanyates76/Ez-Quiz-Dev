@@ -44,7 +44,8 @@ Important functions:
 - `send-feedback.js` — feedback mailer
 - `health.js` — simple health probe
 - `ingest-media.js` — media import path
-- `mcp.ts` — experimental MCP endpoint
+- `mcp.js` — public MCP endpoint and ChatGPT plugin tool surface
+- `lib/mcpQuizWidget.js` — self-contained MCP Apps quiz player returned to ChatGPT
 
 Supporting modules:
 - `netlify/functions/lib/asyncGenerationPlanner.js` — quiz lanes, scenario budgets, and batch planning
@@ -140,6 +141,7 @@ Key redirects:
 - `/api/generate` → `/.netlify/functions/generate-quiz`
 - `/api/health` → `/.netlify/functions/health`
 - `/api/mcp` → `/.netlify/functions/mcp`
+- `/mcp` → `/.netlify/functions/mcp` (stable ChatGPT plugin URL)
 
 Async generation uses the direct Netlify Function paths for `generate-quiz-start`, `generate-quiz-worker-background`, `generate-quiz-status`, and `generate-quiz-stop`.
 

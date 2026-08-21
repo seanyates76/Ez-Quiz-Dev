@@ -79,6 +79,7 @@ Key endpoints
 - `/.netlify/functions/generate-quiz-stop` — stop generation while preserving completed questions
 - `/.netlify/functions/send-feedback` — feedback mailer
 - `/.netlify/functions/health` — health probe
+- `/mcp` — MCP Streamable HTTP endpoint for the ChatGPT plugin and its in-chat quiz player
 
 Environment
 -----------
