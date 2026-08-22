@@ -8,12 +8,47 @@ function json(response) {
   return response.body ? JSON.parse(response.body) : null;
 }
 
+function widgetScript() {
+  const { quizWidgetHtml } = require('../lib/mcpQuizWidget.js');
+  const html = quizWidgetHtml();
+  return { html, script: html.match(/<script>([\s\S]*)<\/script>/)[1] };
+}
+
+function mountWidget(html, openai) {
+  document.documentElement.innerHTML = html.replace(/<script>[\s\S]*<\/script>/, '');
+  window.openai = openai;
+}
+
+function mockJsonResponse(body, status = 200) {
+  return Promise.resolve({
+    ok: status >= 200 && status < 300,
+    status,
+    json: async () => body,
+  });
+}
+
+async function flushWidget() {
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 describe('EZ Quiz MCP server', () => {
   const originalEnv = process.env;
 
   beforeEach(() => {
     jest.resetModules();
-    process.env = { ...originalEnv, AI_PROVIDER: 'echo' };
+    process.env = {
+      ...originalEnv,
+      AI_PROVIDER: 'echo',
+      EZQ_PLUGIN_API_ORIGIN: 'https://preview.ez-quiz.test',
+    };
+    document.documentElement.innerHTML = '<head></head><body></body>';
+  });
+
+  afterEach(() => {
+    delete window.openai;
+    delete window.fetch;
+    jest.useRealTimers();
   });
 
   afterAll(() => { process.env = originalEnv; });
@@ -40,13 +75,25 @@ describe('EZ Quiz MCP server', () => {
     const res = await handler(event({ jsonrpc: '2.0', id: 3, method: 'resources/read', params: { uri: 'ui://ez-quiz/quiz-v1.html' } }));
     const resource = json(res).result.contents[0];
     expect(resource.mimeType).toBe('text/html;profile=mcp-app');
-    expect(resource._meta.ui).toMatchObject({ domain: 'https://ez-quiz.app', csp: { connectDomains: [], resourceDomains: [] } });
+    expect(resource._meta.ui).toMatchObject({
+      domain: 'https://ez-quiz.app',
+      csp: {
+        connectDomains: ['https://preview.ez-quiz.test', 'https://ez-quiz.app'],
+        resourceDomains: ['https://ez-quiz.app'],
+      },
+    });
     expect(resource.text).toContain('EZ');
+    expect(resource.text).toContain('brand-title-source-light.png');
     expect(resource.text).toContain('ui/notifications/tool-result');
     expect(resource.text).toContain("request('ui/initialize'");
     expect(resource.text).toContain('Building your quiz...');
-    expect(resource.text).toContain("name:'build_quiz'");
-    expect(resource.text).toContain('@media(max-width:370px)');
+    expect(resource.text).toContain('Cancel generation');
+    expect(resource.text).toContain('notifyIntrinsicHeight');
+    expect(resource.text).toContain('safeArea');
+    expect(resource.text).toContain('openai:set_globals');
+    expect(resource.text).not.toContain("name:'build_quiz'");
+    expect(resource.text).not.toContain("request('tools/call'");
+    expect(resource.text).toContain('@media (max-width: 360px)');
     expect(resource.text).not.toMatch(/<script[^>]+src=/i);
   });
 
@@ -65,7 +112,6 @@ describe('EZ Quiz MCP server', () => {
   });
 
   test('the component runs a quiz and checks an answer', () => {
-    const { quizWidgetHtml } = require('../lib/mcpQuizWidget.js');
     const toolOutput = {
       title: 'One question',
       topic: 'Arithmetic',
@@ -73,11 +119,21 @@ describe('EZ Quiz MCP server', () => {
       questions: [{ type: 'MC', prompt: 'What is 2 + 2?', options: ['3', '4'], correct: [1] }],
     };
     const states = [];
-    const html = quizWidgetHtml();
-    const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
-    document.documentElement.innerHTML = html.replace(/<script>[\s\S]*<\/script>/, '');
-    window.openai = { toolOutput, setWidgetState: (state) => states.push(state) };
+    const heights = [];
+    const { html, script } = widgetScript();
+    mountWidget(html, {
+      toolOutput,
+      theme: 'dark',
+      maxHeight: 520,
+      safeArea: { insets: { top: 4, right: 6, bottom: 8, left: 10 } },
+      setWidgetState: (state) => states.push(state),
+      notifyIntrinsicHeight: () => heights.push(true),
+    });
     window.eval(script);
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset.compact).toBe('true');
+    expect(document.documentElement.style.getPropertyValue('--safe-left')).toBe('10px');
+    expect(document.querySelector('#brandLogo').src).toContain('brand-title-source.png');
     expect(document.querySelector('h2').textContent).toBe('What is 2 + 2?');
     document.querySelector('input[value="1"]').click();
     document.querySelector('#check').click();
@@ -87,53 +143,132 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('.finish h1').textContent).toBe('Quiz complete');
     expect(document.querySelector('.result-score').textContent).toContain('1out of 1');
     expect(states.length).toBeGreaterThan(0);
-    delete window.openai;
+    expect(document.querySelector('#retake').textContent).toBe('Retake quiz');
   });
 
-  test('the component shows loading while the app-only build tool runs', async () => {
-    const { quizWidgetHtml } = require('../lib/mcpQuizWidget.js');
-    const html = quizWidgetHtml();
-    const script = html.match(/<script>([\s\S]*)<\/script>/)[1];
-    document.documentElement.innerHTML = html.replace(/<script>[\s\S]*<\/script>/, '');
-    window.openai = {
+  test('the component triggers and polls the async job without calling an app-only MCP tool', async () => {
+    const jobId = `qj_${'a'.repeat(32)}`;
+    const workerToken = 'b'.repeat(32);
+    const { html, script } = widgetScript();
+    mountWidget(html, {
       toolInput: { topic: 'Dolphins', count: 3, difficulty: 'medium' },
       toolOutput: { status: 'loading', topic: 'Dolphins', count: 3, difficulty: 'medium' },
-    };
-    const originalPostMessage = window.postMessage;
-    window.postMessage = jest.fn((message) => {
-      if (message.method !== 'tools/call') return;
-      expect(message.params).toMatchObject({ name: 'build_quiz', arguments: { topic: 'Dolphins', count: 3 } });
-      queueMicrotask(() => window.dispatchEvent(new MessageEvent('message', {
-        source: window,
-        data: {
-          jsonrpc: '2.0',
-          id: message.id,
-          result: {
-            structuredContent: {
-              title: 'Dolphins', topic: 'Dolphins', aiGenerated: true, questionCount: 1, lines: 'TF|Dolphins are mammals.|T',
-              questions: [{ type: 'TF', prompt: 'Dolphins are mammals.', correct: true }],
+      toolResponseMetadata: {
+        mcp_tool_result: {
+          _meta: {
+            generateRequest: { topic: 'Dolphins', count: 3, difficulty: 'medium' },
+            generation: {
+              jobId,
+              workerToken,
+              requestedCount: 3,
+              workerUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
+              statusUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-status',
+              stopUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-stop',
             },
           },
         },
-      })));
+      },
+    });
+    window.fetch = jest.fn((url) => {
+      if (String(url).includes('worker-background')) return mockJsonResponse({ status: 'queued' }, 202);
+      if (String(url).includes('generate-quiz-status')) {
+        return mockJsonResponse({
+          jobId,
+          status: 'complete',
+          topic: 'Dolphins',
+          title: 'Dolphins',
+          requestedCount: 3,
+          completedCount: 1,
+          questions: ['TF|Dolphins are mammals.|T'],
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
     });
 
     window.eval(script);
     expect(document.querySelector('.loading-card')).not.toBeNull();
     expect(document.querySelector('#loadingCount').textContent).toBe('Creating 3 questions');
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await flushWidget();
     expect(document.querySelector('h2').textContent).toBe('Dolphins are mammals.');
-
-    window.postMessage = originalPostMessage;
-    delete window.openai;
+    expect(window.fetch).toHaveBeenCalledTimes(2);
+    expect(window.fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    expect(window.fetch.mock.calls[1][1].headers.Authorization).toBe(`Bearer ${workerToken}`);
   });
 
-  test('opens the loading UI before the app-only tool generates the quiz', async () => {
+  test('the component cancels an active generation job', async () => {
+    const jobId = `qj_${'c'.repeat(32)}`;
+    const workerToken = 'd'.repeat(32);
+    const generation = {
+      jobId,
+      workerToken,
+      requestedCount: 5,
+      workerUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
+      statusUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-status',
+      stopUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-stop',
+    };
+    const { html, script } = widgetScript();
+    mountWidget(html, {
+      toolInput: { topic: 'CCNA', count: 5, difficulty: 'medium' },
+      toolOutput: { status: 'loading', topic: 'CCNA', count: 5, difficulty: 'medium' },
+      toolResponseMetadata: { mcp_tool_result: { _meta: { generation, generateRequest: { topic: 'CCNA', count: 5, difficulty: 'medium' } } } },
+      sendFollowUpMessage: jest.fn(),
+    });
+    window.fetch = jest.fn((url) => {
+      if (String(url).includes('worker-background')) return mockJsonResponse({ status: 'queued' }, 202);
+      if (String(url).includes('generate-quiz-status')) {
+        return mockJsonResponse({ jobId, status: 'running', requestedCount: 5, completedCount: 0, progressMessage: 'Writing questions.' });
+      }
+      if (String(url).includes('generate-quiz-stop')) {
+        return mockJsonResponse({ jobId, status: 'stopped', requestedCount: 5, completedCount: 0, progressMessage: 'Generation stopped before any questions were ready.' });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    window.eval(script);
+    await flushWidget();
+    document.querySelector('#cancelGeneration').click();
+    await flushWidget();
+
+    expect(document.querySelector('.status-card h1').textContent).toBe('Quiz generation stopped');
+    const stopCall = window.fetch.mock.calls.find(([url]) => String(url).includes('generate-quiz-stop'));
+    expect(stopCall[1]).toMatchObject({ method: 'POST' });
+    expect(stopCall[1].headers.Authorization).toBe(`Bearer ${workerToken}`);
+  });
+
+  test('an old loading card starts fresh instead of retrying the missing build resource', async () => {
+    const sendFollowUpMessage = jest.fn().mockResolvedValue(undefined);
+    const { html, script } = widgetScript();
+    mountWidget(html, {
+      toolInput: { topic: 'CCNA', count: 5, difficulty: 'medium' },
+      toolOutput: { status: 'loading', topic: 'CCNA', count: 5, difficulty: 'medium' },
+      sendFollowUpMessage,
+    });
+
+    window.eval(script);
+    await new Promise((resolve) => setTimeout(resolve, 380));
+    expect(document.querySelector('.status-card h1').textContent).toBe('This quiz card expired');
+    expect(document.body.textContent).toContain('instead of retrying this broken card');
+    document.querySelector('[data-start-fresh]').click();
+    await flushWidget();
+    expect(sendFollowUpMessage).toHaveBeenCalledWith(expect.objectContaining({
+      prompt: 'Create a fresh 5-question medium-difficulty EZ Quiz about CCNA.',
+    }));
+  });
+
+  test('opens the loading UI with a private async generation capability', async () => {
     const { handler } = require('../mcp.js');
     const args = { topic: 'Network ports', count: 4, types: ['MC'], difficulty: 'medium' };
     const started = await handler(event({ jsonrpc: '2.0', id: 4, method: 'tools/call', params: { name: 'generate_quiz', arguments: args } }));
     expect(json(started).result.structuredContent).toEqual({ status: 'loading', topic: 'Network ports', count: 4, difficulty: 'medium' });
     expect(json(started).result._meta.generateRequest).toEqual(args);
+    expect(json(started).result._meta.generation).toMatchObject({
+      jobId: expect.stringMatching(/^qj_/),
+      workerToken: expect.stringMatching(/^[A-Za-z0-9_-]{24,96}$/),
+      requestedCount: 4,
+      workerUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
+      statusUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-status',
+      stopUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-stop',
+    });
 
     const res = await handler(event({ jsonrpc: '2.0', id: 41, method: 'tools/call', params: { name: 'build_quiz', arguments: args } }));
     const result = json(res).result;
