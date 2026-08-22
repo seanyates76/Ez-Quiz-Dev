@@ -20,11 +20,11 @@ This is the review-ready source package for an MCP-backed ChatGPT plugin. Do not
 
 ### Short description
 
-Turn a topic, notes, or pasted quiz lines into a fast interactive quiz inside ChatGPT.
+Turn a topic or your study material into a polished interactive quiz inside ChatGPT.
 
 ### Long description
 
-EZ Quiz creates focused, interactive quizzes without sending you to a separate study screen. Ask for a quiz about a topic, provide notes or attachment text for a source-grounded quiz, or paste existing EZ Quiz lines. The in-chat player presents one question at a time, checks answers, tracks the score, and works with multiple-choice, true/false, yes/no, and matching questions.
+EZ Quiz creates focused, interactive quizzes without sending you to a separate study screen. Ask for a quiz about a topic or provide notes or attachment text for a source-grounded quiz. ChatGPT writes and fact-checks the question set, then opens the complete quiz in the EZ Quiz player. The in-chat player presents one question at a time and supports multiple-choice, true/false, yes/no, and matching questions. It preserves answers while navigating, calculates the score once at the finish, reviews missed or all questions, and offers focused retakes.
 
 AI-generated questions may contain mistakes. Verify important facts against your source.
 
@@ -33,27 +33,26 @@ AI-generated questions may contain mistakes. Verify important facts against your
 1. Create a 10-question EZ Quiz about IPv4 subnetting.
 2. Turn my attached study notes into an 8-question mixed EZ Quiz.
 3. Make me a hard 12-question quiz on the French Revolution.
-4. Open these EZ Quiz lines as an interactive quiz: `TF|The Earth orbits the Sun.|T`
+4. Give me a five-question true-or-false quiz about the solar system.
 
 ## MCP tools
 
-### `generate_quiz`
+### `open_quiz`
 
-Creates and displays a quiz from a topic and optional user-supplied source text. Accepts 1–20 questions and MC, TF, YN, or MT formats. It reuses the production generator and returns structured content even when a host cannot render UI.
+Displays a complete quiz that ChatGPT has already written and fact-checked from the conversation and any user-supplied source material. It accepts 1–20 structured MC, TF, YN, or MT questions. The tool is read-only and idempotent and does not call a second AI provider, start a background generation job, fetch a URL, or receive raw source material.
 
-### `render_quiz`
-
-Validates and displays newline-separated EZ Quiz lines without calling an AI provider. It accepts up to 50 lines and identifies the first malformed line without returning internal diagnostics.
+The attached component is a self-contained runner and results experience. It does not expose a generation screen because ChatGPT prepares the full question set before calling the tool.
 
 ## Reviewer test cases
 
 | Request | Expected behavior |
 | --- | --- |
-| “Create a five-question easy quiz about photosynthesis.” | `generate_quiz` returns five questions and opens the interactive player. |
-| “Use this text to quiz me: TCP uses a connection-oriented transport. UDP is connectionless.” | `generate_quiz` receives only the supplied source and returns a grounded quiz. |
-| “Open `TF\|Two plus two is four.\|T` as a quiz.” | `render_quiz` opens one true/false question without AI generation. |
-| “Create 21 questions.” | Tool input validation rejects the request because the ChatGPT release limit is 20. |
-| “Render `not a quiz line`.” | Tool returns a safe validation error identifying line 1. |
+| “Create a five-question easy quiz about photosynthesis.” | ChatGPT writes five complete questions, calls `open_quiz` once, and opens the interactive player. |
+| “Use this text to quiz me: TCP uses a connection-oriented transport. UDP is connectionless.” | ChatGPT grounds the question set in the supplied text and passes only the completed structured quiz to `open_quiz`. |
+| “Give me a matching quiz on common network protocols and ports.” | ChatGPT supplies complete left/right columns and a one-to-one answer map before opening the player. |
+| “Create 21 questions.” | ChatGPT should offer the 20-question component limit; tool validation safely rejects oversized input. |
+| Complete a quiz, navigate backward, and finish. | Prior answers remain selected and the final score is calculated once. |
+| Retake missed questions. | Only missed answers reset; retained correct answers still count toward the final full-quiz score. |
 | “Save my score forever.” | The plugin explains that it has no account or durable score storage. |
 | “Quiz me using my password/API key.” | The plugin refuses to treat credentials as study material and asks for non-sensitive content. |
 
@@ -63,8 +62,9 @@ Validates and displays newline-separated EZ Quiz lines without calling an AI pro
 - [ ] Confirm `POST https://ez-quiz.app/mcp` initializes without the former beta cookie/header.
 - [ ] Run MCP Inspector against the deployed endpoint and call every tool with valid and invalid inputs.
 - [ ] Connect the endpoint in ChatGPT developer mode and run every reviewer test case.
-- [ ] Verify the quiz component at mobile and desktop widths, including keyboard-only use and dark mode.
-- [ ] Confirm the production AI provider key, rate limit, timeout, and logs are healthy.
+- [ ] Verify the quiz component at mobile and desktop widths, including safe-area padding, constrained-height scrolling, keyboard-only use, system light/dark mode, and fullscreen expansion.
+- [ ] Confirm the production wordmark renders in the ChatGPT app and browser with the widget CSP showing no external resource dependencies.
+- [ ] Confirm repeated delivery of the same tool result does not reset progress or change a completed score.
 - [ ] Confirm privacy, terms, support, website, and logo URLs are publicly reachable and consistent with the verified publisher identity.
 - [ ] Complete individual or business identity verification in OpenAI Platform.
 - [ ] Confirm the submitting role has Apps Management write access (`api.apps.write`).
@@ -76,6 +76,7 @@ Validates and displays newline-separated EZ Quiz lines without calling an AI pro
 - No user accounts or authentication.
 - No durable score or quiz storage.
 - No arbitrary URL fetching.
+- No second-model generation request or background generation job inside the widget.
 - No payments, advertising, analytics, or tracking.
 - No iframe embedding or third-party widget assets.
 - No publishing step is automated from this repository.

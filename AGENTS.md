@@ -45,7 +45,9 @@ Important functions:
 - `health.js` — simple health probe
 - `ingest-media.js` — media import path
 - `mcp.js` — public MCP endpoint and ChatGPT plugin tool surface
+- `lib/mcpQuizContract.js` — strict structured-question contract for ChatGPT-authored quizzes
 - `lib/mcpQuizWidget.js` — self-contained MCP Apps quiz player returned to ChatGPT
+- `lib/mcpQuizBrand.js` — embedded production wordmark used by the player without external asset requests
 
 Supporting modules:
 - `netlify/functions/lib/asyncGenerationPlanner.js` — quiz lanes, scenario budgets, and batch planning

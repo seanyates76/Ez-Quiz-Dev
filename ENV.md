@@ -22,6 +22,7 @@ Optional security:
 - EZQ_PLUGIN_WIDGET_ORIGIN: Public HTTPS origin assigned to the ChatGPT plugin UI.
   - Defaults to `https://ez-quiz.app`.
   - Keep this stable after submission because OpenAI treats the widget resource URI and origin as reviewable security metadata.
+  - The current widget is self-contained and does not make API or image requests from its sandbox.
 
 AI Generation providers (optional):
 - AI_PROVIDER: `gemini`, `openai`, or `echo`

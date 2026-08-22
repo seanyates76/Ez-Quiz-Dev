@@ -1,8 +1,10 @@
 'use strict';
 
-// Keep the original URI stable because ChatGPT caches the tool template URI
-// when an app connection is created. Widget revisions update the content at the
-// stable URI instead of breaking existing cards.
+const { BRAND_WORDMARK_DATA_URI } = require('./mcpQuizBrand.js');
+
+// Keep the original URI stable because ChatGPT caches the template URI when a
+// connection is created. New revisions replace the resource content instead of
+// stranding existing cards on a missing template.
 const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v1.html';
 const QUIZ_WIDGET_ALIASES = Object.freeze([
   QUIZ_WIDGET_URI,
@@ -10,9 +12,6 @@ const QUIZ_WIDGET_ALIASES = Object.freeze([
 ]);
 const QUIZ_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app';
 const SITE_ORIGIN = 'https://ez-quiz.app';
-const BRAND_LOGO_DARK = `${SITE_ORIGIN}/icons/brand-title-source.png`;
-const BRAND_LOGO_LIGHT = `${SITE_ORIGIN}/icons/brand-title-source-light.png`;
-const BRAND_ICON = `${SITE_ORIGIN}/icons/icon-192.png`;
 
 function quizWidgetHtml() {
   return `<!doctype html>
@@ -24,76 +23,83 @@ function quizWidgetHtml() {
     :root {
       color-scheme: light;
       --surface: #ffffff;
-      --surface-raised: #f7f7f8;
-      --surface-selected: #eef5ff;
-      --text: #202123;
+      --surface-raised: #f6f7f9;
+      --surface-selected: #eef4ff;
+      --surface-muted: #eceef2;
+      --text: #202124;
       --muted: #676b75;
-      --border: #dedfe3;
-      --border-strong: #c9cbd1;
-      --brand-surface: #f7f7f8;
+      --border: #dcdfe5;
+      --border-strong: #c9ced7;
       --accent: #3478f6;
       --accent-press: #2867d8;
       --purple: #7133d4;
       --success: #16885a;
+      --success-soft: #e9f7f1;
       --danger: #b83246;
+      --danger-soft: #fceef0;
       --warning: #9a6500;
       --focus: rgba(52, 120, 246, .25);
-      --shadow: 0 8px 24px rgba(25, 31, 45, .08);
+      --shadow: 0 10px 30px rgba(25, 31, 45, .1);
       --safe-top: 0px;
       --safe-right: 0px;
       --safe-bottom: 0px;
       --safe-left: 0px;
-      --radius-card: 18px;
-      --radius-control: 13px;
+      --radius-card: 19px;
+      --radius-control: 14px;
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
-      --surface: #232428;
-      --surface-raised: #2c2e33;
-      --surface-selected: #26374f;
-      --text: #f2f3f5;
-      --muted: #adb1bb;
-      --border: #3b3d43;
-      --border-strong: #4a4d55;
-      --brand-surface: #1d1d22;
-      --accent: #6698ff;
-      --accent-press: #77a4ff;
-      --purple: #a97aff;
-      --success: #35c982;
-      --danger: #ff7c89;
+      --surface: #202124;
+      --surface-raised: #292b30;
+      --surface-selected: #263750;
+      --surface-muted: #31343a;
+      --text: #f3f4f6;
+      --muted: #adb2bd;
+      --border: #3b3e45;
+      --border-strong: #4b4f58;
+      --accent: #6c9cff;
+      --accent-press: #80aaff;
+      --purple: #b184ff;
+      --success: #42cf8c;
+      --success-soft: #1d3a30;
+      --danger: #ff8491;
+      --danger-soft: #45272e;
       --warning: #f2bd55;
-      --focus: rgba(102, 152, 255, .3);
-      --shadow: 0 9px 28px rgba(0, 0, 0, .24);
+      --focus: rgba(108, 156, 255, .3);
+      --shadow: 0 11px 32px rgba(0, 0, 0, .28);
     }
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme]) {
         color-scheme: dark;
-        --surface: #232428;
-        --surface-raised: #2c2e33;
-        --surface-selected: #26374f;
-        --text: #f2f3f5;
-        --muted: #adb1bb;
-        --border: #3b3d43;
-        --border-strong: #4a4d55;
-        --brand-surface: #1d1d22;
-        --accent: #6698ff;
-        --accent-press: #77a4ff;
-        --purple: #a97aff;
-        --success: #35c982;
-        --danger: #ff7c89;
+        --surface: #202124;
+        --surface-raised: #292b30;
+        --surface-selected: #263750;
+        --surface-muted: #31343a;
+        --text: #f3f4f6;
+        --muted: #adb2bd;
+        --border: #3b3e45;
+        --border-strong: #4b4f58;
+        --accent: #6c9cff;
+        --accent-press: #80aaff;
+        --purple: #b184ff;
+        --success: #42cf8c;
+        --success-soft: #1d3a30;
+        --danger: #ff8491;
+        --danger-soft: #45272e;
         --warning: #f2bd55;
-        --focus: rgba(102, 152, 255, .3);
-        --shadow: 0 9px 28px rgba(0, 0, 0, .24);
+        --focus: rgba(108, 156, 255, .3);
+        --shadow: 0 11px 32px rgba(0, 0, 0, .28);
       }
     }
     * { box-sizing: border-box; }
-    html, body { width: 100%; min-height: 100%; margin: 0; overflow: visible; }
+    html, body { width: 100%; min-height: 100%; margin: 0; }
     body {
+      overflow: hidden;
       padding:
-        max(8px, var(--safe-top))
-        max(8px, var(--safe-right))
-        max(12px, var(--safe-bottom))
-        max(8px, var(--safe-left));
+        calc(12px + var(--safe-top))
+        calc(12px + var(--safe-right))
+        calc(14px + var(--safe-bottom))
+        calc(12px + var(--safe-left));
       color: var(--text);
       background: transparent;
       font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -103,10 +109,13 @@ function quizWidgetHtml() {
     button, input, select { font: inherit; }
     button { -webkit-tap-highlight-color: transparent; }
     .app {
+      display: flex;
       width: 100%;
-      max-width: 680px;
+      max-width: 700px;
+      min-height: 220px;
       margin: 0 auto;
       overflow: hidden;
+      flex-direction: column;
       border: 1px solid var(--border);
       border-radius: var(--radius-card);
       background: var(--surface);
@@ -114,28 +123,30 @@ function quizWidgetHtml() {
     }
     .brandbar {
       position: relative;
+      z-index: 2;
       display: flex;
-      min-height: 58px;
+      flex: 0 0 auto;
+      min-height: 62px;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 11px 14px 10px;
-      border-bottom: 1px solid var(--border);
-      background: var(--brand-surface);
-      box-shadow: inset 0 3px 0 #5c2ab3;
+      padding: 11px 16px 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, .1);
+      background: linear-gradient(135deg, #17131d 0%, #24183b 55%, #321c55 100%);
+      box-shadow: inset 0 3px 0 #6e32ca;
     }
     .brand-logo {
       display: block;
-      width: min(158px, 46vw);
+      width: min(168px, 47vw);
       height: auto;
-      max-height: 38px;
+      max-height: 40px;
       object-fit: contain;
       object-position: left center;
     }
     .brand-actions { display: flex; min-width: 0; align-items: center; gap: 8px; }
     .tag {
       overflow: hidden;
-      color: var(--muted);
+      color: rgba(255, 255, 255, .76);
       font-size: 11px;
       white-space: nowrap;
       text-overflow: ellipsis;
@@ -147,27 +158,36 @@ function quizWidgetHtml() {
       min-height: 38px;
       place-items: center;
       padding: 0;
-      border: 1px solid var(--border);
+      border: 1px solid rgba(255, 255, 255, .25);
       border-radius: 11px;
-      color: var(--text);
-      background: var(--surface);
+      color: #fff;
+      background: rgba(255, 255, 255, .08);
       cursor: pointer;
     }
-    .icon-button:hover { background: var(--surface-raised); }
+    .icon-button:hover { background: rgba(255, 255, 255, .14); }
     .icon-button svg { width: 18px; height: 18px; }
-    .ezq-main { padding: clamp(14px, 3.6vw, 20px); }
+    .ezq-main {
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: clamp(18px, 4vw, 25px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+    }
+    .ezq-main:focus { outline: none; }
     .topline {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 10px;
-      margin-bottom: 9px;
+      gap: 12px;
+      margin-bottom: 10px;
     }
-    .eyebrow { color: var(--purple); font-size: 14px; font-weight: 780; }
-    .score { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+    .eyebrow { color: var(--purple); font-size: 14px; font-weight: 800; }
+    .timer { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
     .progress {
       height: 7px;
-      margin-bottom: 17px;
+      margin-bottom: 19px;
       overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 999px;
@@ -177,18 +197,19 @@ function quizWidgetHtml() {
       display: block;
       height: 100%;
       border-radius: inherit;
-      background: var(--accent);
-      transition: width .25s ease;
+      background: linear-gradient(90deg, var(--accent), var(--purple));
+      transition: width .2s ease;
     }
-    h1, h2, p { overflow-wrap: anywhere; }
-    h2 { margin: 0 0 16px; font-size: 19px; line-height: 1.34; letter-spacing: -.012em; }
-    .answers, .match-list { display: grid; gap: 9px; }
+    h1, h2, h3, p { overflow-wrap: anywhere; }
+    h1 { margin: 0; font-size: 23px; line-height: 1.24; letter-spacing: -.015em; }
+    h2 { margin: 0 0 17px; font-size: 20px; line-height: 1.36; letter-spacing: -.012em; }
+    .answers, .match-list { display: grid; gap: 10px; }
     .answer {
       display: flex;
-      min-height: 52px;
+      min-height: 54px;
       align-items: flex-start;
-      gap: 11px;
-      padding: 12px 13px;
+      gap: 12px;
+      padding: 13px 14px;
       border: 1px solid var(--border-strong);
       border-radius: var(--radius-control);
       background: var(--surface-raised);
@@ -204,18 +225,18 @@ function quizWidgetHtml() {
     .answer:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
     .answer input {
       flex: 0 0 auto;
-      width: 19px;
-      height: 19px;
+      width: 20px;
+      height: 20px;
       margin: 1px 0 0;
       accent-color: var(--accent);
     }
     .answer span { min-width: 0; line-height: 1.42; }
     .match {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(132px, .78fr);
+      grid-template-columns: minmax(0, 1fr) minmax(148px, .82fr);
       align-items: center;
-      gap: 10px;
-      padding: 11px 12px;
+      gap: 12px;
+      padding: 12px 13px;
       border: 1px solid var(--border-strong);
       border-radius: var(--radius-control);
       background: var(--surface-raised);
@@ -223,139 +244,171 @@ function quizWidgetHtml() {
     .match select {
       width: 100%;
       min-width: 0;
-      padding: 9px 30px 9px 10px;
+      padding: 10px 31px 10px 11px;
       border: 1px solid var(--border-strong);
       border-radius: 10px;
       color: var(--text);
       background: var(--surface);
     }
     .match select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-    .feedback { min-height: 22px; margin-top: 12px; font-size: 14px; font-weight: 750; }
-    .feedback.good { color: var(--success); }
-    .feedback.bad { color: var(--danger); }
-    .feedback.hint { color: var(--warning); }
-    .buttons { display: flex; gap: 9px; margin-top: 11px; }
-    .buttons > button { flex: 1; }
+    .runner-actions {
+      position: sticky;
+      z-index: 2;
+      bottom: -1px;
+      display: grid;
+      grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr);
+      gap: 10px;
+      margin: 20px -4px -5px;
+      padding: 13px 4px 5px;
+      background: linear-gradient(to bottom, transparent, var(--surface) 22%);
+    }
     button:not(.icon-button) {
-      min-height: 46px;
-      padding: 10px 15px;
+      min-height: 48px;
+      padding: 10px 16px;
       border: 1px solid transparent;
       border-radius: var(--radius-control);
-      font-weight: 760;
+      font-weight: 780;
       cursor: pointer;
       transition: transform .12s ease, background-color .15s ease, opacity .15s ease;
     }
     button:active { transform: translateY(1px); }
     button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; box-shadow: 0 0 0 4px var(--focus); }
-    button:disabled { cursor: wait; opacity: .64; }
+    button:disabled { cursor: default; opacity: .48; }
     .primary { color: #fff; background: var(--accent); }
     .primary:hover { background: var(--accent-press); }
-    .success { color: #fff; background: var(--success); }
     .secondary { border-color: var(--border-strong) !important; color: var(--text); background: var(--surface-raised); }
-    .secondary:hover { background: var(--surface); }
-    .note { margin: 13px 0 0; color: var(--muted); font-size: 12px; line-height: 1.4; }
-    .loading-card { padding: 4px 0 0; }
-    .loading-head { display: flex; align-items: center; gap: 13px; }
-    .loading-icon {
-      display: block;
+    .secondary:hover { background: var(--surface-muted); }
+    .mounting {
+      display: flex;
+      min-height: 116px;
+      align-items: center;
+      gap: 14px;
+      color: var(--muted);
+    }
+    .mounting-bolt {
+      display: grid;
       flex: 0 0 auto;
-      width: 52px;
-      height: 52px;
-      border: 1px solid var(--border);
+      width: 48px;
+      height: 48px;
+      place-items: center;
       border-radius: 14px;
-      object-fit: cover;
-      box-shadow: 0 6px 16px rgba(25, 31, 45, .13);
+      color: #ffcc00;
+      background: #271a3b;
+      font-size: 26px;
     }
-    .loading-copy { min-width: 0; }
-    .loading-title { margin: 0; font-size: 18px; font-weight: 800; line-height: 1.25; }
-    .loading-message { margin: 3px 0 0; color: var(--muted); font-size: 14px; }
-    .loading-scan {
-      height: 8px;
-      margin: 20px 0 11px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      border-radius: 999px;
-      background: var(--surface-raised);
-    }
-    .loading-scan > span {
-      display: block;
-      width: 42%;
-      height: 100%;
-      border-radius: inherit;
-      background: var(--accent);
-      animation: scan 1.45s ease-in-out infinite;
-    }
-    .loading-scan.determinate > span { animation: none; transition: width .3s ease; }
-    .loading-meta { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
-    .loading-step { white-space: nowrap; }
-    .loading-step::before {
-      content: "";
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      margin-right: 7px;
-      border-radius: 50%;
-      background: var(--success);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 14%, transparent);
-    }
-    .loading-card .buttons { margin-top: 17px; }
-    .status-card, .finish { padding: 3px 0 1px; }
+    .mounting strong { display: block; margin-bottom: 2px; color: var(--text); font-size: 17px; }
+    .status-card { padding: 3px 0 2px; }
     .status-icon {
       display: grid;
-      width: 40px;
-      height: 40px;
-      margin-bottom: 12px;
+      width: 42px;
+      height: 42px;
+      margin-bottom: 13px;
       place-items: center;
-      border-radius: 12px;
+      border-radius: 13px;
       color: var(--purple);
-      background: color-mix(in srgb, var(--purple) 12%, var(--surface));
+      background: color-mix(in srgb, var(--purple) 13%, var(--surface));
       font-size: 21px;
       font-weight: 850;
     }
-    .status-card h1, .finish h1 { margin: 0 0 7px; font-size: 21px; line-height: 1.25; }
-    .status-card p, .finish p { margin: 0; color: var(--muted); }
-    .result-score { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-    .result-score strong { color: var(--purple); font-size: 36px; line-height: 1; }
-    .result-score span { color: var(--muted); font-weight: 650; }
-    .finish .buttons { margin-top: 18px; }
-    @keyframes scan {
-      0% { transform: translateX(-115%); }
-      50% { transform: translateX(72%); }
-      100% { transform: translateX(245%); }
+    .status-card p { margin: 8px 0 0; color: var(--muted); }
+    .results-head { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; }
+    .score-orb {
+      display: grid;
+      width: 82px;
+      height: 82px;
+      place-items: center;
+      border: 7px solid color-mix(in srgb, var(--purple) 22%, var(--surface-raised));
+      border-radius: 50%;
+      color: var(--purple);
+      background: var(--surface-raised);
+      font-size: 22px;
+      font-weight: 850;
+      font-variant-numeric: tabular-nums;
     }
-    :root[data-compact="true"] .brandbar { min-height: 52px; padding-block: 9px 8px; }
-    :root[data-compact="true"] .ezq-main { padding: 12px; }
-    :root[data-compact="true"] .answer { min-height: 46px; padding: 10px 11px; }
-    :root[data-compact="true"] h2 { margin-bottom: 13px; font-size: 18px; }
+    .results-copy p { margin: 5px 0 0; color: var(--muted); }
+    .result-progress { margin: 18px 0 15px; }
+    .result-progress .progress { margin: 0; }
+    .filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
+    .filter-chip {
+      min-height: 38px !important;
+      padding: 7px 13px !important;
+      border-color: var(--border-strong) !important;
+      color: var(--muted);
+      background: var(--surface-raised);
+      font-size: 13px;
+    }
+    .filter-chip.active { border-color: var(--accent) !important; color: var(--text); background: var(--surface-selected); }
+    .result-list { display: grid; gap: 11px; }
+    .result-card {
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--danger);
+      border-radius: var(--radius-control);
+      background: var(--surface-raised);
+    }
+    .result-card.correct { border-left-color: var(--success); }
+    .result-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .result-card h3 { margin: 0; font-size: 15px; line-height: 1.42; }
+    .result-badge {
+      flex: 0 0 auto;
+      padding: 4px 8px;
+      border-radius: 999px;
+      color: var(--danger);
+      background: var(--danger-soft);
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .result-card.correct .result-badge { color: var(--success); background: var(--success-soft); }
+    .answer-detail { margin-top: 9px; color: var(--muted); font-size: 13px; }
+    .answer-detail strong { color: var(--text); }
+    .explain {
+      min-height: 36px !important;
+      margin-top: 11px;
+      padding: 6px 11px !important;
+      border-color: var(--border-strong) !important;
+      color: var(--text);
+      background: var(--surface);
+      font-size: 12px;
+    }
+    .empty-results { padding: 19px; border: 1px dashed var(--border-strong); border-radius: var(--radius-control); color: var(--muted); text-align: center; }
+    .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 17px; }
+    .result-note { margin: 13px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
     @media (max-width: 460px) {
       body {
         padding:
-          max(6px, var(--safe-top))
-          max(6px, var(--safe-right))
-          max(10px, var(--safe-bottom))
-          max(6px, var(--safe-left));
+          calc(10px + var(--safe-top))
+          calc(10px + var(--safe-right))
+          calc(12px + var(--safe-bottom))
+          calc(10px + var(--safe-left));
       }
-      .app { border-radius: 16px; }
-      .brandbar { min-height: 54px; padding: 9px 12px 8px; }
-      .brand-logo { width: min(142px, 49vw); max-height: 34px; }
-      .tag { max-width: 128px; }
-      .ezq-main { padding: 13px; }
-      h2 { margin-bottom: 14px; font-size: 18px; }
-      .answer { min-height: 49px; padding: 11px 12px; }
+      .app { min-height: 210px; border-radius: 17px; }
+      .brandbar { min-height: 57px; padding: 9px 14px 8px; }
+      .brand-logo { width: min(150px, 48vw); max-height: 37px; }
+      .tag { max-width: 126px; }
+      .ezq-main { padding: 17px; }
+      h2 { margin-bottom: 15px; font-size: 19px; }
+      .answer { min-height: 52px; padding: 12px 13px; }
       .match { grid-template-columns: 1fr; }
-      .loading-icon { width: 48px; height: 48px; }
+      .results-head { gap: 13px; }
+      .score-orb { width: 72px; height: 72px; border-width: 6px; font-size: 20px; }
     }
     @media (max-width: 360px) {
+      body {
+        padding:
+          calc(8px + var(--safe-top))
+          calc(8px + var(--safe-right))
+          calc(10px + var(--safe-bottom))
+          calc(8px + var(--safe-left));
+      }
       .tag { display: none; }
-      .brand-logo { width: 132px; }
-      .ezq-main { padding: 12px; }
-      .topline { margin-bottom: 8px; }
-      .eyebrow, .score { font-size: 13px; }
-      h2 { font-size: 17px; }
-      .answer { gap: 9px; padding: 10px 11px; }
-      .buttons { flex-direction: column; }
-      .buttons > button { width: 100%; }
-      .loading-meta { align-items: flex-start; flex-direction: column; gap: 5px; }
+      .brand-logo { width: 142px; }
+      .ezq-main { padding: 15px; }
+      .eyebrow, .timer { font-size: 13px; }
+      h2 { font-size: 18px; }
+      .answer { gap: 10px; padding: 11px 12px; }
+      .runner-actions, .result-actions { grid-template-columns: 1fr; }
+      .runner-actions { position: static; }
+      .results-head { grid-template-columns: 1fr; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -368,9 +421,9 @@ function quizWidgetHtml() {
   </style>
 </head>
 <body>
-  <section class="app" aria-live="polite">
+  <section id="app" class="app" aria-label="EZ Quiz">
     <header class="brandbar">
-      <img id="brandLogo" class="brand-logo" src="${BRAND_LOGO_LIGHT}" data-light-src="${BRAND_LOGO_LIGHT}" data-dark-src="${BRAND_LOGO_DARK}" alt="EZ Quiz">
+      <img id="brandLogo" class="brand-logo" src="${BRAND_WORDMARK_DATA_URI}" alt="EZ Quiz">
       <div class="brand-actions">
         <span class="tag">Smart. Simple. Fast. EZ.</span>
         <button id="expand" class="icon-button" type="button" aria-label="Open quiz full screen" title="Open full screen" hidden>
@@ -378,41 +431,31 @@ function quizWidgetHtml() {
         </button>
       </div>
     </header>
-    <main id="root" class="ezq-main">
-      <div class="loading-card">
-        <div class="loading-head">
-          <img class="loading-icon" src="${BRAND_ICON}" alt="">
-          <div class="loading-copy"><p class="loading-title">Building your quiz...</p><p class="loading-message">Preparing the question plan.</p></div>
-        </div>
-        <div class="loading-scan" aria-hidden="true"><span></span></div>
-        <div class="loading-meta"><span class="loading-step">Connecting</span><span>Creating your questions</span></div>
-      </div>
+    <main id="root" class="ezq-main" tabindex="-1">
+      <div class="mounting"><span class="mounting-bolt" aria-hidden="true">⚡</span><div><strong>Opening your quiz…</strong><span>Loading the runner.</span></div></div>
     </main>
   </section>
   <script>
     (() => {
+      const app = document.getElementById('app');
       const root = document.getElementById('root');
-      const brandLogo = document.getElementById('brandLogo');
       const expandButton = document.getElementById('expand');
       const requestFrame = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
       const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
       const colorScheme = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
       const pendingRequests = new Map();
-      const terminalStatuses = new Set(['complete', 'partial', 'failed', 'stopped', 'canceled', 'expired']);
-      let quiz = null;
-      let index = 0;
-      let score = 0;
-      let checked = false;
       let nextRequestId = 1;
-      let phaseTimer = null;
-      let pollTimer = null;
-      let pollController = null;
-      let activeJob = null;
-      let generationInput = {};
-      let queuedPolls = 0;
-      let pollingStartedAt = 0;
       let heightFrame = 0;
-      const MAX_POLL_MS = 120000;
+      let timerHandle = null;
+      let quiz = null;
+      let quizKey = '';
+      let mode = 'quiz';
+      let attemptIndexes = [];
+      let answers = [];
+      let index = 0;
+      let resultsFilter = 'missed';
+      let startedAt = 0;
+      let finishedAt = 0;
 
       const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -428,12 +471,17 @@ function quizWidgetHtml() {
         if (heightFrame) cancelFrame(heightFrame);
         heightFrame = requestFrame(() => {
           heightFrame = 0;
-          try { window.openai && window.openai.notifyIntrinsicHeight && window.openai.notifyIntrinsicHeight(); } catch {}
+          try {
+            if (window.openai && typeof window.openai.notifyIntrinsicHeight === 'function') {
+              window.openai.notifyIntrinsicHeight();
+            }
+          } catch {}
         });
       }
 
       function renderHtml(html) {
         root.innerHTML = html;
+        root.scrollTop = 0;
         scheduleHeightReport();
       }
 
@@ -449,40 +497,74 @@ function quizWidgetHtml() {
           ? requestedTheme
           : (colorScheme && colorScheme.matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
-        if (brandLogo) brandLogo.src = theme === 'dark' ? brandLogo.dataset.darkSrc : brandLogo.dataset.lightSrc;
 
         const safeArea = context.safeArea && typeof context.safeArea === 'object' ? context.safeArea : {};
         const insets = safeArea.insets && typeof safeArea.insets === 'object' ? safeArea.insets : safeArea;
-        document.documentElement.style.setProperty('--safe-top', numberInset(insets.top) + 'px');
-        document.documentElement.style.setProperty('--safe-right', numberInset(insets.right) + 'px');
-        document.documentElement.style.setProperty('--safe-bottom', numberInset(insets.bottom) + 'px');
-        document.documentElement.style.setProperty('--safe-left', numberInset(insets.left) + 'px');
+        const top = numberInset(insets.top);
+        const right = numberInset(insets.right);
+        const bottom = numberInset(insets.bottom);
+        const left = numberInset(insets.left);
+        document.documentElement.style.setProperty('--safe-top', top + 'px');
+        document.documentElement.style.setProperty('--safe-right', right + 'px');
+        document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
+        document.documentElement.style.setProperty('--safe-left', left + 'px');
 
         const maxHeight = Number(context.maxHeight || 0);
-        document.documentElement.dataset.compact = maxHeight > 0 && maxHeight < 620 ? 'true' : 'false';
+        if (maxHeight > 0) {
+          app.style.maxHeight = Math.max(180, maxHeight - top - bottom - 24) + 'px';
+          document.documentElement.dataset.constrained = 'true';
+        } else {
+          app.style.maxHeight = '';
+          delete document.documentElement.dataset.constrained;
+        }
         expandButton.hidden = !(window.openai && typeof window.openai.requestDisplayMode === 'function')
           || String(context.displayMode || '').toLowerCase() === 'fullscreen';
         scheduleHeightReport();
       }
 
+      function formatDuration(milliseconds) {
+        const total = Math.max(0, Math.floor(Number(milliseconds || 0) / 1000));
+        const minutes = Math.floor(total / 60);
+        const seconds = total % 60;
+        return String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+      }
+
+      function stopTimer() {
+        clearInterval(timerHandle);
+        timerHandle = null;
+      }
+
+      function updateTimer() {
+        const timer = document.getElementById('timer');
+        if (timer) timer.textContent = formatDuration((finishedAt || Date.now()) - startedAt);
+      }
+
+      function startTimer() {
+        stopTimer();
+        updateTimer();
+        if (mode === 'quiz') timerHandle = setInterval(updateTimer, 1000);
+      }
+
+      function snapshot() {
+        return {
+          version: 2,
+          quizId: quizKey,
+          mode,
+          attemptIndexes: attemptIndexes.slice(),
+          answers: answers.slice(),
+          index,
+          resultsFilter,
+          startedAt,
+          finishedAt,
+        };
+      }
+
       function saveQuizState() {
         try {
-          window.openai && window.openai.setWidgetState && window.openai.setWidgetState({ index, score, checked: false });
+          if (window.openai && typeof window.openai.setWidgetState === 'function') {
+            window.openai.setWidgetState(snapshot());
+          }
         } catch {}
-      }
-
-      function findMeta(value, depth) {
-        if (!value || typeof value !== 'object' || depth > 4) return null;
-        if (value._meta && typeof value._meta === 'object') return value._meta;
-        for (const key of ['mcp_tool_result', 'call_tool_result', 'toolResult', 'result', 'params']) {
-          const found = findMeta(value[key], depth + 1);
-          if (found) return found;
-        }
-        return null;
-      }
-
-      function currentMetadata() {
-        return findMeta(window.openai && window.openai.toolResponseMetadata, 0);
       }
 
       function structuredOutput(value) {
@@ -493,425 +575,376 @@ function quizWidgetHtml() {
         return value;
       }
 
-      function generationPrompt() {
-        const topic = String(generationInput.topic || 'the same topic').trim() || 'the same topic';
-        const count = Math.max(1, Math.min(20, Number(generationInput.count || 10) || 10));
-        const difficulty = String(generationInput.difficulty || 'medium').toLowerCase();
-        return 'Create a fresh ' + count + '-question ' + difficulty + '-difficulty EZ Quiz about ' + topic + '.';
-      }
-
-      async function startFresh() {
-        const button = root.querySelector('[data-start-fresh]');
-        if (button) {
-          button.disabled = true;
-          button.textContent = 'Starting...';
+      function simpleHash(value) {
+        const text = JSON.stringify(value);
+        let hash = 2166136261;
+        for (let offset = 0; offset < text.length; offset += 1) {
+          hash ^= text.charCodeAt(offset);
+          hash = Math.imul(hash, 16777619);
         }
-        try {
-          if (!window.openai || typeof window.openai.sendFollowUpMessage !== 'function') {
-            throw new Error('Ask ChatGPT to create a new EZ Quiz in the composer below.');
-          }
-          await window.openai.sendFollowUpMessage({ prompt: generationPrompt(), scrollToBottom: true });
-        } catch (error) {
-          const note = root.querySelector('[data-recovery-note]');
-          if (note) note.textContent = String(error && error.message || 'Ask ChatGPT to create a new EZ Quiz.');
-          if (button) {
-            button.disabled = false;
-            button.textContent = 'Start fresh';
-          }
+        return 'legacy-' + (hash >>> 0).toString(16);
+      }
+
+      function normalizeQuestion(raw) {
+        if (!raw || typeof raw !== 'object') return null;
+        const type = String(raw.type || '').toUpperCase();
+        const text = String(raw.text || raw.prompt || '').trim();
+        if (!text || !['MC', 'TF', 'YN', 'MT'].includes(type)) return null;
+        if (type === 'MC') {
+          const options = Array.isArray(raw.options) ? raw.options.map(String) : [];
+          const correct = Array.isArray(raw.correct) ? raw.correct.filter(Number.isInteger) : [];
+          return options.length >= 2 && correct.length ? { type, text, options, correct } : null;
         }
-      }
-
-      function statusCard(title, message, options) {
-        const settings = options || {};
-        const buttons = [];
-        if (settings.primaryLabel) buttons.push('<button class="primary" type="button" data-primary>' + esc(settings.primaryLabel) + '</button>');
-        if (settings.allowFresh !== false) buttons.push('<button class="' + (buttons.length ? 'secondary' : 'primary') + '" type="button" data-start-fresh>Start fresh</button>');
-        renderHtml(
-          '<div class="status-card"><div class="status-icon" aria-hidden="true">' + esc(settings.icon || '!') + '</div>' +
-          '<h1>' + esc(title) + '</h1><p>' + esc(message) + '</p>' +
-          (buttons.length ? '<div class="buttons">' + buttons.join('') + '</div>' : '') +
-          '<p class="note" data-recovery-note>' + esc(settings.note || '') + '</p></div>'
-        );
-        const fresh = root.querySelector('[data-start-fresh]');
-        if (fresh) fresh.addEventListener('click', startFresh);
-        return root.querySelector('[data-primary]');
-      }
-
-      function showStaleSession() {
-        clearGenerationTimers();
-        statusCard('This quiz card expired', 'Its original generation session is no longer available, so repeating it would fail again.', {
-          icon: '↻', note: 'Start fresh creates a new job instead of retrying this broken card.'
-        });
-      }
-
-      function showFailure(message, title) {
-        clearGenerationTimers();
-        statusCard(title || 'Quiz generation stopped', message || 'EZ Quiz could not finish this generation job.', {
-          icon: '!', note: 'Start fresh creates a new generation job.'
-        });
-      }
-
-      function loadingMarkup(count, message, completed) {
-        const requested = Math.max(1, Number(count || 10) || 10);
-        const ready = Math.max(0, Number(completed || 0) || 0);
-        const determinate = ready > 0;
-        const percent = Math.max(4, Math.min(100, Math.round((ready / requested) * 100)));
-        return '<div class="loading-card"><div class="loading-head"><img class="loading-icon" src="${BRAND_ICON}" alt="">' +
-          '<div class="loading-copy"><p class="loading-title">Building your quiz...</p><p class="loading-message" id="loadingMessage">' +
-          esc(message || 'Preparing the question plan.') + '</p></div></div>' +
-          '<div class="loading-scan' + (determinate ? ' determinate' : '') + '" aria-hidden="true"><span style="' + (determinate ? 'width:' + percent + '%' : '') + '"></span></div>' +
-          '<div class="loading-meta"><span class="loading-step">Generation in progress</span><span id="loadingCount">' +
-          (determinate ? ready + ' of ' + requested + ' ready' : 'Creating ' + requested + ' questions') + '</span></div>' +
-          '<div class="buttons"><button id="cancelGeneration" class="secondary" type="button">Cancel generation</button></div></div>';
-      }
-
-      function showLoading(count, message, completed) {
-        renderHtml(loadingMarkup(count, message, completed));
-        const cancel = document.getElementById('cancelGeneration');
-        if (cancel) cancel.addEventListener('click', () => stopGeneration());
-        const phases = ['Preparing the question plan.', 'Writing balanced questions.', 'Checking the quiz format.'];
-        let phase = 0;
-        clearInterval(phaseTimer);
-        if (!message && !completed) {
-          phaseTimer = setInterval(() => {
-            phase = (phase + 1) % phases.length;
-            const element = document.getElementById('loadingMessage');
-            if (element) element.textContent = phases[phase];
-          }, 2400);
+        if (type === 'TF' || type === 'YN') {
+          return typeof raw.correct === 'boolean' ? { type, text, correct: raw.correct } : null;
         }
+        const left = Array.isArray(raw.left) ? raw.left.map(String) : [];
+        const right = Array.isArray(raw.right) ? raw.right.map(String) : [];
+        const pairsSource = Array.isArray(raw.pairs) ? raw.pairs : raw.matches;
+        const pairs = Array.isArray(pairsSource) ? pairsSource.filter((pair) => Array.isArray(pair) && pair.length === 2) : [];
+        return left.length && right.length && pairs.length ? { type, text, left, right, pairs } : null;
       }
 
-      function clearGenerationTimers() {
-        clearInterval(phaseTimer);
-        clearTimeout(pollTimer);
-        phaseTimer = null;
-        pollTimer = null;
-        if (pollController) pollController.abort();
-        pollController = null;
-      }
-
-      function validHttpUrl(value) {
-        try {
-          const url = new URL(String(value || ''));
-          return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : '';
-        } catch {
-          return '';
-        }
-      }
-
-      function normalizedJob(raw) {
-        const value = raw && typeof raw === 'object' ? raw : {};
-        const jobId = String(value.jobId || '');
-        const workerToken = String(value.workerToken || '');
-        const workerUrl = validHttpUrl(value.workerUrl);
-        const statusUrl = validHttpUrl(value.statusUrl);
-        const stopUrl = validHttpUrl(value.stopUrl);
-        const workerStarted = value.workerStarted;
-        if (!/^qj_[A-Za-z0-9_-]{24,96}$/.test(jobId)) return null;
-        if (!/^[A-Za-z0-9_-]{24,96}$/.test(workerToken)) return null;
-        if (typeof workerStarted !== 'boolean') return null;
-        if (!statusUrl || !stopUrl || (!workerStarted && !workerUrl)) return null;
-        return { jobId, workerToken, workerStarted, workerUrl, statusUrl, stopUrl, requestedCount: Math.max(1, Number(value.requestedCount || generationInput.count || 10) || 10) };
-      }
-
-      async function fetchJson(url, options) {
-        const response = await fetch(url, { credentials: 'omit', cache: 'no-store', ...options });
-        let body = {};
-        try { body = await response.json(); } catch {}
-        if (!response.ok && response.status !== 410) {
-          const error = new Error(String(body.error || ('Request failed (' + response.status + ').')));
-          error.status = response.status;
-          throw error;
-        }
-        return body;
-      }
-
-      async function triggerWorker() {
-        if (!activeJob) return;
-        await fetchJson(activeJob.workerUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ jobId: activeJob.jobId, workerToken: activeJob.workerToken }),
-        });
-      }
-
-      function parseLegacyQuestion(line) {
-        const value = String(line || '').trim();
-        let match = value.match(/^MC\\|(.*)\\|(.+?)\\|([A-Za-z](?:\\s*,\\s*[A-Za-z])*)$/i);
-        if (match) {
-          const options = match[2].split(';').map((item) => item.trim().replace(/^[A-D]\\)\\s*/i, '')).filter(Boolean);
-          const correct = match[3].split(',').map((letter) => letter.trim().toUpperCase().charCodeAt(0) - 65)
-            .filter((position, offset, values) => position >= 0 && position < options.length && values.indexOf(position) === offset)
-            .sort((a, b) => a - b);
-          return options.length >= 2 && correct.length ? { type: 'MC', prompt: match[1].trim(), options, correct } : null;
-        }
-        match = value.match(/^TF\\|(.*)\\|(T|F)$/i);
-        if (match) return { type: 'TF', prompt: match[1].trim(), correct: /^T$/i.test(match[2]) };
-        match = value.match(/^YN\\|(.*)\\|(Y|N)$/i);
-        if (match) return { type: 'YN', prompt: match[1].trim(), correct: /^Y$/i.test(match[2]) };
-        match = value.match(/^MT\\|(.*)\\|(.+?)\\|(.+?)\\|(.+?)$/i);
-        if (match) {
-          const left = match[2].split(';').map((item) => item.trim().replace(/^\\d+\\)\\s*/, '')).filter(Boolean);
-          const right = match[3].split(';').map((item) => item.trim().replace(/^[A-Z]\\)\\s*/i, '')).filter(Boolean);
-          const pairs = match[4].split(',').map((pair) => pair.trim().match(/^(\\d+)\\s*-\\s*([A-Z])$/i)).filter(Boolean)
-            .map((pair) => [Number(pair[1]) - 1, pair[2].toUpperCase().charCodeAt(0) - 65]);
-          const leftIndexes = new Set(pairs.map((pair) => pair[0]));
-          const valid = left.length && right.length && pairs.length === left.length && leftIndexes.size === left.length
-            && pairs.every((pair) => pair[0] >= 0 && pair[0] < left.length && pair[1] >= 0 && pair[1] < right.length);
-          return valid ? { type: 'MT', prompt: match[1].trim(), left, right, matches: pairs } : null;
-        }
-        return null;
-      }
-
-      function quizFromStatus(status) {
-        const lines = Array.isArray(status.questions)
-          ? status.questions.map((line) => String(line || '').trim()).filter(Boolean)
-          : String(status.lines || '').split('\\n').map((line) => line.trim()).filter(Boolean);
-        const questions = lines.map(parseLegacyQuestion).filter(Boolean);
-        if (!questions.length) return null;
-        return {
-          title: String(status.title || status.topic || generationInput.topic || 'EZ Quiz'),
-          topic: String(status.topic || generationInput.topic || ''),
-          lines: lines.join('\\n'), questions, questionCount: questions.length, aiGenerated: true,
-          partial: questions.length < Number(status.requestedCount || questions.length),
-        };
-      }
-
-      function finishGeneration(status) {
-        const state = String(status.status || '').toLowerCase();
-        const readyQuiz = quizFromStatus(status);
-        clearGenerationTimers();
-        activeJob = null;
-        if ((state === 'complete' || state === 'partial') && readyQuiz) {
-          loadQuiz(readyQuiz);
-          return;
-        }
-        if ((state === 'stopped' || state === 'canceled') && readyQuiz) {
-          const primary = statusCard('Generation stopped', readyQuiz.questionCount + ' question' + (readyQuiz.questionCount === 1 ? ' is' : 's are') + ' ready to use.', {
-            icon: '■', primaryLabel: 'Use ready questions', note: 'You can continue with the completed questions or start a new job.'
-          });
-          if (primary) primary.addEventListener('click', () => loadQuiz(readyQuiz));
-          return;
-        }
-        const firstError = status.errors && status.errors[0] && status.errors[0].message;
-        const message = firstError || status.progressMessage || (state === 'expired' ? 'This generation job expired.' : 'No usable questions were created.');
-        showFailure(message, state === 'expired' ? 'Quiz generation expired' : 'Quiz generation stopped');
-      }
-
-      async function pollJob() {
-        if (!activeJob) return;
-        if (Date.now() - pollingStartedAt > MAX_POLL_MS) {
-          await stopGeneration('Generation took too long and was stopped.');
-          return;
-        }
-        pollController = new AbortController();
-        try {
-          const separator = activeJob.statusUrl.includes('?') ? '&' : '?';
-          const status = await fetchJson(activeJob.statusUrl + separator + 'jobId=' + encodeURIComponent(activeJob.jobId), {
-            method: 'GET', headers: { Accept: 'application/json', Authorization: 'Bearer ' + activeJob.workerToken }, signal: pollController.signal,
-          });
-          if (!activeJob) return;
-          const state = String(status.status || '').toLowerCase();
-          const completed = Number(status.completedCount || 0);
-          const requested = Number(status.requestedCount || activeJob.requestedCount);
-          queuedPolls = state === 'queued' && completed === 0 ? queuedPolls + 1 : 0;
-          if (terminalStatuses.has(state)) {
-            finishGeneration(status);
-            return;
-          }
-          showLoading(requested, status.progressMessage || (state === 'queued' ? 'Planning the quiz.' : 'Writing balanced questions.'), completed);
-          if (queuedPolls === 4 && !activeJob.workerStarted) {
-            try { await triggerWorker(); } catch {}
-          }
-          pollTimer = setTimeout(pollJob, 1400);
-        } catch (error) {
-          if (!activeJob || (error && error.name === 'AbortError')) return;
-          showFailure(error && error.status === 404
-            ? 'The generation job could not be found. Start a fresh quiz instead of retrying this card.'
-            : 'Lost contact with the generation job. Start fresh to create a new session.');
-          activeJob = null;
-        } finally {
-          pollController = null;
-        }
-      }
-
-      async function startGeneration(rawJob, output) {
-        const job = normalizedJob(rawJob);
-        if (!job) {
-          showStaleSession();
-          return;
-        }
-        if (activeJob && activeJob.jobId === job.jobId) return;
-        clearGenerationTimers();
-        activeJob = job;
-        queuedPolls = 0;
-        pollingStartedAt = Date.now();
-        showLoading(job.requestedCount, rawJob.progressMessage || output.progressMessage, 0);
-        try {
-          if (!job.workerStarted) await triggerWorker();
-          await pollJob();
-        } catch (error) {
-          if (!activeJob || (error && error.name === 'AbortError')) return;
-          activeJob = null;
-          showFailure('The generation worker could not start. Start fresh to create a new job.');
-        }
-      }
-
-      async function stopGeneration(timeoutMessage) {
-        if (!activeJob) return;
-        const job = activeJob;
-        clearGenerationTimers();
-        const cancel = document.getElementById('cancelGeneration');
-        if (cancel) { cancel.disabled = true; cancel.textContent = 'Stopping...'; }
-        try {
-          const status = await fetchJson(job.stopUrl, {
-            method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + job.workerToken }, body: JSON.stringify({ jobId: job.jobId }),
-          });
-          finishGeneration({ ...status, progressMessage: timeoutMessage || status.progressMessage });
-        } catch {
-          activeJob = null;
-          showFailure(timeoutMessage || 'The stop request could not be confirmed. The card will no longer keep polling.');
-        }
-      }
-
-      function optionsFor(question) {
-        if (question.type === 'MC') {
-          return question.options.map((option, optionIndex) =>
-            '<label class="answer"><input type="' + (question.correct.length > 1 ? 'checkbox' : 'radio') + '" name="answer" value="' + optionIndex + '"><span>' + esc(option) + '</span></label>'
-          ).join('');
-        }
-        if (question.type === 'TF' || question.type === 'YN') {
-          const labels = question.type === 'TF' ? ['True', 'False'] : ['Yes', 'No'];
-          return labels.map((option, optionIndex) =>
-            '<label class="answer"><input type="radio" name="answer" value="' + (optionIndex === 0 ? 'true' : 'false') + '"><span>' + option + '</span></label>'
-          ).join('');
-        }
-        if (question.type === 'MT') {
-          return '<div class="match-list">' + question.left.map((left, leftIndex) =>
-            '<label class="match"><span>' + (leftIndex + 1) + '. ' + esc(left) + '</span><select data-left="' + leftIndex + '"><option value="">Choose a match</option>' +
-            question.right.map((right, rightIndex) => '<option value="' + rightIndex + '">' + String.fromCharCode(65 + rightIndex) + '. ' + esc(right) + '</option>').join('') + '</select></label>'
-          ).join('') + '</div>';
-        }
-        return '';
-      }
-
-      function hasSelection(question) {
-        if (question.type === 'MC' || question.type === 'TF' || question.type === 'YN') return !!root.querySelector('input[name=answer]:checked');
-        if (question.type === 'MT') {
-          const fields = [...root.querySelectorAll('select[data-left]')];
-          return fields.length > 0 && fields.every((field) => field.value !== '');
-        }
-        return false;
-      }
-
-      function isCorrect(question) {
-        if (question.type === 'MC') {
-          const chosen = [...root.querySelectorAll('input[name=answer]:checked')].map((element) => Number(element.value)).sort((a, b) => a - b);
-          return JSON.stringify(chosen) === JSON.stringify([...question.correct].sort((a, b) => a - b));
-        }
-        if (question.type === 'TF' || question.type === 'YN') {
-          const picked = root.querySelector('input[name=answer]:checked');
-          return !!picked && String(question.correct) === picked.value;
-        }
-        if (question.type === 'MT') {
-          const chosen = [...root.querySelectorAll('select[data-left]')].map((element) => [Number(element.dataset.left), Number(element.value)]);
-          return chosen.length === question.matches.length && question.matches.every(([left, right]) => chosen.some(([chosenLeft, chosenRight]) => chosenLeft === left && chosenRight === right));
-        }
-        return false;
-      }
-
-      function answerText(question) {
-        if (question.type === 'MC') return question.correct.map((position) => question.options[position]).join(', ');
-        if (question.type === 'TF') return question.correct ? 'True' : 'False';
-        if (question.type === 'YN') return question.correct ? 'Yes' : 'No';
-        if (question.type === 'MT') return question.matches.map(([left, right]) => (left + 1) + '-' + String.fromCharCode(65 + right)).join(', ');
-        return '';
-      }
-
-      function renderQuestion() {
-        if (!quiz) return;
-        const question = quiz.questions[index];
-        const percent = Math.round(((index + 1) / quiz.questions.length) * 100);
-        renderHtml(
-          '<div class="topline"><span class="eyebrow">Question ' + (index + 1) + ' of ' + quiz.questions.length + '</span><span class="score">Score: ' + score + '</span></div>' +
-          '<div class="progress" aria-label="Quiz progress"><span style="width:' + percent + '%"></span></div><h2>' + esc(question.prompt) + '</h2>' +
-          '<div class="answers">' + optionsFor(question) + '</div><div id="feedback" class="feedback" role="status"></div>' +
-          '<div class="buttons"><button id="check" class="primary" type="button">Check answer</button><button id="next" class="success" type="button" hidden>' +
-          (index + 1 === quiz.questions.length ? 'See results' : 'Next question') + '</button></div>' +
-          '<p class="note">' + (quiz.partial ? 'Partial AI-generated quiz. ' : 'AI-generated quiz. ') + 'Check important facts against your source.</p>'
-        );
-        root.querySelector('#check').addEventListener('click', () => {
-          if (checked) return;
-          const feedback = root.querySelector('#feedback');
-          if (!hasSelection(question)) { feedback.className = 'feedback hint'; feedback.textContent = 'Choose an answer first.'; return; }
-          const correct = isCorrect(question);
-          checked = true;
-          if (correct) score += 1;
-          feedback.className = 'feedback ' + (correct ? 'good' : 'bad');
-          feedback.textContent = correct ? 'Correct!' : 'Not quite. Correct answer: ' + answerText(question);
-          root.querySelectorAll('input, select').forEach((element) => { element.disabled = true; });
-          root.querySelector('#check').hidden = true;
-          root.querySelector('#next').hidden = false;
-          saveQuizState();
-          scheduleHeightReport();
-        });
-        root.querySelector('#next').addEventListener('click', () => {
-          if (index + 1 >= quiz.questions.length) { finishQuiz(); return; }
-          index += 1;
-          checked = false;
-          saveQuizState();
-          renderQuestion();
-        });
-      }
-
-      function finishQuiz() {
-        saveQuizState();
-        const total = quiz.questions.length;
-        const message = score === total ? 'Perfect score.' : (score >= Math.ceil(total * .7) ? 'Nice work.' : 'Review the misses and give it another run.');
-        renderHtml('<div class="finish"><div class="result-score"><strong>' + score + '</strong><span>out of ' + total + '</span></div>' +
-          '<h1>Quiz complete</h1><p>' + esc(message) + '</p><div class="buttons"><button id="retake" class="secondary" type="button">Retake quiz</button></div>' +
-          '<p class="note">' + esc(quiz.title || 'EZ Quiz') + '</p></div>');
-        root.querySelector('#retake').addEventListener('click', () => { index = 0; score = 0; checked = false; saveQuizState(); renderQuestion(); });
-      }
-
-      function loadQuiz(value) {
+      function normalizeQuiz(value) {
         const data = structuredOutput(value);
-        if (!data || !Array.isArray(data.questions) || !data.questions.length) return false;
-        clearGenerationTimers();
-        activeJob = null;
-        quiz = data;
-        const prior = window.openai && window.openai.widgetState || {};
-        index = Math.max(0, Math.min(data.questions.length - 1, Number(prior.index) || 0));
-        score = Math.max(0, Math.min(data.questions.length, Number(prior.score) || 0));
-        checked = false;
-        renderQuestion();
+        if (!data || !Array.isArray(data.questions)) return null;
+        const questions = data.questions.map(normalizeQuestion).filter(Boolean);
+        if (!questions.length || questions.length !== data.questions.length) return null;
+        const normalized = {
+          quizId: String(data.quizId || ''),
+          title: String(data.title || data.topic || 'EZ Quiz'),
+          topic: String(data.topic || ''),
+          difficulty: String(data.difficulty || 'medium'),
+          questions,
+        };
+        if (!normalized.quizId) normalized.quizId = simpleHash(normalized);
+        return normalized;
+      }
+
+      function validAttemptIndexes(value, size) {
+        if (!Array.isArray(value) || !value.length) return null;
+        const indexes = value.filter((item) => Number.isInteger(item) && item >= 0 && item < size);
+        return indexes.length === value.length && new Set(indexes).size === indexes.length ? indexes : null;
+      }
+
+      function restoreState(data) {
+        const prior = window.openai && window.openai.widgetState;
+        if (!prior || prior.version !== 2 || String(prior.quizId || '') !== data.quizId) return false;
+        const restoredIndexes = validAttemptIndexes(prior.attemptIndexes, data.questions.length);
+        if (!restoredIndexes || !Array.isArray(prior.answers) || prior.answers.length !== data.questions.length) return false;
+        attemptIndexes = restoredIndexes;
+        answers = prior.answers.slice();
+        index = Math.max(0, Math.min(attemptIndexes.length - 1, Number(prior.index) || 0));
+        mode = prior.mode === 'results' ? 'results' : 'quiz';
+        resultsFilter = prior.resultsFilter === 'all' ? 'all' : 'missed';
+        startedAt = Number(prior.startedAt) > 0 ? Number(prior.startedAt) : Date.now();
+        finishedAt = mode === 'results' && Number(prior.finishedAt) > 0 ? Number(prior.finishedAt) : 0;
         return true;
       }
 
-      function loadToolResult(value, metadataSource) {
-        const data = structuredOutput(value);
-        const meta = findMeta(metadataSource, 0) || findMeta(value, 0) || currentMetadata() || {};
-        generationInput = meta.generateRequest || window.openai && window.openai.toolInput || generationInput || {};
-        if (loadQuiz(data)) return;
-        if (data && (data.status === 'loading' || data.status === 'queued')) {
-          if (meta.generation) startGeneration(meta.generation, data);
-          else setTimeout(() => {
-            const refreshed = currentMetadata();
-            if (refreshed && refreshed.generation) startGeneration(refreshed.generation, data);
-            else if (!activeJob && !quiz) showStaleSession();
-          }, 350);
+      function currentOriginalIndex() {
+        return attemptIndexes[index];
+      }
+
+      function compareAnswer(question, answer) {
+        if (question.type === 'MC') {
+          if (!Array.isArray(answer) || !answer.length) return false;
+          const selected = answer.slice().sort((a, b) => a - b);
+          const correct = question.correct.slice().sort((a, b) => a - b);
+          return selected.length === correct.length && selected.every((value, offset) => value === correct[offset]);
+        }
+        if (question.type === 'TF' || question.type === 'YN') {
+          return typeof answer === 'boolean' && answer === question.correct;
+        }
+        if (question.type === 'MT') {
+          if (!Array.isArray(answer) || answer.length !== question.left.length) return false;
+          const target = new Array(question.left.length).fill(-1);
+          question.pairs.forEach(([left, right]) => { target[left] = right; });
+          return answer.every((value, offset) => value === target[offset]);
+        }
+        return false;
+      }
+
+      function scoreQuiz() {
+        return quiz.questions.reduce((score, question, questionIndex) => (
+          score + (compareAnswer(question, answers[questionIndex]) ? 1 : 0)
+        ), 0);
+      }
+
+      function missedIndexes() {
+        const missed = [];
+        quiz.questions.forEach((question, questionIndex) => {
+          if (!compareAnswer(question, answers[questionIndex])) missed.push(questionIndex);
+        });
+        return missed;
+      }
+
+      function optionsFor(question, answer) {
+        if (question.type === 'MC') {
+          const selected = Array.isArray(answer) ? answer : [];
+          const inputType = question.correct.length > 1 ? 'checkbox' : 'radio';
+          return question.options.map((option, optionIndex) => (
+            '<label class="answer"><input type="' + inputType + '" name="answer" value="' + optionIndex + '" ' +
+            (selected.includes(optionIndex) ? 'checked' : '') + '><span>' + esc(option) + '</span></label>'
+          )).join('');
+        }
+        if (question.type === 'TF' || question.type === 'YN') {
+          const labels = question.type === 'TF' ? ['True', 'False'] : ['Yes', 'No'];
+          return labels.map((option, optionIndex) => {
+            const value = optionIndex === 0;
+            return '<label class="answer"><input type="radio" name="answer" value="' + value + '" ' +
+              (answer === value ? 'checked' : '') + '><span>' + option + '</span></label>';
+          }).join('');
+        }
+        if (question.type === 'MT') {
+          const selected = Array.isArray(answer) ? answer : new Array(question.left.length).fill(-1);
+          return '<div class="match-list">' + question.left.map((left, leftIndex) => (
+            '<label class="match"><span>' + (leftIndex + 1) + '. ' + esc(left) + '</span><select data-left="' + leftIndex + '">' +
+            '<option value="">Choose a match</option>' + question.right.map((right, rightIndex) => (
+              '<option value="' + rightIndex + '" ' + (selected[leftIndex] === rightIndex ? 'selected' : '') + '>' +
+              String.fromCharCode(65 + rightIndex) + '. ' + esc(right) + '</option>'
+            )).join('') + '</select></label>'
+          )).join('') + '</div>';
+        }
+        return '';
+      }
+
+      function bindAnswerInputs(question, originalIndex) {
+        if (question.type === 'MC') {
+          root.querySelectorAll('input[name="answer"]').forEach((input) => {
+            input.addEventListener('change', () => {
+              if (question.correct.length > 1) {
+                answers[originalIndex] = [...root.querySelectorAll('input[name="answer"]:checked')]
+                  .map((element) => Number(element.value)).sort((a, b) => a - b);
+              } else {
+                answers[originalIndex] = [Number(input.value)];
+              }
+              saveQuizState();
+            });
+          });
+          return;
+        }
+        if (question.type === 'TF' || question.type === 'YN') {
+          root.querySelectorAll('input[name="answer"]').forEach((input) => {
+            input.addEventListener('change', () => {
+              answers[originalIndex] = input.value === 'true';
+              saveQuizState();
+            });
+          });
+          return;
+        }
+        root.querySelectorAll('select[data-left]').forEach((select) => {
+          select.addEventListener('change', () => {
+            const current = Array.isArray(answers[originalIndex])
+              ? answers[originalIndex].slice()
+              : new Array(question.left.length).fill(-1);
+            current[Number(select.dataset.left)] = select.value === '' ? -1 : Number(select.value);
+            answers[originalIndex] = current;
+            saveQuizState();
+          });
+        });
+      }
+
+      function goPrevious() {
+        if (index <= 0) return;
+        index -= 1;
+        saveQuizState();
+        renderQuestion();
+      }
+
+      function goNext() {
+        if (index + 1 >= attemptIndexes.length) {
+          finishQuiz();
+          return;
+        }
+        index += 1;
+        saveQuizState();
+        renderQuestion();
+      }
+
+      function renderQuestion() {
+        if (!quiz || !attemptIndexes.length) return;
+        mode = 'quiz';
+        finishedAt = 0;
+        const originalIndex = currentOriginalIndex();
+        const question = quiz.questions[originalIndex];
+        const percent = Math.round(((index + 1) / attemptIndexes.length) * 100);
+        renderHtml(
+          '<div class="topline"><span class="eyebrow">Question ' + (index + 1) + ' of ' + attemptIndexes.length + '</span>' +
+          '<span id="timer" class="timer" aria-label="Elapsed time"></span></div>' +
+          '<div class="progress" role="progressbar" aria-label="Quiz progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + percent + '">' +
+          '<span style="width:' + percent + '%"></span></div><h2>' + esc(question.text) + '</h2>' +
+          '<div class="answers">' + optionsFor(question, answers[originalIndex]) + '</div>' +
+          '<div class="runner-actions"><button id="previous" class="secondary" type="button" ' + (index === 0 ? 'disabled' : '') + '>Previous</button>' +
+          '<button id="next" class="primary" type="button">' + (index + 1 === attemptIndexes.length ? 'Finish' : 'Next') + '</button></div>'
+        );
+        bindAnswerInputs(question, originalIndex);
+        document.getElementById('previous').addEventListener('click', goPrevious);
+        document.getElementById('next').addEventListener('click', goNext);
+        startTimer();
+      }
+
+      function answerText(question, answer, correct) {
+        const value = correct ? question.correct : answer;
+        if (question.type === 'MC') {
+          const indexes = Array.isArray(value) ? value : [];
+          return indexes.length ? indexes.map((position) => (
+            String.fromCharCode(65 + position) + '. ' + (question.options[position] || '')
+          )).join(', ') : 'No answer';
+        }
+        if (question.type === 'TF') {
+          return typeof value === 'boolean' ? (value ? 'True' : 'False') : 'No answer';
+        }
+        if (question.type === 'YN') {
+          return typeof value === 'boolean' ? (value ? 'Yes' : 'No') : 'No answer';
+        }
+        const selected = correct
+          ? question.pairs.reduce((output, [left, right]) => { output[left] = right; return output; }, new Array(question.left.length).fill(-1))
+          : (Array.isArray(value) ? value : []);
+        return question.left.map((left, leftIndex) => {
+          const rightIndex = Number.isInteger(selected[leftIndex]) ? selected[leftIndex] : -1;
+          return left + ' → ' + (rightIndex >= 0 ? question.right[rightIndex] : 'No answer');
+        }).join('; ');
+      }
+
+      function resultCard(questionIndex) {
+        const question = quiz.questions[questionIndex];
+        const answer = answers[questionIndex];
+        const correct = compareAnswer(question, answer);
+        const yours = answerText(question, answer, false);
+        const expected = answerText(question, answer, true);
+        return '<article class="result-card ' + (correct ? 'correct' : '') + '" data-question="' + questionIndex + '">' +
+          '<div class="result-card-head"><h3>' + (questionIndex + 1) + '. ' + esc(question.text) + '</h3>' +
+          '<span class="result-badge">' + (correct ? 'Correct' : 'Incorrect') + '</span></div>' +
+          '<div class="answer-detail"><strong>' + (correct ? 'Answer:' : 'Your answer:') + '</strong> ' + esc(yours) + '</div>' +
+          (correct ? '' : '<div class="answer-detail"><strong>Correct:</strong> ' + esc(expected) + '</div>') +
+          '<button class="explain" type="button" data-explain="' + questionIndex + '">Ask ChatGPT to explain</button></article>';
+      }
+
+      async function explainQuestion(questionIndex, button) {
+        const question = quiz.questions[questionIndex];
+        const prompt = 'Explain this ' + quiz.topic + ' quiz question clearly and briefly. Question: ' + question.text +
+          ' My answer: ' + answerText(question, answers[questionIndex], false) +
+          ' Correct answer: ' + answerText(question, answers[questionIndex], true) + '.';
+        if (button) { button.disabled = true; button.textContent = 'Asking ChatGPT…'; }
+        try {
+          if (!window.openai || typeof window.openai.sendFollowUpMessage !== 'function') throw new Error('Unavailable');
+          await window.openai.sendFollowUpMessage({ prompt, scrollToBottom: true });
+          if (button) button.textContent = 'Explanation requested';
+        } catch {
+          if (button) { button.disabled = false; button.textContent = 'Ask ChatGPT to explain'; }
         }
       }
 
-      expandButton.addEventListener('click', async () => { try { await window.openai.requestDisplayMode({ mode: 'fullscreen' }); } catch {} });
-      brandLogo.addEventListener('load', scheduleHeightReport);
+      function beginRetake(indexes) {
+        if (!indexes.length) return;
+        indexes.forEach((questionIndex) => { answers[questionIndex] = null; });
+        attemptIndexes = indexes.slice();
+        index = 0;
+        mode = 'quiz';
+        startedAt = Date.now();
+        finishedAt = 0;
+        saveQuizState();
+        renderQuestion();
+      }
+
+      function renderResults() {
+        if (!quiz) return;
+        stopTimer();
+        mode = 'results';
+        const score = scoreQuiz();
+        const missed = missedIndexes();
+        const percent = Math.round((score / quiz.questions.length) * 100);
+        const visible = resultsFilter === 'all'
+          ? quiz.questions.map((_, questionIndex) => questionIndex)
+          : missed;
+        const message = score === quiz.questions.length
+          ? 'Perfect score.'
+          : (score >= Math.ceil(quiz.questions.length * .7) ? 'Nice work.' : 'Review the misses and give it another run.');
+        renderHtml(
+          '<div class="results-head"><div class="score-orb" aria-label="' + score + ' out of ' + quiz.questions.length + '">' + score + '/' + quiz.questions.length + '</div>' +
+          '<div class="results-copy"><h1>Quiz complete</h1><p>' + esc(message) + ' · ' + formatDuration(finishedAt - startedAt) + '</p></div></div>' +
+          '<div class="result-progress"><div class="progress" role="progressbar" aria-label="Final score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + percent + '">' +
+          '<span style="width:' + percent + '%"></span></div></div>' +
+          '<div class="filter-row" role="group" aria-label="Result filter"><button class="filter-chip ' + (resultsFilter === 'missed' ? 'active' : '') + '" data-filter="missed" type="button">Missed (' + missed.length + ')</button>' +
+          '<button class="filter-chip ' + (resultsFilter === 'all' ? 'active' : '') + '" data-filter="all" type="button">All (' + quiz.questions.length + ')</button></div>' +
+          '<div class="result-list">' + (visible.length ? visible.map(resultCard).join('') : '<div class="empty-results">No missed questions 🎉</div>') + '</div>' +
+          '<div class="result-actions"><button id="retakeMissed" class="primary" type="button" ' + (!missed.length ? 'disabled' : '') + '>Retake missed</button>' +
+          '<button id="retakeAll" class="secondary" type="button">Retake all</button></div>' +
+          '<p class="result-note">' + esc(quiz.title) + '</p>'
+        );
+        root.querySelectorAll('[data-filter]').forEach((button) => {
+          button.addEventListener('click', () => {
+            resultsFilter = button.dataset.filter === 'all' ? 'all' : 'missed';
+            saveQuizState();
+            renderResults();
+          });
+        });
+        root.querySelectorAll('[data-explain]').forEach((button) => {
+          button.addEventListener('click', () => explainQuestion(Number(button.dataset.explain), button));
+        });
+        document.getElementById('retakeMissed').addEventListener('click', () => beginRetake(missed));
+        document.getElementById('retakeAll').addEventListener('click', () => (
+          beginRetake(quiz.questions.map((_, questionIndex) => questionIndex))
+        ));
+        saveQuizState();
+      }
+
+      function finishQuiz() {
+        if (mode !== 'quiz') return;
+        finishedAt = Date.now();
+        mode = 'results';
+        saveQuizState();
+        renderResults();
+      }
+
+      function showUnavailable() {
+        stopTimer();
+        renderHtml('<div class="status-card"><div class="status-icon" aria-hidden="true">!</div><h1>Quiz unavailable</h1>' +
+          '<p>ChatGPT did not provide a complete question set for this card. Ask for a new EZ Quiz in the conversation.</p></div>');
+      }
+
+      function loadQuiz(value) {
+        const data = normalizeQuiz(value);
+        if (!data) return false;
+        if (quiz && quizKey === data.quizId) return true;
+        quiz = data;
+        quizKey = data.quizId;
+        if (!restoreState(data)) {
+          mode = 'quiz';
+          attemptIndexes = data.questions.map((_, questionIndex) => questionIndex);
+          answers = new Array(data.questions.length).fill(null);
+          index = 0;
+          resultsFilter = 'missed';
+          startedAt = Date.now();
+          finishedAt = 0;
+        }
+        if (mode === 'results') renderResults(); else renderQuestion();
+        return true;
+      }
+
+      function loadToolResult(value) {
+        if (value == null) return;
+        if (!loadQuiz(value)) showUnavailable();
+      }
+
+      expandButton.addEventListener('click', async () => {
+        try { await window.openai.requestDisplayMode({ mode: 'fullscreen' }); } catch {}
+      });
+
+      document.addEventListener('keydown', (event) => {
+        if (mode !== 'quiz') return;
+        const active = document.activeElement;
+        const tag = active && active.tagName ? active.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'select' || tag === 'textarea' || (active && active.isContentEditable)) return;
+        if (event.key === 'ArrowLeft' && index > 0) { event.preventDefault(); goPrevious(); }
+        if ((event.key === 'ArrowRight' || event.key === 'Enter')) { event.preventDefault(); goNext(); }
+      });
 
       window.addEventListener('openai:set_globals', (event) => {
         const globals = event && event.detail && event.detail.globals || {};
         applyHostContext({ ...(window.openai || {}), ...globals });
-        if (globals.toolOutput !== undefined || globals.toolResponseMetadata !== undefined) {
-          loadToolResult(window.openai && window.openai.toolOutput, window.openai && window.openai.toolResponseMetadata);
-        }
+        if (globals.toolOutput !== undefined) loadToolResult(window.openai && window.openai.toolOutput);
       }, { passive: true });
 
       window.addEventListener('message', (event) => {
@@ -924,13 +957,16 @@ function quizWidgetHtml() {
           if (message.error) pending.reject(message.error); else pending.resolve(message.result);
           return;
         }
-        if (message.method === 'ui/notifications/tool-input' && message.params && message.params.arguments) generationInput = message.params.arguments;
-        if (message.method === 'ui/notifications/tool-result') loadToolResult(message.params, message.params);
-        if (message.method === 'ui/notifications/host-context-changed') applyHostContext(message.params && (message.params.hostContext || message.params));
+        if (message.method === 'ui/notifications/tool-result') loadToolResult(message.params);
+        if (message.method === 'ui/notifications/host-context-changed') {
+          applyHostContext(message.params && (message.params.hostContext || message.params));
+        }
       });
 
       if (colorScheme && colorScheme.addEventListener) {
-        colorScheme.addEventListener('change', () => { if (!window.openai || !window.openai.theme) applyHostContext(window.openai || {}); });
+        colorScheme.addEventListener('change', () => {
+          if (!window.openai || !window.openai.theme) applyHostContext(window.openai || {});
+        });
       }
       if (typeof ResizeObserver !== 'undefined') {
         const observer = new ResizeObserver(scheduleHeightReport);
@@ -938,18 +974,17 @@ function quizWidgetHtml() {
       }
 
       applyHostContext(window.openai || {});
-      generationInput = window.openai && window.openai.toolInput || {};
       const initialOutput = window.openai && window.openai.toolOutput;
-      if (initialOutput) loadToolResult(initialOutput, window.openai && window.openai.toolResponseMetadata);
+      if (initialOutput) loadToolResult(initialOutput);
 
       request('ui/initialize', {
         protocolVersion: '2025-11-21',
-        appInfo: { name: 'ez-quiz-player', title: 'EZ Quiz', version: '3.0.0', websiteUrl: '${SITE_ORIGIN}' },
+        appInfo: { name: 'ez-quiz-player', title: 'EZ Quiz', version: '4.0.0', websiteUrl: '${SITE_ORIGIN}' },
         appCapabilities: {},
       }).then((result) => {
         window.parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized' }, '*');
         if (result && result.hostContext) applyHostContext(result.hostContext);
-        if (!initialOutput && result && result.toolResult) loadToolResult(result.toolResult, result.toolResult);
+        if (!initialOutput && result && result.toolResult) loadToolResult(result.toolResult);
       }).catch(() => {});
       scheduleHeightReport();
     })();
@@ -958,4 +993,9 @@ function quizWidgetHtml() {
 </html>`;
 }
 
-module.exports = { QUIZ_WIDGET_ALIASES, QUIZ_WIDGET_MIME_TYPE, QUIZ_WIDGET_URI, quizWidgetHtml };
+module.exports = {
+  QUIZ_WIDGET_ALIASES,
+  QUIZ_WIDGET_MIME_TYPE,
+  QUIZ_WIDGET_URI,
+  quizWidgetHtml,
+};
