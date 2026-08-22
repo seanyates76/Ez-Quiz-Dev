@@ -606,10 +606,12 @@ function quizWidgetHtml() {
         const workerUrl = validHttpUrl(value.workerUrl);
         const statusUrl = validHttpUrl(value.statusUrl);
         const stopUrl = validHttpUrl(value.stopUrl);
+        const workerStarted = value.workerStarted;
         if (!/^qj_[A-Za-z0-9_-]{24,96}$/.test(jobId)) return null;
         if (!/^[A-Za-z0-9_-]{24,96}$/.test(workerToken)) return null;
-        if (!workerUrl || !statusUrl || !stopUrl) return null;
-        return { jobId, workerToken, workerUrl, statusUrl, stopUrl, requestedCount: Math.max(1, Number(value.requestedCount || generationInput.count || 10) || 10) };
+        if (typeof workerStarted !== 'boolean') return null;
+        if (!statusUrl || !stopUrl || (!workerStarted && !workerUrl)) return null;
+        return { jobId, workerToken, workerStarted, workerUrl, statusUrl, stopUrl, requestedCount: Math.max(1, Number(value.requestedCount || generationInput.count || 10) || 10) };
       }
 
       async function fetchJson(url, options) {
@@ -718,7 +720,7 @@ function quizWidgetHtml() {
             return;
           }
           showLoading(requested, status.progressMessage || (state === 'queued' ? 'Planning the quiz.' : 'Writing balanced questions.'), completed);
-          if (queuedPolls === 4) {
+          if (queuedPolls === 4 && !activeJob.workerStarted) {
             try { await triggerWorker(); } catch {}
           }
           pollTimer = setTimeout(pollJob, 1400);
@@ -746,7 +748,7 @@ function quizWidgetHtml() {
         pollingStartedAt = Date.now();
         showLoading(job.requestedCount, rawJob.progressMessage || output.progressMessage, 0);
         try {
-          await triggerWorker();
+          if (!job.workerStarted) await triggerWorker();
           await pollJob();
         } catch (error) {
           if (!activeJob || (error && error.name === 'AbortError')) return;
