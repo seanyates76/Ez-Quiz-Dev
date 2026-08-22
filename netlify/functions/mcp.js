@@ -253,10 +253,45 @@ function internalGenerationEvent(event, payload) {
   };
 }
 
+function missingBlobContext(error) {
+  return /not been configured to use Netlify Blobs|supply.+siteID.+token/i.test(String(error && error.message || error || ''));
+}
+
+async function startGenerationOverHttp(event, payload) {
+  const origin = requestOrigin(event);
+  const headers = { 'Content-Type': 'application/json' };
+  if (process.env.GENERATE_BEARER_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GENERATE_BEARER_TOKEN}`;
+  }
+  const res = await fetch(`${origin}/.netlify/functions/generate-quiz-start`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...payload, format: 'legacy-lines' }),
+  });
+  return {
+    statusCode: res.status,
+    body: await res.text(),
+  };
+}
+
+async function startGeneration(event, payload) {
+  // Each Netlify Function receives its own Blobs runtime binding. Calling the
+  // start handler as a plain function from MCP bypasses that binding, so route
+  // through the deployed endpoint in Netlify and retain the direct path for
+  // tests and local development.
+  if (process.env.NETLIFY === 'true') return startGenerationOverHttp(event, payload);
+  try {
+    return await startGenerationJob(internalGenerationEvent(event, payload));
+  } catch (error) {
+    if (!missingBlobContext(error)) throw error;
+    return startGenerationOverHttp(event, payload);
+  }
+}
+
 async function startQuiz(args, event) {
   try {
     const payload = validateGenerateArgs(args);
-    const started = await startGenerationJob(internalGenerationEvent(event, payload));
+    const started = await startGeneration(event, payload);
     let job;
     try { job = JSON.parse(started.body || '{}'); } catch { job = {}; }
     if (started.statusCode !== 202 || !job.jobId || !job.workerToken) {
@@ -413,4 +448,14 @@ exports.handler = async (event) => {
   return result ? response(200, result, { ...cors, 'Mcp-Protocol-Version': DEFAULT_PROTOCOL_VERSION }) : response(202, '', cors);
 };
 
-exports._private = { callTool, dispatch, parseQuizLines, requestOrigin, tools, widgetResource };
+exports._private = {
+  callTool,
+  dispatch,
+  missingBlobContext,
+  parseQuizLines,
+  requestOrigin,
+  startGeneration,
+  startGenerationOverHttp,
+  tools,
+  widgetResource,
+};
