@@ -1,6 +1,7 @@
 'use strict';
 
 const { handleGenerateQuiz } = require('./generate-quiz.js');
+const { handler: startGenerationJob } = require('./generate-quiz-start.js');
 const { parseLegacyQuestion } = require('./lib/normalizer.js');
 const { QUIZ_WIDGET_ALIASES, QUIZ_WIDGET_MIME_TYPE, QUIZ_WIDGET_URI, quizWidgetHtml } = require('./lib/mcpQuizWidget.js');
 
@@ -60,7 +61,7 @@ const tools = [
       ui: { resourceUri: QUIZ_WIDGET_URI },
       'openai/outputTemplate': QUIZ_WIDGET_URI,
       'openai/toolInvocation/invoking': 'Building your quiz…',
-      'openai/toolInvocation/invoked': 'Quiz ready.',
+      'openai/toolInvocation/invoked': 'Quiz generation started.',
     },
   },
   {
@@ -106,6 +107,38 @@ const tools = [
 function headerValue(headers, name) {
   if (!headers) return '';
   return String(headers[name] || headers[name.toLowerCase()] || headers[name.toUpperCase()] || '');
+}
+
+function validOrigin(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (!['http:', 'https:'].includes(url.protocol)) return '';
+    return url.origin;
+  } catch {
+    return '';
+  }
+}
+
+function requestOrigin(event) {
+  const rawUrlOrigin = validOrigin(event && (event.rawUrl || event.rawURL));
+  if (rawUrlOrigin) return rawUrlOrigin;
+  const host = headerValue(event && event.headers, 'x-forwarded-host')
+    || headerValue(event && event.headers, 'host');
+  if (host) {
+    const protocol = headerValue(event && event.headers, 'x-forwarded-proto') || 'https';
+    const headerOrigin = validOrigin(`${protocol}://${host}`);
+    if (headerOrigin) return headerOrigin;
+  }
+  for (const candidate of [
+    process.env.EZQ_PLUGIN_API_ORIGIN,
+    process.env.DEPLOY_PRIME_URL,
+    process.env.DEPLOY_URL,
+    process.env.URL,
+  ]) {
+    const origin = validOrigin(candidate);
+    if (origin) return origin;
+  }
+  return 'https://ez-quiz.app';
 }
 
 function allowedOrigins() {
@@ -205,13 +238,54 @@ function quizToolResult(quiz, message) {
   };
 }
 
-function startQuiz(args) {
+function internalGenerationEvent(event, payload) {
+  const headers = {};
+  for (const name of ['x-forwarded-for', 'client-ip', 'x-nf-client-connection-ip']) {
+    const value = headerValue(event && event.headers, name);
+    if (value) headers[name] = value;
+  }
+  return {
+    ...(event || {}),
+    httpMethod: 'POST',
+    headers,
+    body: JSON.stringify({ ...payload, format: 'legacy-lines' }),
+    queryStringParameters: {},
+  };
+}
+
+async function startQuiz(args, event) {
   try {
     const payload = validateGenerateArgs(args);
+    const started = await startGenerationJob(internalGenerationEvent(event, payload));
+    let job;
+    try { job = JSON.parse(started.body || '{}'); } catch { job = {}; }
+    if (started.statusCode !== 202 || !job.jobId || !job.workerToken) {
+      const message = started.statusCode === 429
+        ? 'EZ Quiz is receiving a lot of requests. Please wait a moment and try again.'
+        : safeString(job.error, 220, 'EZ Quiz could not start the generation job.');
+      return { isError: true, content: [{ type: 'text', text: message }] };
+    }
+    const origin = requestOrigin(event);
     return {
       structuredContent: { status: 'loading', topic: payload.topic, count: payload.count, difficulty: payload.difficulty },
-      content: [{ type: 'text', text: `Building an interactive ${payload.count}-question quiz about ${payload.topic}.` }],
-      _meta: { generateRequest: args },
+      content: [{ type: 'text', text: `Started building an interactive ${payload.count}-question quiz about ${payload.topic}.` }],
+      _meta: {
+        generateRequest: {
+          topic: payload.topic,
+          count: payload.count,
+          difficulty: payload.difficulty,
+          ...(payload.types ? { types: payload.types } : {}),
+        },
+        generation: {
+          jobId: job.jobId,
+          workerToken: job.workerToken,
+          requestedCount: job.requestedCount || payload.count,
+          progressMessage: job.progressMessage || 'Generation job queued.',
+          workerUrl: `${origin}/.netlify/functions/generate-quiz-worker-background`,
+          statusUrl: `${origin}/.netlify/functions/generate-quiz-status`,
+          stopUrl: `${origin}/.netlify/functions/generate-quiz-stop`,
+        },
+      },
     };
   } catch (error) {
     return { isError: true, content: [{ type: 'text', text: `I could not build that quiz: ${error.message}.` }] };
@@ -262,14 +336,17 @@ function renderQuiz(args) {
 }
 
 async function callTool(name, args, event) {
-  if (name === 'generate_quiz') return startQuiz(args);
+  if (name === 'generate_quiz') return startQuiz(args, event);
   if (name === 'build_quiz') return buildQuiz(args, event);
   if (name === 'render_quiz') return renderQuiz(args);
   return { isError: true, content: [{ type: 'text', text: `Unknown tool: ${safeString(name, 80, '(missing)')}.` }] };
 }
 
-function widgetResource(uri = QUIZ_WIDGET_URI) {
-  const widgetOrigin = safeString(process.env.EZQ_PLUGIN_WIDGET_ORIGIN, 300, 'https://ez-quiz.app');
+function widgetResource(uri = QUIZ_WIDGET_URI, event) {
+  const widgetOrigin = validOrigin(process.env.EZQ_PLUGIN_WIDGET_ORIGIN) || 'https://ez-quiz.app';
+  const apiOrigin = requestOrigin(event);
+  const connectDomains = [...new Set([apiOrigin, widgetOrigin].map(validOrigin).filter(Boolean))];
+  const resourceDomains = [...new Set([widgetOrigin].map(validOrigin).filter(Boolean))];
   return {
     contents: [{
       uri,
@@ -280,12 +357,12 @@ function widgetResource(uri = QUIZ_WIDGET_URI) {
         ui: {
           prefersBorder: true,
           domain: widgetOrigin,
-          csp: { connectDomains: [], resourceDomains: [] },
+          csp: { connectDomains, resourceDomains },
         },
         'openai/widgetDescription': 'An accessible interactive quiz player that presents one question at a time, checks answers, tracks score, and shows results.',
         'openai/widgetPrefersBorder': true,
         'openai/widgetDomain': widgetOrigin,
-        'openai/widgetCSP': { connect_domains: [], resource_domains: [] },
+        'openai/widgetCSP': { connect_domains: connectDomains, resource_domains: resourceDomains },
       },
     }],
   };
@@ -315,7 +392,7 @@ async function dispatch(message, event) {
   if (message.method === 'resources/read') {
     const uri = message.params && message.params.uri;
     if (!QUIZ_WIDGET_ALIASES.includes(uri)) return rpcError(id, -32002, 'Resource not found');
-    return rpcResult(id, widgetResource(uri));
+    return rpcResult(id, widgetResource(uri, event));
   }
   return rpcError(id, -32601, 'Method not found');
 }
@@ -336,4 +413,4 @@ exports.handler = async (event) => {
   return result ? response(200, result, { ...cors, 'Mcp-Protocol-Version': DEFAULT_PROTOCOL_VERSION }) : response(202, '', cors);
 };
 
-exports._private = { callTool, dispatch, parseQuizLines, tools, widgetResource };
+exports._private = { callTool, dispatch, parseQuizLines, requestOrigin, tools, widgetResource };
