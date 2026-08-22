@@ -271,7 +271,20 @@ async function startGenerationOverHttp(event, payload) {
   return {
     statusCode: res.status,
     body: await res.text(),
+    viaHttp: true,
   };
+}
+
+async function launchGenerationOverHttp(event, job) {
+  const origin = requestOrigin(event);
+  const res = await fetch(`${origin}/.netlify/functions/generate-quiz-worker-background`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId: job.jobId, workerToken: job.workerToken }),
+  });
+  if (res.status < 200 || res.status >= 300) {
+    throw new Error(`The generation worker could not start (${res.status})`);
+  }
 }
 
 async function startGeneration(event, payload) {
@@ -300,6 +313,8 @@ async function startQuiz(args, event) {
         : safeString(job.error, 220, 'EZ Quiz could not start the generation job.');
       return { isError: true, content: [{ type: 'text', text: message }] };
     }
+    const workerStarted = started.viaHttp === true;
+    if (workerStarted) await launchGenerationOverHttp(event, job);
     const origin = requestOrigin(event);
     return {
       structuredContent: { status: 'loading', topic: payload.topic, count: payload.count, difficulty: payload.difficulty },
@@ -314,6 +329,7 @@ async function startQuiz(args, event) {
         generation: {
           jobId: job.jobId,
           workerToken: job.workerToken,
+          workerStarted,
           requestedCount: job.requestedCount || payload.count,
           progressMessage: job.progressMessage || 'Generation job queued.',
           workerUrl: `${origin}/.netlify/functions/generate-quiz-worker-background`,
@@ -452,6 +468,7 @@ exports._private = {
   callTool,
   dispatch,
   missingBlobContext,
+  launchGenerationOverHttp,
   parseQuizLines,
   requestOrigin,
   startGeneration,
