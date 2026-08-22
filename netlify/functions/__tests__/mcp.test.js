@@ -146,7 +146,7 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('#retake').textContent).toBe('Retake quiz');
   });
 
-  test('the component triggers and polls the async job without calling an app-only MCP tool', async () => {
+  test('the component polls a server-started async job without calling an app-only MCP tool', async () => {
     const jobId = `qj_${'a'.repeat(32)}`;
     const workerToken = 'b'.repeat(32);
     const { html, script } = widgetScript();
@@ -160,6 +160,7 @@ describe('EZ Quiz MCP server', () => {
             generation: {
               jobId,
               workerToken,
+              workerStarted: true,
               requestedCount: 3,
               workerUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
               statusUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-status',
@@ -170,7 +171,6 @@ describe('EZ Quiz MCP server', () => {
       },
     });
     window.fetch = jest.fn((url) => {
-      if (String(url).includes('worker-background')) return mockJsonResponse({ status: 'queued' }, 202);
       if (String(url).includes('generate-quiz-status')) {
         return mockJsonResponse({
           jobId,
@@ -190,9 +190,9 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('#loadingCount').textContent).toBe('Creating 3 questions');
     await flushWidget();
     expect(document.querySelector('h2').textContent).toBe('Dolphins are mammals.');
-    expect(window.fetch).toHaveBeenCalledTimes(2);
-    expect(window.fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' });
-    expect(window.fetch.mock.calls[1][1].headers.Authorization).toBe(`Bearer ${workerToken}`);
+    expect(window.fetch).toHaveBeenCalledTimes(1);
+    expect(window.fetch.mock.calls[0][0]).toContain('generate-quiz-status');
+    expect(window.fetch.mock.calls[0][1].headers.Authorization).toBe(`Bearer ${workerToken}`);
   });
 
   test('the component cancels an active generation job', async () => {
@@ -201,6 +201,7 @@ describe('EZ Quiz MCP server', () => {
     const generation = {
       jobId,
       workerToken,
+      workerStarted: true,
       requestedCount: 5,
       workerUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
       statusUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-status',
@@ -214,7 +215,6 @@ describe('EZ Quiz MCP server', () => {
       sendFollowUpMessage: jest.fn(),
     });
     window.fetch = jest.fn((url) => {
-      if (String(url).includes('worker-background')) return mockJsonResponse({ status: 'queued' }, 202);
       if (String(url).includes('generate-quiz-status')) {
         return mockJsonResponse({ jobId, status: 'running', requestedCount: 5, completedCount: 0, progressMessage: 'Writing questions.' });
       }
@@ -237,10 +237,19 @@ describe('EZ Quiz MCP server', () => {
 
   test('an old loading card starts fresh instead of retrying the missing build resource', async () => {
     const sendFollowUpMessage = jest.fn().mockResolvedValue(undefined);
+    const oldGeneration = {
+      jobId: `qj_${'o'.repeat(32)}`,
+      workerToken: 'p'.repeat(32),
+      requestedCount: 5,
+      workerUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
+      statusUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-status',
+      stopUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-stop',
+    };
     const { html, script } = widgetScript();
     mountWidget(html, {
       toolInput: { topic: 'CCNA', count: 5, difficulty: 'medium' },
       toolOutput: { status: 'loading', topic: 'CCNA', count: 5, difficulty: 'medium' },
+      toolResponseMetadata: { mcp_tool_result: { _meta: { generation: oldGeneration } } },
       sendFollowUpMessage,
     });
 
@@ -264,6 +273,7 @@ describe('EZ Quiz MCP server', () => {
     expect(json(started).result._meta.generation).toMatchObject({
       jobId: expect.stringMatching(/^qj_/),
       workerToken: expect.stringMatching(/^[A-Za-z0-9_-]{24,96}$/),
+      workerStarted: false,
       requestedCount: 4,
       workerUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
       statusUrl: 'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-status',
@@ -282,15 +292,20 @@ describe('EZ Quiz MCP server', () => {
     process.env.NETLIFY = 'true';
     const jobId = `qj_${'n'.repeat(32)}`;
     const workerToken = 't'.repeat(32);
-    global.fetch = jest.fn().mockResolvedValue({
-      status: 202,
-      text: async () => JSON.stringify({
-        jobId,
-        workerToken,
-        requestedCount: 5,
-        progressMessage: 'Generation job queued.',
-      }),
-    });
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({
+        status: 202,
+        text: async () => JSON.stringify({
+          jobId,
+          workerToken,
+          requestedCount: 5,
+          progressMessage: 'Generation job queued.',
+        }),
+      })
+      .mockResolvedValueOnce({
+        status: 202,
+        text: async () => '',
+      });
     const { handler } = require('../mcp.js');
     const started = await handler(event({
       jsonrpc: '2.0',
@@ -304,9 +319,15 @@ describe('EZ Quiz MCP server', () => {
     const result = json(started).result;
 
     expect(result.isError).not.toBe(true);
-    expect(result._meta.generation).toMatchObject({ jobId, workerToken });
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(result._meta.generation).toMatchObject({ jobId, workerToken, workerStarted: true });
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      1,
       'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-start',
+      expect.objectContaining({ method: 'POST' }),
+    );
+    expect(global.fetch).toHaveBeenNthCalledWith(
+      2,
+      'https://preview.ez-quiz.test/.netlify/functions/generate-quiz-worker-background',
       expect.objectContaining({ method: 'POST' }),
     );
     expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({
