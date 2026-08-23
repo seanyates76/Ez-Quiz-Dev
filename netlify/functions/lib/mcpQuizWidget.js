@@ -2,13 +2,13 @@
 
 const { BRAND_WORDMARK_DATA_URI } = require('./mcpQuizBrand.js');
 
-// Keep the original URI stable because ChatGPT caches the template URI when a
-// connection is created. New revisions replace the resource content instead of
-// stranding existing cards on a missing template.
-const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v1.html';
+// Widget template URIs are cache keys. Publish breaking layout revisions under
+// a fresh URI while continuing to serve old aliases for cached tool descriptors.
+const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v3.html';
 const QUIZ_WIDGET_ALIASES = Object.freeze([
-  QUIZ_WIDGET_URI,
+  'ui://ez-quiz/quiz-v1.html',
   'ui://ez-quiz/quiz-v2.html',
+  QUIZ_WIDGET_URI,
 ]);
 const QUIZ_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app';
 const SITE_ORIGIN = 'https://ez-quiz.app';
@@ -92,14 +92,14 @@ function quizWidgetHtml() {
       }
     }
     * { box-sizing: border-box; }
-    html, body { width: 100%; min-height: 100%; margin: 0; }
+    html, body { width: 100%; margin: 0; }
     body {
       overflow: hidden;
       padding:
-        calc(12px + var(--safe-top))
-        calc(12px + var(--safe-right))
-        calc(14px + var(--safe-bottom))
-        calc(12px + var(--safe-left));
+        calc(10px + var(--safe-top))
+        calc(10px + var(--safe-right))
+        calc(12px + var(--safe-bottom))
+        calc(10px + var(--safe-left));
       color: var(--text);
       background: transparent;
       font: 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -121,26 +121,26 @@ function quizWidgetHtml() {
       background: var(--surface);
       box-shadow: var(--shadow);
     }
-    .app[data-view="quiz"] { min-height: 570px; }
+    .app[data-view="quiz"] { min-height: 520px; }
     .brandbar {
       position: relative;
       z-index: 2;
       display: flex;
       flex: 0 0 auto;
-      min-height: 62px;
+      min-height: 56px;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 11px 16px 10px;
+      padding: 9px 16px 8px;
       border-bottom: 1px solid rgba(255, 255, 255, .1);
       background: linear-gradient(135deg, #17131d 0%, #24183b 55%, #321c55 100%);
       box-shadow: inset 0 3px 0 #6e32ca;
     }
     .brand-logo {
       display: block;
-      width: min(168px, 47vw);
+      width: min(158px, 47vw);
       height: auto;
-      max-height: 40px;
+      max-height: 38px;
       object-fit: contain;
       object-position: left center;
     }
@@ -152,40 +152,24 @@ function quizWidgetHtml() {
       white-space: nowrap;
       text-overflow: ellipsis;
     }
-    .icon-button {
-      display: inline-grid;
-      flex: 0 0 auto;
-      width: 38px;
-      min-height: 38px;
-      place-items: center;
-      padding: 0;
-      border: 1px solid rgba(255, 255, 255, .25);
-      border-radius: 11px;
-      color: #fff;
-      background: rgba(255, 255, 255, .08);
-      cursor: pointer;
-    }
-    .icon-button:hover { background: rgba(255, 255, 255, .14); }
-    .icon-button svg { width: 18px; height: 18px; }
     .ezq-main {
       display: flex;
       flex: 1 1 auto;
       min-height: 0;
       flex-direction: column;
       padding: 0;
-      overflow: hidden;
+      overflow: visible;
     }
     .ezq-main:focus { outline: none; }
     .app[data-view="results"] .ezq-main {
       display: block;
-      padding: 20px 22px;
-      overflow-x: hidden;
-      overflow-y: auto;
-      overscroll-behavior: contain;
+      padding: 18px 20px;
+      overflow: visible;
     }
+    .app[data-view="results"] { min-height: 340px; }
     .app[data-view="status"] .ezq-main {
       display: block;
-      padding: 20px 22px;
+      padding: 18px 20px;
     }
     .question-layout {
       display: flex;
@@ -196,21 +180,21 @@ function quizWidgetHtml() {
     .question-content {
       flex: 1 1 auto;
       min-height: 0;
-      padding: 20px 22px 10px;
-      overflow: hidden;
+      padding: 16px 20px 8px;
+      overflow: visible;
     }
     .topline {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin-bottom: 10px;
+      margin-bottom: 7px;
     }
     .eyebrow { color: var(--purple); font-size: 14px; font-weight: 800; }
     .timer { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
     .progress {
       height: 7px;
-      margin-bottom: 19px;
+      margin-bottom: 14px;
       overflow: hidden;
       border: 1px solid var(--border);
       border-radius: 999px;
@@ -225,14 +209,14 @@ function quizWidgetHtml() {
     }
     h1, h2, h3, p { overflow-wrap: anywhere; }
     h1 { margin: 0; font-size: 23px; line-height: 1.24; letter-spacing: -.015em; }
-    h2 { margin: 0 0 17px; font-size: 20px; line-height: 1.36; letter-spacing: -.012em; }
-    .answers, .match-list { display: grid; gap: 10px; }
+    h2 { margin: 0 0 14px; font-size: 18px; line-height: 1.3; letter-spacing: -.012em; }
+    .answers, .match-list { display: grid; gap: 8px; }
     .answer {
       display: flex;
-      min-height: 54px;
+      min-height: 48px;
       align-items: flex-start;
-      gap: 12px;
-      padding: 13px 14px;
+      gap: 10px;
+      padding: 10px 12px;
       border: 1px solid var(--border-strong);
       border-radius: var(--radius-control);
       background: var(--surface-raised);
@@ -253,7 +237,7 @@ function quizWidgetHtml() {
       margin: 1px 0 0;
       accent-color: var(--accent);
     }
-    .answer span { min-width: 0; line-height: 1.42; }
+    .answer span { min-width: 0; line-height: 1.34; }
     .match {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(148px, .82fr);
@@ -282,13 +266,13 @@ function quizWidgetHtml() {
       grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr);
       gap: 10px;
       margin: 0;
-      padding: 11px 22px 17px;
+      padding: 9px 20px 13px;
       border-top: 1px solid var(--border);
       background: var(--surface);
       box-shadow: 0 -8px 18px color-mix(in srgb, var(--surface) 86%, transparent);
     }
     button:not(.icon-button) {
-      min-height: 48px;
+      min-height: 44px;
       padding: 10px 16px;
       border: 1px solid transparent;
       border-radius: var(--radius-control);
@@ -353,77 +337,109 @@ function quizWidgetHtml() {
     .results-copy p { margin: 5px 0 0; color: var(--muted); }
     .result-progress { margin: 18px 0 15px; }
     .result-progress .progress { margin: 0; }
-    .filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 13px; }
-    .filter-chip {
-      min-height: 38px !important;
-      padding: 7px 13px !important;
-      border-color: var(--border-strong) !important;
+    .result-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 12px; }
+    .result-stat {
+      display: grid;
+      min-width: 0;
+      padding: 10px 8px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface-raised);
+      text-align: center;
+    }
+    .result-stat strong { color: var(--text); font-size: 18px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .result-stat span { margin-top: 3px; color: var(--muted); font-size: 11px; }
+    .result-stat.correct strong { color: var(--success); }
+    .result-stat.missed strong { color: var(--danger); }
+    .result-summary {
+      min-height: 48px;
+      padding: 11px 13px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-control);
       color: var(--muted);
       background: var(--surface-raised);
       font-size: 13px;
     }
-    .filter-chip.active { border-color: var(--accent) !important; color: var(--text); background: var(--surface-selected); }
-    .result-list { display: grid; gap: 11px; }
-    .result-card {
-      padding: 14px;
-      border: 1px solid var(--border);
-      border-left: 4px solid var(--danger);
-      border-radius: var(--radius-control);
-      background: var(--surface-raised);
-    }
-    .result-card.correct { border-left-color: var(--success); }
-    .result-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-    .result-card h3 { margin: 0; font-size: 15px; line-height: 1.42; }
-    .result-badge {
-      flex: 0 0 auto;
-      padding: 4px 8px;
-      border-radius: 999px;
-      color: var(--danger);
-      background: var(--danger-soft);
-      font-size: 11px;
-      font-weight: 800;
-    }
-    .result-card.correct .result-badge { color: var(--success); background: var(--success-soft); }
-    .answer-detail { margin-top: 9px; color: var(--muted); font-size: 13px; }
-    .answer-detail strong { color: var(--text); }
-    .explain {
-      min-height: 36px !important;
-      margin-top: 11px;
-      padding: 6px 11px !important;
-      border-color: var(--border-strong) !important;
-      color: var(--text);
-      background: var(--surface);
-      font-size: 12px;
-    }
-    .empty-results { padding: 19px; border: 1px dashed var(--border-strong); border-radius: var(--radius-control); color: var(--muted); text-align: center; }
-    .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 17px; }
+    .result-summary strong { color: var(--text); }
+    .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
     .result-note { margin: 13px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
-    :root[data-constrained="true"] .app { min-height: 0; }
-    :root[data-constrained="true"] .brandbar { min-height: 54px; padding-top: 8px; padding-bottom: 7px; }
-    :root[data-constrained="true"] .brand-logo { width: min(148px, 44vw); max-height: 35px; }
-    :root[data-constrained="true"] .question-content { padding-top: 14px; padding-bottom: 8px; }
-    :root[data-constrained="true"] .topline { margin-bottom: 6px; }
-    :root[data-constrained="true"] .progress { margin-bottom: 12px; }
-    :root[data-constrained="true"] h2 { margin-bottom: 12px; font-size: 18px; line-height: 1.28; }
-    :root[data-constrained="true"] .answers,
-    :root[data-constrained="true"] .match-list { gap: 7px; }
-    :root[data-constrained="true"] .answer { min-height: 46px; padding: 9px 13px; }
-    :root[data-constrained="true"] .answer span { font-size: 14px; line-height: 1.32; }
-    :root[data-constrained="true"] .answer input { width: 19px; height: 19px; }
-    :root[data-constrained="true"] .runner-actions { padding-top: 9px; padding-bottom: 12px; }
-    :root[data-constrained="true"] .runner-actions button { min-height: 44px; }
-    .ezq-main[data-density="tight"] .question-content { padding-top: 10px; padding-bottom: 6px; }
-    .ezq-main[data-density="tight"] .topline { margin-bottom: 4px; }
-    .ezq-main[data-density="tight"] .eyebrow,
-    .ezq-main[data-density="tight"] .timer { font-size: 12px; }
-    .ezq-main[data-density="tight"] .progress { height: 5px; margin-bottom: 8px; }
-    .ezq-main[data-density="tight"] h2 { margin-bottom: 8px; font-size: 16px; line-height: 1.22; }
-    .ezq-main[data-density="tight"] .answers,
-    .ezq-main[data-density="tight"] .match-list { gap: 5px; }
-    .ezq-main[data-density="tight"] .answer { min-height: 40px; gap: 10px; padding: 7px 12px; }
-    .ezq-main[data-density="tight"] .answer span { font-size: 13px; line-height: 1.25; }
-    .ezq-main[data-density="tight"] .match { gap: 7px; padding: 7px 10px; font-size: 13px; }
-    .ezq-main[data-density="tight"] .match select { padding-top: 7px; padding-bottom: 7px; }
+    :root[data-size="compact"] body {
+      padding:
+        calc(8px + var(--safe-top))
+        calc(8px + var(--safe-right))
+        calc(9px + var(--safe-bottom))
+        calc(8px + var(--safe-left));
+    }
+    :root[data-size="compact"] .app[data-view="quiz"] { min-height: 460px; }
+    :root[data-size="compact"] .brandbar { min-height: 50px; padding-top: 7px; padding-bottom: 6px; }
+    :root[data-size="compact"] .brand-logo { width: min(146px, 44vw); max-height: 34px; }
+    :root[data-size="compact"] .question-content { padding: 12px 18px 6px; }
+    :root[data-size="compact"] .topline { margin-bottom: 4px; }
+    :root[data-size="compact"] .progress { height: 5px; margin-bottom: 8px; }
+    :root[data-size="compact"] h2 { margin-bottom: 9px; font-size: 16px; line-height: 1.24; }
+    :root[data-size="compact"] .answers,
+    :root[data-size="compact"] .match-list { gap: 5px; }
+    :root[data-size="compact"] .answer { min-height: 40px; padding: 7px 10px; }
+    :root[data-size="compact"] .answer span { font-size: 13px; line-height: 1.25; }
+    :root[data-size="compact"] .answer input { width: 18px; height: 18px; }
+    :root[data-size="compact"] .runner-actions { padding: 7px 18px 10px; }
+    :root[data-size="compact"] .runner-actions button { min-height: 40px; }
+    :root[data-size="compact"] .app[data-view="results"] .ezq-main { padding: 14px 18px; }
+    :root[data-size="compact"] .score-orb { width: 70px; height: 70px; border-width: 6px; font-size: 19px; }
+    :root[data-size="compact"] .result-progress { margin: 12px 0 10px; }
+    :root[data-size="compact"] .result-stat { padding-top: 8px; padding-bottom: 8px; }
+    :root[data-size="compact"] .result-actions { margin-top: 11px; }
+    :root[data-size="compact"] .result-actions button { min-height: 40px; }
+    :root[data-size="tight"] body {
+      padding:
+        calc(6px + var(--safe-top))
+        calc(6px + var(--safe-right))
+        calc(7px + var(--safe-bottom))
+        calc(6px + var(--safe-left));
+    }
+    :root[data-size="tight"] .app[data-view="quiz"] { min-height: 340px; }
+    :root[data-size="tight"] .brandbar { min-height: 46px; padding: 6px 14px 5px; }
+    :root[data-size="tight"] .brand-logo { width: min(140px, 43vw); max-height: 31px; }
+    :root[data-size="tight"] .tag { display: none; }
+    :root[data-size="tight"] .question-content { padding: 8px 16px 5px; }
+    :root[data-size="tight"] .topline { margin-bottom: 2px; }
+    :root[data-size="tight"] .eyebrow,
+    :root[data-size="tight"] .timer { font-size: 11px; }
+    :root[data-size="tight"] .progress { height: 4px; margin-bottom: 6px; }
+    :root[data-size="tight"] h2 { margin-bottom: 7px; font-size: 14px; line-height: 1.2; }
+    :root[data-size="tight"] .answers,
+    :root[data-size="tight"] .match-list { gap: 4px; }
+    :root[data-size="tight"] .answer { min-height: 34px; gap: 8px; padding: 5px 9px; border-radius: 11px; }
+    :root[data-size="tight"] .answer span { font-size: 12px; line-height: 1.2; }
+    :root[data-size="tight"] .answer input { width: 17px; height: 17px; }
+    :root[data-size="tight"] .runner-actions { gap: 7px; padding: 5px 16px 7px; }
+    :root[data-size="tight"] .runner-actions button { min-height: 38px; padding-top: 7px; padding-bottom: 7px; }
+    :root[data-size="tight"] .app[data-view="results"] { min-height: 300px; }
+    :root[data-size="tight"] .app[data-view="results"] .ezq-main { padding: 10px 16px; }
+    :root[data-size="tight"] .results-head { gap: 10px; }
+    :root[data-size="tight"] .score-orb { width: 58px; height: 58px; border-width: 5px; font-size: 17px; }
+    :root[data-size="tight"] .results-copy h1 { font-size: 18px; }
+    :root[data-size="tight"] .results-copy p { font-size: 12px; }
+    :root[data-size="tight"] .result-progress { margin: 9px 0 8px; }
+    :root[data-size="tight"] .result-stats { gap: 5px; margin-bottom: 8px; }
+    :root[data-size="tight"] .result-stat { padding: 6px 5px; border-radius: 10px; }
+    :root[data-size="tight"] .result-stat strong { font-size: 16px; }
+    :root[data-size="tight"] .result-summary { min-height: 40px; padding: 8px 10px; font-size: 12px; }
+    :root[data-size="tight"] .result-actions { gap: 7px; margin-top: 8px; }
+    :root[data-size="tight"] .result-actions button { min-height: 38px; padding: 7px 9px; font-size: 12px; }
+    :root[data-size="tight"] .result-note { margin-top: 7px; font-size: 10px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .question-content { padding-top: 10px; padding-bottom: 6px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .topline { margin-bottom: 4px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .eyebrow,
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .timer { font-size: 12px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .progress { height: 5px; margin-bottom: 8px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] h2 { margin-bottom: 8px; font-size: 16px; line-height: 1.22; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .answers,
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .match-list { gap: 5px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .answer { min-height: 40px; gap: 10px; padding: 7px 12px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .answer span { font-size: 13px; line-height: 1.25; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .match { gap: 7px; padding: 7px 10px; font-size: 13px; }
+    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .match select { padding-top: 7px; padding-bottom: 7px; }
     :root[data-display-mode="fullscreen"],
     :root[data-display-mode="fullscreen"] body { height: 100%; min-height: 100%; }
     :root[data-display-mode="fullscreen"] body {
@@ -449,11 +465,14 @@ function quizWidgetHtml() {
           calc(10px + var(--safe-left));
       }
       .app { min-height: 210px; border-radius: 17px; }
-      .brandbar { min-height: 57px; padding: 9px 14px 8px; }
-      .brand-logo { width: min(150px, 48vw); max-height: 37px; }
+      .app[data-view="quiz"] { min-height: 500px; }
+      .brandbar { min-height: 52px; padding: 7px 14px 6px; }
+      .brand-logo { width: min(146px, 48vw); max-height: 34px; }
       .tag { max-width: 126px; }
-      h2 { margin-bottom: 15px; font-size: 19px; }
-      .answer { min-height: 52px; padding: 12px 13px; }
+      .question-content { padding-right: 18px; padding-left: 18px; }
+      .runner-actions { padding-right: 18px; padding-left: 18px; }
+      h2 { font-size: 17px; }
+      .answer { min-height: 46px; padding: 9px 11px; }
       .match { grid-template-columns: 1fr; }
       .results-head { gap: 13px; }
       .score-orb { width: 72px; height: 72px; border-width: 6px; font-size: 20px; }
@@ -468,11 +487,9 @@ function quizWidgetHtml() {
       }
       .tag { display: none; }
       .brand-logo { width: 142px; }
-      .eyebrow, .timer { font-size: 13px; }
-      h2 { font-size: 18px; }
-      .answer { gap: 10px; padding: 11px 12px; }
-      .result-actions { grid-template-columns: 1fr; }
-      .results-head { grid-template-columns: 1fr; }
+      .eyebrow, .timer { font-size: 12px; }
+      h2 { font-size: 16px; }
+      .answer { gap: 9px; padding: 8px 10px; }
     }
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after {
@@ -490,9 +507,6 @@ function quizWidgetHtml() {
       <img id="brandLogo" class="brand-logo" src="${BRAND_WORDMARK_DATA_URI}" alt="EZ Quiz">
       <div class="brand-actions">
         <span class="tag">Smart. Simple. Fast. EZ.</span>
-        <button id="expand" class="icon-button" type="button" aria-label="Open quiz in a larger view" title="Open larger view" hidden>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
-        </button>
       </div>
     </header>
     <main id="root" class="ezq-main" tabindex="-1">
@@ -503,13 +517,13 @@ function quizWidgetHtml() {
     (() => {
       const app = document.getElementById('app');
       const root = document.getElementById('root');
-      const expandButton = document.getElementById('expand');
       const requestFrame = window.requestAnimationFrame || ((callback) => window.setTimeout(callback, 0));
       const cancelFrame = window.cancelAnimationFrame || window.clearTimeout;
       const colorScheme = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
       const pendingRequests = new Map();
       let nextRequestId = 1;
       let heightFrame = 0;
+      let lastReportedHeight = 0;
       let timerHandle = null;
       let quiz = null;
       let quizKey = '';
@@ -517,7 +531,6 @@ function quizWidgetHtml() {
       let attemptIndexes = [];
       let answers = [];
       let index = 0;
-      let resultsFilter = 'missed';
       let startedAt = 0;
       let finishedAt = 0;
 
@@ -535,9 +548,28 @@ function quizWidgetHtml() {
         if (heightFrame) cancelFrame(heightFrame);
         heightFrame = requestFrame(() => {
           heightFrame = 0;
+          const bodyStyle = window.getComputedStyle ? window.getComputedStyle(document.body) : null;
+          const verticalPadding = bodyStyle
+            ? (Number.parseFloat(bodyStyle.paddingTop) || 0) + (Number.parseFloat(bodyStyle.paddingBottom) || 0)
+            : 0;
+          const appHeight = Math.max(
+            app.scrollHeight || 0,
+            app.offsetHeight || 0,
+            app.getBoundingClientRect ? app.getBoundingClientRect().height : 0,
+            app.dataset.view === 'quiz' ? 340 : 220
+          );
+          const height = Math.ceil(appHeight + verticalPadding);
           try {
-            if (window.openai && typeof window.openai.notifyIntrinsicHeight === 'function') {
-              window.openai.notifyIntrinsicHeight();
+            if (Math.abs(height - lastReportedHeight) > 1) {
+              lastReportedHeight = height;
+              window.parent.postMessage({
+                jsonrpc: '2.0',
+                method: 'ui/notifications/size-changed',
+                params: { height },
+              }, '*');
+              if (window.openai && typeof window.openai.notifyIntrinsicHeight === 'function') {
+                window.openai.notifyIntrinsicHeight();
+              }
             }
           } catch {}
         });
@@ -556,8 +588,10 @@ function quizWidgetHtml() {
           ? question.options.join(' ')
           : (question.type === 'MT' ? question.left.concat(question.right).join(' ') : '');
         const complexity = question.text.length + optionText.length;
-        const shouldStartTight = document.documentElement.dataset.constrained === 'true'
-          && (complexity > 320 || (question.options && question.options.length > 4));
+        const hostSize = document.documentElement.dataset.size || '';
+        const shouldStartTight = hostSize === 'tight' || (
+          hostSize === 'compact' && (complexity > 320 || (question.options && question.options.length > 4))
+        );
         root.dataset.density = shouldStartTight ? 'tight' : '';
         requestFrame(() => {
           const content = root.querySelector('.question-content');
@@ -582,7 +616,9 @@ function quizWidgetHtml() {
           : (colorScheme && colorScheme.matches ? 'dark' : 'light');
         document.documentElement.dataset.theme = theme;
 
-        const safeArea = context.safeArea && typeof context.safeArea === 'object' ? context.safeArea : {};
+        const safeArea = context.safeAreaInsets && typeof context.safeAreaInsets === 'object'
+          ? context.safeAreaInsets
+          : (context.safeArea && typeof context.safeArea === 'object' ? context.safeArea : {});
         const insets = safeArea.insets && typeof safeArea.insets === 'object' ? safeArea.insets : safeArea;
         const top = numberInset(insets.top);
         const right = numberInset(insets.right);
@@ -593,24 +629,19 @@ function quizWidgetHtml() {
         document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
         document.documentElement.style.setProperty('--safe-left', left + 'px');
 
-        const maxHeight = Number(context.maxHeight || 0);
+        const dimensions = context.containerDimensions && typeof context.containerDimensions === 'object'
+          ? context.containerDimensions
+          : {};
+        const fixedHeight = Number(dimensions.height || 0);
+        const maxHeight = Number(dimensions.maxHeight || context.maxHeight || fixedHeight || 0);
         const displayMode = String(context.displayMode || 'inline').toLowerCase();
         document.documentElement.dataset.displayMode = displayMode;
-        if (maxHeight > 0) {
-          const availableHeight = Math.max(220, maxHeight - top - bottom - 24);
-          app.style.height = availableHeight + 'px';
-          app.style.maxHeight = availableHeight + 'px';
-          document.documentElement.dataset.constrained = 'true';
-        } else {
-          app.style.height = '';
-          app.style.maxHeight = '';
-          delete document.documentElement.dataset.constrained;
-        }
-        const canOpenLargeView = window.openai && (
-          typeof window.openai.requestModal === 'function'
-          || typeof window.openai.requestDisplayMode === 'function'
-        );
-        expandButton.hidden = !canOpenLargeView || displayMode === 'fullscreen';
+        const usableHeight = maxHeight > 0 ? Math.max(0, maxHeight - top - bottom) : 0;
+        document.documentElement.dataset.size = usableHeight > 0 && usableHeight <= 440
+          ? 'tight'
+          : (usableHeight > 0 && usableHeight <= 560 ? 'compact' : 'comfortable');
+        app.style.height = '';
+        app.style.maxHeight = '';
         if (mode === 'quiz' && quiz) fitQuestionToViewport(quiz.questions[currentOriginalIndex()]);
         scheduleHeightReport();
       }
@@ -646,7 +677,6 @@ function quizWidgetHtml() {
           attemptIndexes: attemptIndexes.slice(),
           answers: answers.slice(),
           index,
-          resultsFilter,
           startedAt,
           finishedAt,
         };
@@ -739,7 +769,6 @@ function quizWidgetHtml() {
         answers = prior.answers.slice();
         index = Math.max(0, Math.min(attemptIndexes.length - 1, Number(prior.index) || 0));
         mode = prior.mode === 'results' ? 'results' : 'quiz';
-        resultsFilter = prior.resultsFilter === 'all' ? 'all' : 'missed';
         startedAt = Number(prior.startedAt) > 0 ? Number(prior.startedAt) : Date.now();
         finishedAt = mode === 'results' && Number(prior.finishedAt) > 0 ? Number(prior.finishedAt) : 0;
         return true;
@@ -889,58 +918,6 @@ function quizWidgetHtml() {
         startTimer();
       }
 
-      function answerText(question, answer, correct) {
-        const value = correct ? question.correct : answer;
-        if (question.type === 'MC') {
-          const indexes = Array.isArray(value) ? value : [];
-          return indexes.length ? indexes.map((position) => (
-            String.fromCharCode(65 + position) + '. ' + (question.options[position] || '')
-          )).join(', ') : 'No answer';
-        }
-        if (question.type === 'TF') {
-          return typeof value === 'boolean' ? (value ? 'True' : 'False') : 'No answer';
-        }
-        if (question.type === 'YN') {
-          return typeof value === 'boolean' ? (value ? 'Yes' : 'No') : 'No answer';
-        }
-        const selected = correct
-          ? question.pairs.reduce((output, [left, right]) => { output[left] = right; return output; }, new Array(question.left.length).fill(-1))
-          : (Array.isArray(value) ? value : []);
-        return question.left.map((left, leftIndex) => {
-          const rightIndex = Number.isInteger(selected[leftIndex]) ? selected[leftIndex] : -1;
-          return left + ' → ' + (rightIndex >= 0 ? question.right[rightIndex] : 'No answer');
-        }).join('; ');
-      }
-
-      function resultCard(questionIndex) {
-        const question = quiz.questions[questionIndex];
-        const answer = answers[questionIndex];
-        const correct = compareAnswer(question, answer);
-        const yours = answerText(question, answer, false);
-        const expected = answerText(question, answer, true);
-        return '<article class="result-card ' + (correct ? 'correct' : '') + '" data-question="' + questionIndex + '">' +
-          '<div class="result-card-head"><h3>' + (questionIndex + 1) + '. ' + esc(question.text) + '</h3>' +
-          '<span class="result-badge">' + (correct ? 'Correct' : 'Incorrect') + '</span></div>' +
-          '<div class="answer-detail"><strong>' + (correct ? 'Answer:' : 'Your answer:') + '</strong> ' + esc(yours) + '</div>' +
-          (correct ? '' : '<div class="answer-detail"><strong>Correct:</strong> ' + esc(expected) + '</div>') +
-          '<button class="explain" type="button" data-explain="' + questionIndex + '">Ask ChatGPT to explain</button></article>';
-      }
-
-      async function explainQuestion(questionIndex, button) {
-        const question = quiz.questions[questionIndex];
-        const prompt = 'Explain this ' + quiz.topic + ' quiz question clearly and briefly. Question: ' + question.text +
-          ' My answer: ' + answerText(question, answers[questionIndex], false) +
-          ' Correct answer: ' + answerText(question, answers[questionIndex], true) + '.';
-        if (button) { button.disabled = true; button.textContent = 'Asking ChatGPT…'; }
-        try {
-          if (!window.openai || typeof window.openai.sendFollowUpMessage !== 'function') throw new Error('Unavailable');
-          await window.openai.sendFollowUpMessage({ prompt, scrollToBottom: true });
-          if (button) button.textContent = 'Explanation requested';
-        } catch {
-          if (button) { button.disabled = false; button.textContent = 'Ask ChatGPT to explain'; }
-        }
-      }
-
       function beginRetake(indexes) {
         if (!indexes.length) return;
         indexes.forEach((questionIndex) => { answers[questionIndex] = null; });
@@ -960,35 +937,26 @@ function quizWidgetHtml() {
         const score = scoreQuiz();
         const missed = missedIndexes();
         const percent = Math.round((score / quiz.questions.length) * 100);
-        const visible = resultsFilter === 'all'
-          ? quiz.questions.map((_, questionIndex) => questionIndex)
-          : missed;
         const message = score === quiz.questions.length
           ? 'Perfect score.'
           : (score >= Math.ceil(quiz.questions.length * .7) ? 'Nice work.' : 'Review the misses and give it another run.');
+        const missedSummary = missed.length
+          ? '<strong>Review next:</strong> ' + missed.map((questionIndex) => 'Question ' + (questionIndex + 1)).join(', ')
+          : '<strong>All correct.</strong> You are ready for a harder round.';
         renderHtml(
           '<div class="results-head"><div class="score-orb" aria-label="' + score + ' out of ' + quiz.questions.length + '">' + score + '/' + quiz.questions.length + '</div>' +
           '<div class="results-copy"><h1>Quiz complete</h1><p>' + esc(message) + ' · ' + formatDuration(finishedAt - startedAt) + '</p></div></div>' +
           '<div class="result-progress"><div class="progress" role="progressbar" aria-label="Final score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + percent + '">' +
           '<span style="width:' + percent + '%"></span></div></div>' +
-          '<div class="filter-row" role="group" aria-label="Result filter"><button class="filter-chip ' + (resultsFilter === 'missed' ? 'active' : '') + '" data-filter="missed" type="button">Missed (' + missed.length + ')</button>' +
-          '<button class="filter-chip ' + (resultsFilter === 'all' ? 'active' : '') + '" data-filter="all" type="button">All (' + quiz.questions.length + ')</button></div>' +
-          '<div class="result-list">' + (visible.length ? visible.map(resultCard).join('') : '<div class="empty-results">No missed questions 🎉</div>') + '</div>' +
+          '<div class="result-stats" aria-label="Quiz results"><div class="result-stat correct"><strong>' + score + '</strong><span>Correct</span></div>' +
+          '<div class="result-stat missed"><strong>' + missed.length + '</strong><span>Missed</span></div>' +
+          '<div class="result-stat"><strong>' + percent + '%</strong><span>Score</span></div></div>' +
+          '<div class="result-summary">' + missedSummary + '</div>' +
           '<div class="result-actions"><button id="retakeMissed" class="primary" type="button" ' + (!missed.length ? 'disabled' : '') + '>Retake missed</button>' +
           '<button id="retakeAll" class="secondary" type="button">Retake all</button></div>' +
           '<p class="result-note">' + esc(quiz.title) + '</p>',
           'results'
         );
-        root.querySelectorAll('[data-filter]').forEach((button) => {
-          button.addEventListener('click', () => {
-            resultsFilter = button.dataset.filter === 'all' ? 'all' : 'missed';
-            saveQuizState();
-            renderResults();
-          });
-        });
-        root.querySelectorAll('[data-explain]').forEach((button) => {
-          button.addEventListener('click', () => explainQuestion(Number(button.dataset.explain), button));
-        });
         document.getElementById('retakeMissed').addEventListener('click', () => beginRetake(missed));
         document.getElementById('retakeAll').addEventListener('click', () => (
           beginRetake(quiz.questions.map((_, questionIndex) => questionIndex))
@@ -1021,7 +989,6 @@ function quizWidgetHtml() {
           attemptIndexes = data.questions.map((_, questionIndex) => questionIndex);
           answers = new Array(data.questions.length).fill(null);
           index = 0;
-          resultsFilter = 'missed';
           startedAt = Date.now();
           finishedAt = 0;
         }
@@ -1033,17 +1000,6 @@ function quizWidgetHtml() {
         if (value == null) return;
         if (!loadQuiz(value)) showUnavailable();
       }
-
-      expandButton.addEventListener('click', async () => {
-        saveQuizState();
-        try {
-          if (window.openai && typeof window.openai.requestModal === 'function') {
-            await window.openai.requestModal({});
-          } else if (window.openai && typeof window.openai.requestDisplayMode === 'function') {
-            await window.openai.requestDisplayMode({ mode: 'fullscreen' });
-          }
-        } catch {}
-      });
 
       document.addEventListener('keydown', (event) => {
         if (mode !== 'quiz') return;
@@ -1084,7 +1040,7 @@ function quizWidgetHtml() {
       }
       if (typeof ResizeObserver !== 'undefined') {
         const observer = new ResizeObserver(scheduleHeightReport);
-        observer.observe(document.body);
+        observer.observe(app);
       }
 
       applyHostContext(window.openai || {});

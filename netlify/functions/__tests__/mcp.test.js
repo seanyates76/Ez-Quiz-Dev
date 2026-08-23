@@ -26,7 +26,7 @@ function mountWidget(html, openai) {
 
 async function flushWidget() {
   await new Promise((resolve) => setTimeout(resolve, 0));
-  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
 function quiz(overrides = {}) {
@@ -95,7 +95,7 @@ describe('EZ Quiz MCP server', () => {
     expect(listedTools[0]).toMatchObject({
       inputSchema: { required: ['title', 'topic', 'questions'], additionalProperties: false },
       annotations: { readOnlyHint: true, openWorldHint: false, idempotentHint: true },
-      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v1.html' } },
+      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v3.html' } },
     });
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('source_text');
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('lines');
@@ -118,6 +118,7 @@ describe('EZ Quiz MCP server', () => {
     expect(resource.text).toContain('alt="EZ Quiz"');
     expect(resource.text).toContain('ui/notifications/tool-result');
     expect(resource.text).toContain("request('ui/initialize'");
+    expect(resource.text).toContain('ui/notifications/size-changed');
     expect(resource.text).toContain('notifyIntrinsicHeight');
     expect(resource.text).toContain('safeArea');
     expect(resource.text).toContain('maxHeight');
@@ -127,6 +128,7 @@ describe('EZ Quiz MCP server', () => {
     expect(resource.text).not.toContain('Building your quiz');
     expect(resource.text).not.toContain('Cancel generation');
     expect(resource.text).not.toContain('Try again');
+    expect(resource.text).not.toContain('requestModal');
     expect(resource.text).not.toContain('fetch(');
     expect(resource.text).not.toMatch(/<script[^>]+src=/i);
     expect(resource.text).not.toMatch(/<img[^>]+src="https?:/i);
@@ -138,9 +140,10 @@ describe('EZ Quiz MCP server', () => {
     expect(json(listed).result.resources.map((resource) => resource.uri)).toEqual([
       'ui://ez-quiz/quiz-v1.html',
       'ui://ez-quiz/quiz-v2.html',
+      'ui://ez-quiz/quiz-v3.html',
     ]);
 
-    for (const uri of ['ui://ez-quiz/quiz-v1.html', 'ui://ez-quiz/quiz-v2.html']) {
+    for (const uri of ['ui://ez-quiz/quiz-v1.html', 'ui://ez-quiz/quiz-v2.html', 'ui://ez-quiz/quiz-v3.html']) {
       const read = await handler(event({ jsonrpc: '2.0', id: 32, method: 'resources/read', params: { uri } }));
       expect(json(read).result.contents[0]).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app' });
     }
@@ -255,30 +258,38 @@ describe('EZ Quiz MCP server', () => {
     expect(json(response).result.content[0].text).toContain('1 to 20');
   });
 
-  test('uses original runner navigation and calculates the score once on Finish', () => {
+  test('uses original runner navigation, reports intrinsic height, and calculates the score once on Finish', async () => {
     const states = [];
+    const notifyIntrinsicHeight = jest.fn();
     const { html, script } = widgetDocument();
     mountWidget(html, {
       toolOutput: quiz(), theme: 'dark', maxHeight: 520,
       safeArea: { insets: { top: 4, right: 6, bottom: 8, left: 10 } },
       setWidgetState: (state) => states.push(state),
-      notifyIntrinsicHeight: jest.fn(),
+      notifyIntrinsicHeight,
     });
     window.eval(script);
+    await flushWidget();
 
     expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(document.documentElement.dataset.constrained).toBe('true');
+    expect(document.documentElement.dataset.size).toBe('compact');
+    expect(document.documentElement.dataset.constrained).toBeUndefined();
     expect(document.documentElement.style.getPropertyValue('--safe-left')).toBe('10px');
-    expect(document.querySelector('#app').style.maxHeight).toBe('484px');
-    expect(document.querySelector('#app').style.height).toBe('484px');
+    expect(document.querySelector('#app').style.maxHeight).toBe('');
+    expect(document.querySelector('#app').style.height).toBe('');
     expect(document.querySelector('#brandLogo').src).toContain('data:image/png;base64,');
     expect(document.querySelector('h2').textContent).toContain('subnet mask');
     expect(document.querySelector('#check')).toBeNull();
     expect(document.querySelector('#next').textContent).toBe('Next');
     expect(document.querySelector('.question-content').contains(document.querySelector('#next'))).toBe(false);
     expect(document.querySelector('.runner-actions').parentElement).toBe(document.querySelector('.question-layout'));
-    expect(getComputedStyle(document.querySelector('.question-content')).paddingLeft).toBe('22px');
-    expect(getComputedStyle(document.querySelector('.runner-actions')).paddingLeft).toBe('22px');
+    expect(getComputedStyle(document.querySelector('.question-content')).paddingLeft).toBe('18px');
+    expect(getComputedStyle(document.querySelector('.runner-actions')).paddingLeft).toBe('18px');
+    expect(window.parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'ui/notifications/size-changed',
+      params: { height: expect.any(Number) },
+    }), '*');
+    expect(notifyIntrinsicHeight).toHaveBeenCalled();
 
     clickInput('input[value="1"]');
     document.querySelector('#next').click();
@@ -290,8 +301,11 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('.results-copy h1').textContent).toBe('Quiz complete');
     expect(document.querySelector('.score-orb').textContent).toBe('2/2');
     expect(states.at(-1)).toMatchObject({ mode: 'results', answers: [[1], true] });
-    document.querySelector('[data-filter="all"]').click();
-    expect(document.querySelectorAll('.result-card')).toHaveLength(2);
+    expect(document.querySelector('.result-stat.correct strong').textContent).toBe('2');
+    expect(document.querySelector('.result-stat.missed strong').textContent).toBe('0');
+    expect(document.querySelectorAll('.result-actions button')).toHaveLength(2);
+    expect(document.querySelector('#retakeMissed').disabled).toBe(true);
+    expect(document.querySelector('#retakeAll')).not.toBeNull();
     expect(document.querySelector('.score-orb').textContent).toBe('2/2');
   });
 
@@ -355,7 +369,8 @@ describe('EZ Quiz MCP server', () => {
     document.querySelector('#next').click();
 
     expect(document.querySelector('.score-orb').textContent).toBe('1/2');
-    expect(document.querySelectorAll('.result-card')).toHaveLength(1);
+    expect(document.querySelector('.result-stat.missed strong').textContent).toBe('1');
+    expect(document.querySelector('.result-summary').textContent).toContain('Question 2');
     document.querySelector('#retakeMissed').click();
     expect(document.querySelector('.eyebrow').textContent).toBe('Question 1 of 1');
     expect(document.querySelector('h2').textContent).toContain('OSPF');
@@ -372,7 +387,7 @@ describe('EZ Quiz MCP server', () => {
       toolOutput: output,
       widgetState: {
         version: 2, quizId: output.quizId, mode: 'quiz', attemptIndexes: [0, 1],
-        answers: [[1], null], index: 1, resultsFilter: 'missed',
+        answers: [[1], null], index: 1,
         startedAt: Date.now() - 1000, finishedAt: 0,
       },
       setWidgetState: jest.fn(),
@@ -383,7 +398,7 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('input[value="1"]').checked).toBe(true);
   });
 
-  test('follows system theme, applies host safe area, and prefers a host-owned large-view modal', async () => {
+  test('follows system theme and standard safe-area context without launching a modal', async () => {
     const mediaListeners = [];
     window.matchMedia = jest.fn().mockReturnValue({
       matches: true,
@@ -394,29 +409,38 @@ describe('EZ Quiz MCP server', () => {
     const setWidgetState = jest.fn();
     const { html, script } = widgetDocument();
     mountWidget(html, {
-      toolOutput: quiz(), displayMode: 'inline', safeArea: { top: 3, right: 5, bottom: 7, left: 9 },
+      toolOutput: quiz(), displayMode: 'inline', safeAreaInsets: { top: 3, right: 5, bottom: 7, left: 9 },
       requestDisplayMode, requestModal, setWidgetState,
     });
     window.eval(script);
+    await flushWidget();
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(document.documentElement.style.getPropertyValue('--safe-bottom')).toBe('7px');
-    expect(document.querySelector('#expand').hidden).toBe(false);
-    document.querySelector('#expand').click();
-    await flushWidget();
-    expect(setWidgetState).toHaveBeenCalled();
-    expect(requestModal).toHaveBeenCalledWith({});
+    expect(document.querySelector('#expand')).toBeNull();
+    expect(requestModal).not.toHaveBeenCalled();
     expect(requestDisplayMode).not.toHaveBeenCalled();
     expect(mediaListeners).toHaveLength(1);
   });
 
-  test('falls back to fullscreen when the host does not provide modal expansion', async () => {
+  test('uses standard container dimensions as a compactness hint without hard-clamping the card', async () => {
     const requestDisplayMode = jest.fn().mockResolvedValue({ mode: 'fullscreen' });
     const { html, script } = widgetDocument();
-    mountWidget(html, { toolOutput: quiz(), displayMode: 'inline', requestDisplayMode });
+    mountWidget(html, {
+      toolOutput: quiz(), displayMode: 'inline', requestDisplayMode,
+      containerDimensions: { maxHeight: 420 },
+      safeAreaInsets: { top: 5, bottom: 7, left: 4, right: 4 },
+    });
     window.eval(script);
-    document.querySelector('#expand').click();
     await flushWidget();
-    expect(requestDisplayMode).toHaveBeenCalledWith({ mode: 'fullscreen' });
+    expect(document.documentElement.dataset.size).toBe('tight');
+    expect(document.querySelector('#app').style.height).toBe('');
+    expect(document.querySelector('#app').style.maxHeight).toBe('');
+    expect(html).toContain(':root[data-size="tight"] .question-content { padding: 8px 16px 5px; }');
+    expect(document.querySelector('#next')).not.toBeNull();
+    expect(window.parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'ui/notifications/size-changed',
+    }), '*');
+    expect(requestDisplayMode).not.toHaveBeenCalled();
   });
 
   test('hydrates a remounted surface from canonical tool response metadata', () => {
@@ -439,7 +463,8 @@ describe('EZ Quiz MCP server', () => {
     });
     window.eval(script);
     expect(document.documentElement.dataset.displayMode).toBe('fullscreen');
-    expect(document.querySelector('#expand').hidden).toBe(true);
+    expect(document.querySelector('#expand')).toBeNull();
+    expect(document.querySelector('#app').style.height).toBe('');
     expect(document.querySelector('#app').dataset.view).toBe('quiz');
     expect(document.querySelector('h2').textContent).toContain('subnet mask');
     expect(html).toContain(':root[data-display-mode="fullscreen"] body');
@@ -467,21 +492,35 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('#root').dataset.density).toBe('tight');
     expect(document.querySelector('.question-content').contains(document.querySelector('#next'))).toBe(false);
     expect(document.querySelector('#next').textContent).toBe('Finish');
-    expect(document.querySelector('#app').style.height).toBe('456px');
+    expect(document.querySelector('#app').style.height).toBe('');
+    expect(document.querySelector('#app').style.maxHeight).toBe('');
+    expect(html).toContain(':root[data-size="compact"] .runner-actions { padding: 7px 18px 10px; }');
   });
 
-  test('asks ChatGPT to explain a result without making a network request', async () => {
-    const sendFollowUpMessage = jest.fn().mockResolvedValue(undefined);
+  test('keeps a padded, compact results summary and both retake actions in the card', () => {
     const { html, script } = widgetDocument();
-    mountWidget(html, { toolOutput: quiz(), sendFollowUpMessage });
+    mountWidget(html, {
+      toolOutput: quiz(),
+      containerDimensions: { maxHeight: 420 },
+      safeAreaInsets: { top: 4, right: 3, bottom: 4, left: 3 },
+      setWidgetState: jest.fn(),
+    });
     window.eval(script);
+    clickInput('input[value="1"]');
     document.querySelector('#next').click();
+    clickInput('input[value="false"]');
     document.querySelector('#next').click();
-    document.querySelector('[data-explain]').click();
-    await flushWidget();
-    expect(sendFollowUpMessage).toHaveBeenCalledWith(expect.objectContaining({
-      prompt: expect.stringContaining('Correct answer:'), scrollToBottom: true,
-    }));
+    expect(document.documentElement.dataset.size).toBe('tight');
+    expect(html).toContain(':root[data-size="tight"] .app[data-view="results"] .ezq-main { padding: 10px 16px; }');
+    expect(document.querySelector('.result-summary').textContent).toContain('Question 2');
+    expect(document.querySelectorAll('.result-actions button')).toHaveLength(2);
+    expect(document.querySelector('#retakeMissed').disabled).toBe(false);
+    expect(document.querySelector('#retakeAll').textContent).toBe('Retake all');
+    expect(document.querySelector('.result-list')).toBeNull();
+    expect(document.querySelector('[data-explain]')).toBeNull();
+    expect(document.querySelector('#app').style.height).toBe('');
+    document.querySelector('#retakeAll').click();
+    expect(document.querySelector('.eyebrow').textContent).toBe('Question 1 of 2');
   });
 
   test('shows a terminal unavailable card instead of a retry loop', () => {
