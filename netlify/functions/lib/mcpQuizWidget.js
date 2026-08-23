@@ -490,7 +490,7 @@ function quizWidgetHtml() {
       <img id="brandLogo" class="brand-logo" src="${BRAND_WORDMARK_DATA_URI}" alt="EZ Quiz">
       <div class="brand-actions">
         <span class="tag">Smart. Simple. Fast. EZ.</span>
-        <button id="expand" class="icon-button" type="button" aria-label="Open quiz full screen" title="Open full screen" hidden>
+        <button id="expand" class="icon-button" type="button" aria-label="Open quiz in a larger view" title="Open larger view" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg>
         </button>
       </div>
@@ -606,8 +606,11 @@ function quizWidgetHtml() {
           app.style.maxHeight = '';
           delete document.documentElement.dataset.constrained;
         }
-        expandButton.hidden = !(window.openai && typeof window.openai.requestDisplayMode === 'function')
-          || displayMode === 'fullscreen';
+        const canOpenLargeView = window.openai && (
+          typeof window.openai.requestModal === 'function'
+          || typeof window.openai.requestDisplayMode === 'function'
+        );
+        expandButton.hidden = !canOpenLargeView || displayMode === 'fullscreen';
         if (mode === 'quiz' && quiz) fitQuestionToViewport(quiz.questions[currentOriginalIndex()]);
         scheduleHeightReport();
       }
@@ -662,7 +665,17 @@ function quizWidgetHtml() {
         if (value.structuredContent) return value.structuredContent;
         if (value.result && value.result.structuredContent) return value.result.structuredContent;
         if (value.mcp_tool_result && value.mcp_tool_result.structuredContent) return value.mcp_tool_result.structuredContent;
+        if (value.call_tool_result && value.call_tool_result.structuredContent) return value.call_tool_result.structuredContent;
         return value;
+      }
+
+      function hostToolResult(globals) {
+        if (globals && globals.toolOutput !== undefined) return globals.toolOutput;
+        const openai = window.openai || {};
+        if (openai.toolOutput !== undefined) return openai.toolOutput;
+        const metadata = openai.toolResponseMetadata;
+        if (!metadata || typeof metadata !== 'object') return null;
+        return metadata.mcp_tool_result || metadata.call_tool_result || null;
       }
 
       function simpleHash(value) {
@@ -1022,7 +1035,14 @@ function quizWidgetHtml() {
       }
 
       expandButton.addEventListener('click', async () => {
-        try { await window.openai.requestDisplayMode({ mode: 'fullscreen' }); } catch {}
+        saveQuizState();
+        try {
+          if (window.openai && typeof window.openai.requestModal === 'function') {
+            await window.openai.requestModal({});
+          } else if (window.openai && typeof window.openai.requestDisplayMode === 'function') {
+            await window.openai.requestDisplayMode({ mode: 'fullscreen' });
+          }
+        } catch {}
       });
 
       document.addEventListener('keydown', (event) => {
@@ -1037,7 +1057,8 @@ function quizWidgetHtml() {
       window.addEventListener('openai:set_globals', (event) => {
         const globals = event && event.detail && event.detail.globals || {};
         applyHostContext({ ...(window.openai || {}), ...globals });
-        if (globals.toolOutput !== undefined) loadToolResult(window.openai && window.openai.toolOutput);
+        const nextOutput = hostToolResult(globals);
+        if (nextOutput != null) loadToolResult(nextOutput);
       }, { passive: true });
 
       window.addEventListener('message', (event) => {
@@ -1067,7 +1088,7 @@ function quizWidgetHtml() {
       }
 
       applyHostContext(window.openai || {});
-      const initialOutput = window.openai && window.openai.toolOutput;
+      const initialOutput = hostToolResult(window.openai || {});
       if (initialOutput) loadToolResult(initialOutput);
 
       request('ui/initialize', {

@@ -383,17 +383,19 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('input[value="1"]').checked).toBe(true);
   });
 
-  test('follows system theme, applies host safe area, and requests fullscreen', async () => {
+  test('follows system theme, applies host safe area, and prefers a host-owned large-view modal', async () => {
     const mediaListeners = [];
     window.matchMedia = jest.fn().mockReturnValue({
       matches: true,
       addEventListener: (_name, callback) => mediaListeners.push(callback),
     });
     const requestDisplayMode = jest.fn().mockResolvedValue({ mode: 'fullscreen' });
+    const requestModal = jest.fn().mockResolvedValue(undefined);
+    const setWidgetState = jest.fn();
     const { html, script } = widgetDocument();
     mountWidget(html, {
       toolOutput: quiz(), displayMode: 'inline', safeArea: { top: 3, right: 5, bottom: 7, left: 9 },
-      requestDisplayMode,
+      requestDisplayMode, requestModal, setWidgetState,
     });
     window.eval(script);
     expect(document.documentElement.dataset.theme).toBe('dark');
@@ -401,8 +403,31 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('#expand').hidden).toBe(false);
     document.querySelector('#expand').click();
     await flushWidget();
-    expect(requestDisplayMode).toHaveBeenCalledWith({ mode: 'fullscreen' });
+    expect(setWidgetState).toHaveBeenCalled();
+    expect(requestModal).toHaveBeenCalledWith({});
+    expect(requestDisplayMode).not.toHaveBeenCalled();
     expect(mediaListeners).toHaveLength(1);
+  });
+
+  test('falls back to fullscreen when the host does not provide modal expansion', async () => {
+    const requestDisplayMode = jest.fn().mockResolvedValue({ mode: 'fullscreen' });
+    const { html, script } = widgetDocument();
+    mountWidget(html, { toolOutput: quiz(), displayMode: 'inline', requestDisplayMode });
+    window.eval(script);
+    document.querySelector('#expand').click();
+    await flushWidget();
+    expect(requestDisplayMode).toHaveBeenCalledWith({ mode: 'fullscreen' });
+  });
+
+  test('hydrates a remounted surface from canonical tool response metadata', () => {
+    const { html, script } = widgetDocument();
+    mountWidget(html, {
+      theme: 'light',
+      toolResponseMetadata: { mcp_tool_result: { structuredContent: quiz() } },
+    });
+    window.eval(script);
+    expect(document.querySelector('#app').dataset.view).toBe('quiz');
+    expect(document.querySelector('h2').textContent).toContain('subnet mask');
   });
 
   test('uses a painted, full-viewport presentation when the host enters fullscreen', () => {
