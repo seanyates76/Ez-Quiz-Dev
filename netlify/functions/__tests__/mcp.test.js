@@ -62,7 +62,11 @@ describe('EZ Quiz MCP server', () => {
 
   beforeEach(() => {
     jest.resetModules();
-    process.env = { ...originalEnv, EZQ_PLUGIN_WIDGET_ORIGIN: 'https://ez-quiz.app' };
+    process.env = {
+      ...originalEnv,
+      AI_PROVIDER: 'echo',
+      EZQ_PLUGIN_WIDGET_ORIGIN: 'https://ez-quiz.app',
+    };
     document.documentElement.innerHTML = '<head></head><body></body>';
   });
 
@@ -176,6 +180,54 @@ describe('EZ Quiz MCP server', () => {
     expect(json(repeated).result.structuredContent.quizId).toBe(result.structuredContent.quizId);
   });
 
+  test('dispatches cached generate_quiz and render_quiz calls without advertising them', async () => {
+    const { handler } = require('../mcp.js');
+    const generated = await handler(event({
+      jsonrpc: '2.0',
+      id: 51,
+      method: 'tools/call',
+      params: {
+        name: 'generate_quiz',
+        arguments: { topic: 'CCNA', count: 3, difficulty: 'medium', types: ['MC'] },
+      },
+    }));
+    expect(json(generated).result).toMatchObject({
+      structuredContent: {
+        topic: 'CCNA',
+        questionCount: 3,
+        aiGenerated: true,
+      },
+      _meta: { compatibilityTool: true },
+    });
+    expect(json(generated).result.structuredContent.questions).toHaveLength(3);
+
+    const rendered = await handler(event({
+      jsonrpc: '2.0',
+      id: 52,
+      method: 'tools/call',
+      params: {
+        name: 'render_quiz',
+        arguments: {
+          title: 'Cached quiz',
+          topic: 'Basics',
+          lines: 'TF|The Earth orbits the Sun.|T\nYN|Does two plus two equal four?|Y',
+        },
+      },
+    }));
+    expect(json(rendered).result).toMatchObject({
+      structuredContent: {
+        title: 'Cached quiz',
+        topic: 'Basics',
+        questionCount: 2,
+        aiGenerated: false,
+      },
+      _meta: { compatibilityTool: true },
+    });
+
+    const listed = await handler(event({ jsonrpc: '2.0', id: 53, method: 'tools/list' }));
+    expect(json(listed).result.tools.map((tool) => tool.name)).toEqual(['open_quiz']);
+  });
+
   test.each([
     ['duplicate choices', { title: 'Bad', topic: 'Bad', questions: [{ type: 'MC', text: 'Pick', options: ['Same', 'same'], correct: [0] }] }, 'duplicates'],
     ['bad answer index', { title: 'Bad', topic: 'Bad', questions: [{ type: 'MC', text: 'Pick', options: ['A', 'B'], correct: [2] }] }, 'out-of-range'],
@@ -256,6 +308,32 @@ describe('EZ Quiz MCP server', () => {
     window.dispatchEvent(new CustomEvent('openai:set_globals', { detail: { globals: { toolOutput: output } } }));
     expect(document.querySelector('.score-orb').textContent).toBe('2/2');
     expect(states.at(-1).mode).toBe('results');
+  });
+
+  test('plays a complete quiz returned through the cached generate_quiz contract', async () => {
+    const { handler } = require('../mcp.js');
+    const generated = await handler(event({
+      jsonrpc: '2.0',
+      id: 54,
+      method: 'tools/call',
+      params: {
+        name: 'generate_quiz',
+        arguments: { topic: 'CCNA', count: 2, difficulty: 'easy', types: ['MC'] },
+      },
+    }));
+    const output = json(generated).result.structuredContent;
+    expect(output.questions[0]).toHaveProperty('prompt');
+
+    const { html, script } = widgetDocument();
+    mountWidget(html, { toolOutput: output, setWidgetState: jest.fn() });
+    window.eval(script);
+    expect(document.querySelector('h2').textContent).toContain('Sample Q 1');
+    clickInput('input[value="0"]');
+    document.querySelector('#next').click();
+    expect(document.querySelector('h2').textContent).toContain('Sample Q 2');
+    clickInput('input[value="0"]');
+    document.querySelector('#next').click();
+    expect(document.querySelector('.score-orb').textContent).toBe('2/2');
   });
 
   test('Previous restores answers and a missed-only retake preserves prior correct answers', () => {
