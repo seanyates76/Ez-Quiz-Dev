@@ -270,10 +270,15 @@ describe('EZ Quiz MCP server', () => {
     expect(document.documentElement.dataset.constrained).toBe('true');
     expect(document.documentElement.style.getPropertyValue('--safe-left')).toBe('10px');
     expect(document.querySelector('#app').style.maxHeight).toBe('484px');
+    expect(document.querySelector('#app').style.height).toBe('484px');
     expect(document.querySelector('#brandLogo').src).toContain('data:image/png;base64,');
     expect(document.querySelector('h2').textContent).toContain('subnet mask');
     expect(document.querySelector('#check')).toBeNull();
     expect(document.querySelector('#next').textContent).toBe('Next');
+    expect(document.querySelector('.question-content').contains(document.querySelector('#next'))).toBe(false);
+    expect(document.querySelector('.runner-actions').parentElement).toBe(document.querySelector('.question-layout'));
+    expect(getComputedStyle(document.querySelector('.question-content')).paddingLeft).toBe('22px');
+    expect(getComputedStyle(document.querySelector('.runner-actions')).paddingLeft).toBe('22px');
 
     clickInput('input[value="1"]');
     document.querySelector('#next').click();
@@ -398,6 +403,46 @@ describe('EZ Quiz MCP server', () => {
     await flushWidget();
     expect(requestDisplayMode).toHaveBeenCalledWith({ mode: 'fullscreen' });
     expect(mediaListeners).toHaveLength(1);
+  });
+
+  test('uses a painted, full-viewport presentation when the host enters fullscreen', () => {
+    const { html, script } = widgetDocument();
+    mountWidget(html, {
+      toolOutput: quiz(), theme: 'dark', displayMode: 'fullscreen', maxHeight: 860,
+      safeArea: { top: 18, right: 4, bottom: 24, left: 4 },
+      requestDisplayMode: jest.fn(),
+    });
+    window.eval(script);
+    expect(document.documentElement.dataset.displayMode).toBe('fullscreen');
+    expect(document.querySelector('#expand').hidden).toBe(true);
+    expect(document.querySelector('#app').dataset.view).toBe('quiz');
+    expect(document.querySelector('h2').textContent).toContain('subnet mask');
+    expect(html).toContain(':root[data-display-mode="fullscreen"] body');
+    expect(html).toContain('background: var(--surface);');
+  });
+
+  test('compacts a text-heavy question while keeping navigation outside clipped content', () => {
+    const longQuiz = quiz({
+      questions: [{
+        type: 'MC',
+        text: 'Which answer best explains how a router selects the most specific matching route for a destination IPv4 address?',
+        options: [
+          'It compares every matching prefix and selects the route with the longest matching network prefix.',
+          'It always selects the route learned first, regardless of prefix length or administrative distance.',
+          'It selects the route with the numerically largest next-hop address and ignores the routing table prefix.',
+          'It broadcasts the packet to every interface and waits for the destination host to acknowledge receipt.',
+        ],
+        correct: [0],
+      }],
+      questionCount: 1,
+    });
+    const { html, script } = widgetDocument();
+    mountWidget(html, { toolOutput: longQuiz, maxHeight: 480 });
+    window.eval(script);
+    expect(document.querySelector('#root').dataset.density).toBe('tight');
+    expect(document.querySelector('.question-content').contains(document.querySelector('#next'))).toBe(false);
+    expect(document.querySelector('#next').textContent).toBe('Finish');
+    expect(document.querySelector('#app').style.height).toBe('456px');
   });
 
   test('asks ChatGPT to explain a result without making a network request', async () => {

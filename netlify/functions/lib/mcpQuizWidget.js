@@ -121,6 +121,7 @@ function quizWidgetHtml() {
       background: var(--surface);
       box-shadow: var(--shadow);
     }
+    .app[data-view="quiz"] { min-height: 570px; }
     .brandbar {
       position: relative;
       z-index: 2;
@@ -167,15 +168,37 @@ function quizWidgetHtml() {
     .icon-button:hover { background: rgba(255, 255, 255, .14); }
     .icon-button svg { width: 18px; height: 18px; }
     .ezq-main {
+      display: flex;
       flex: 1 1 auto;
       min-height: 0;
-      padding: clamp(18px, 4vw, 25px);
+      flex-direction: column;
+      padding: 0;
+      overflow: hidden;
+    }
+    .ezq-main:focus { outline: none; }
+    .app[data-view="results"] .ezq-main {
+      display: block;
+      padding: 20px 22px;
       overflow-x: hidden;
       overflow-y: auto;
       overscroll-behavior: contain;
-      scrollbar-gutter: stable;
     }
-    .ezq-main:focus { outline: none; }
+    .app[data-view="status"] .ezq-main {
+      display: block;
+      padding: 20px 22px;
+    }
+    .question-layout {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+    }
+    .question-content {
+      flex: 1 1 auto;
+      min-height: 0;
+      padding: 20px 22px 10px;
+      overflow: hidden;
+    }
     .topline {
       display: flex;
       align-items: center;
@@ -252,15 +275,17 @@ function quizWidgetHtml() {
     }
     .match select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
     .runner-actions {
-      position: sticky;
+      position: relative;
       z-index: 2;
-      bottom: -1px;
       display: grid;
+      flex: 0 0 auto;
       grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr);
       gap: 10px;
-      margin: 20px -4px -5px;
-      padding: 13px 4px 5px;
-      background: linear-gradient(to bottom, transparent, var(--surface) 22%);
+      margin: 0;
+      padding: 11px 22px 17px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: 0 -8px 18px color-mix(in srgb, var(--surface) 86%, transparent);
     }
     button:not(.icon-button) {
       min-height: 48px;
@@ -373,6 +398,48 @@ function quizWidgetHtml() {
     .empty-results { padding: 19px; border: 1px dashed var(--border-strong); border-radius: var(--radius-control); color: var(--muted); text-align: center; }
     .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 17px; }
     .result-note { margin: 13px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
+    :root[data-constrained="true"] .app { min-height: 0; }
+    :root[data-constrained="true"] .brandbar { min-height: 54px; padding-top: 8px; padding-bottom: 7px; }
+    :root[data-constrained="true"] .brand-logo { width: min(148px, 44vw); max-height: 35px; }
+    :root[data-constrained="true"] .question-content { padding-top: 14px; padding-bottom: 8px; }
+    :root[data-constrained="true"] .topline { margin-bottom: 6px; }
+    :root[data-constrained="true"] .progress { margin-bottom: 12px; }
+    :root[data-constrained="true"] h2 { margin-bottom: 12px; font-size: 18px; line-height: 1.28; }
+    :root[data-constrained="true"] .answers,
+    :root[data-constrained="true"] .match-list { gap: 7px; }
+    :root[data-constrained="true"] .answer { min-height: 46px; padding: 9px 13px; }
+    :root[data-constrained="true"] .answer span { font-size: 14px; line-height: 1.32; }
+    :root[data-constrained="true"] .answer input { width: 19px; height: 19px; }
+    :root[data-constrained="true"] .runner-actions { padding-top: 9px; padding-bottom: 12px; }
+    :root[data-constrained="true"] .runner-actions button { min-height: 44px; }
+    .ezq-main[data-density="tight"] .question-content { padding-top: 10px; padding-bottom: 6px; }
+    .ezq-main[data-density="tight"] .topline { margin-bottom: 4px; }
+    .ezq-main[data-density="tight"] .eyebrow,
+    .ezq-main[data-density="tight"] .timer { font-size: 12px; }
+    .ezq-main[data-density="tight"] .progress { height: 5px; margin-bottom: 8px; }
+    .ezq-main[data-density="tight"] h2 { margin-bottom: 8px; font-size: 16px; line-height: 1.22; }
+    .ezq-main[data-density="tight"] .answers,
+    .ezq-main[data-density="tight"] .match-list { gap: 5px; }
+    .ezq-main[data-density="tight"] .answer { min-height: 40px; gap: 10px; padding: 7px 12px; }
+    .ezq-main[data-density="tight"] .answer span { font-size: 13px; line-height: 1.25; }
+    .ezq-main[data-density="tight"] .match { gap: 7px; padding: 7px 10px; font-size: 13px; }
+    .ezq-main[data-density="tight"] .match select { padding-top: 7px; padding-bottom: 7px; }
+    :root[data-display-mode="fullscreen"],
+    :root[data-display-mode="fullscreen"] body { height: 100%; min-height: 100%; }
+    :root[data-display-mode="fullscreen"] body {
+      padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+      background: var(--surface);
+    }
+    :root[data-display-mode="fullscreen"] .app {
+      width: 100%;
+      max-width: none;
+      height: 100%;
+      max-height: none;
+      min-height: 0;
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
     @media (max-width: 460px) {
       body {
         padding:
@@ -385,7 +452,6 @@ function quizWidgetHtml() {
       .brandbar { min-height: 57px; padding: 9px 14px 8px; }
       .brand-logo { width: min(150px, 48vw); max-height: 37px; }
       .tag { max-width: 126px; }
-      .ezq-main { padding: 17px; }
       h2 { margin-bottom: 15px; font-size: 19px; }
       .answer { min-height: 52px; padding: 12px 13px; }
       .match { grid-template-columns: 1fr; }
@@ -402,12 +468,10 @@ function quizWidgetHtml() {
       }
       .tag { display: none; }
       .brand-logo { width: 142px; }
-      .ezq-main { padding: 15px; }
       .eyebrow, .timer { font-size: 13px; }
       h2 { font-size: 18px; }
       .answer { gap: 10px; padding: 11px 12px; }
-      .runner-actions, .result-actions { grid-template-columns: 1fr; }
-      .runner-actions { position: static; }
+      .result-actions { grid-template-columns: 1fr; }
       .results-head { grid-template-columns: 1fr; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -421,7 +485,7 @@ function quizWidgetHtml() {
   </style>
 </head>
 <body>
-  <section id="app" class="app" aria-label="EZ Quiz">
+  <section id="app" class="app" data-view="status" aria-label="EZ Quiz">
     <header class="brandbar">
       <img id="brandLogo" class="brand-logo" src="${BRAND_WORDMARK_DATA_URI}" alt="EZ Quiz">
       <div class="brand-actions">
@@ -479,10 +543,30 @@ function quizWidgetHtml() {
         });
       }
 
-      function renderHtml(html) {
+      function renderHtml(html, view) {
+        app.dataset.view = view || 'status';
+        root.dataset.density = '';
         root.innerHTML = html;
         root.scrollTop = 0;
         scheduleHeightReport();
+      }
+
+      function fitQuestionToViewport(question) {
+        const optionText = question.type === 'MC'
+          ? question.options.join(' ')
+          : (question.type === 'MT' ? question.left.concat(question.right).join(' ') : '');
+        const complexity = question.text.length + optionText.length;
+        const shouldStartTight = document.documentElement.dataset.constrained === 'true'
+          && (complexity > 320 || (question.options && question.options.length > 4));
+        root.dataset.density = shouldStartTight ? 'tight' : '';
+        requestFrame(() => {
+          const content = root.querySelector('.question-content');
+          if (!content || content.clientHeight <= 0) return;
+          if (content.scrollHeight > content.clientHeight + 1) {
+            root.dataset.density = 'tight';
+          }
+          scheduleHeightReport();
+        });
       }
 
       function numberInset(value) {
@@ -510,15 +594,21 @@ function quizWidgetHtml() {
         document.documentElement.style.setProperty('--safe-left', left + 'px');
 
         const maxHeight = Number(context.maxHeight || 0);
+        const displayMode = String(context.displayMode || 'inline').toLowerCase();
+        document.documentElement.dataset.displayMode = displayMode;
         if (maxHeight > 0) {
-          app.style.maxHeight = Math.max(180, maxHeight - top - bottom - 24) + 'px';
+          const availableHeight = Math.max(220, maxHeight - top - bottom - 24);
+          app.style.height = availableHeight + 'px';
+          app.style.maxHeight = availableHeight + 'px';
           document.documentElement.dataset.constrained = 'true';
         } else {
+          app.style.height = '';
           app.style.maxHeight = '';
           delete document.documentElement.dataset.constrained;
         }
         expandButton.hidden = !(window.openai && typeof window.openai.requestDisplayMode === 'function')
-          || String(context.displayMode || '').toLowerCase() === 'fullscreen';
+          || displayMode === 'fullscreen';
+        if (mode === 'quiz' && quiz) fitQuestionToViewport(quiz.questions[currentOriginalIndex()]);
         scheduleHeightReport();
       }
 
@@ -770,14 +860,16 @@ function quizWidgetHtml() {
         const question = quiz.questions[originalIndex];
         const percent = Math.round(((index + 1) / attemptIndexes.length) * 100);
         renderHtml(
-          '<div class="topline"><span class="eyebrow">Question ' + (index + 1) + ' of ' + attemptIndexes.length + '</span>' +
+          '<section class="question-layout"><div class="question-content"><div class="topline"><span class="eyebrow">Question ' + (index + 1) + ' of ' + attemptIndexes.length + '</span>' +
           '<span id="timer" class="timer" aria-label="Elapsed time"></span></div>' +
           '<div class="progress" role="progressbar" aria-label="Quiz progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + percent + '">' +
           '<span style="width:' + percent + '%"></span></div><h2>' + esc(question.text) + '</h2>' +
-          '<div class="answers">' + optionsFor(question, answers[originalIndex]) + '</div>' +
+          '<div class="answers">' + optionsFor(question, answers[originalIndex]) + '</div></div>' +
           '<div class="runner-actions"><button id="previous" class="secondary" type="button" ' + (index === 0 ? 'disabled' : '') + '>Previous</button>' +
-          '<button id="next" class="primary" type="button">' + (index + 1 === attemptIndexes.length ? 'Finish' : 'Next') + '</button></div>'
+          '<button id="next" class="primary" type="button">' + (index + 1 === attemptIndexes.length ? 'Finish' : 'Next') + '</button></div></section>',
+          'quiz'
         );
+        fitQuestionToViewport(question);
         bindAnswerInputs(question, originalIndex);
         document.getElementById('previous').addEventListener('click', goPrevious);
         document.getElementById('next').addEventListener('click', goNext);
@@ -871,7 +963,8 @@ function quizWidgetHtml() {
           '<div class="result-list">' + (visible.length ? visible.map(resultCard).join('') : '<div class="empty-results">No missed questions 🎉</div>') + '</div>' +
           '<div class="result-actions"><button id="retakeMissed" class="primary" type="button" ' + (!missed.length ? 'disabled' : '') + '>Retake missed</button>' +
           '<button id="retakeAll" class="secondary" type="button">Retake all</button></div>' +
-          '<p class="result-note">' + esc(quiz.title) + '</p>'
+          '<p class="result-note">' + esc(quiz.title) + '</p>',
+          'results'
         );
         root.querySelectorAll('[data-filter]').forEach((button) => {
           button.addEventListener('click', () => {
@@ -901,7 +994,7 @@ function quizWidgetHtml() {
       function showUnavailable() {
         stopTimer();
         renderHtml('<div class="status-card"><div class="status-icon" aria-hidden="true">!</div><h1>Quiz unavailable</h1>' +
-          '<p>ChatGPT did not provide a complete question set for this card. Ask for a new EZ Quiz in the conversation.</p></div>');
+          '<p>ChatGPT did not provide a complete question set for this card. Ask for a new EZ Quiz in the conversation.</p></div>', 'status');
       }
 
       function loadQuiz(value) {
