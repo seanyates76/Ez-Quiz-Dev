@@ -1,7 +1,9 @@
 [build]
   publish = "public"
-  # Skip builds if no meaningful runtime paths changed:
-  ignore = "git diff --quiet $CACHED_COMMIT_REF $COMMIT_REF -- public/ src/ netlify/functions/ package*.json netlify.toml"
+  # Skip builds if no meaningful runtime paths changed. A stale production
+  # cache may reference a commit outside the current shallow checkout; in that
+  # case return 1 so Netlify performs a clean build instead of failing early.
+  ignore = "if git cat-file -e \"$CACHED_COMMIT_REF^{commit}\" 2>/dev/null && git cat-file -e \"$COMMIT_REF^{commit}\" 2>/dev/null; then git diff --quiet \"$CACHED_COMMIT_REF\" \"$COMMIT_REF\" -- public/ src/ netlify/functions/ package*.json netlify.toml; else exit 1; fi"
 
 [functions]
   directory = "netlify/functions"
@@ -94,6 +96,14 @@
 [[redirects]]
   from = "/mcp"
   to = "/.netlify/functions/mcp"
+  status = 200
+  force = true
+
+# OpenAI Apps submission domain verification. Configure the portal-provided
+# value as OPENAI_APPS_CHALLENGE in Netlify before requesting verification.
+[[redirects]]
+  from = "/.well-known/openai-apps-challenge"
+  to = "/.netlify/functions/openai-apps-challenge"
   status = 200
   force = true
 

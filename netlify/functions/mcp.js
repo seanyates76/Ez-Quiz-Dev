@@ -12,9 +12,10 @@ const {
   QUIZ_WIDGET_URI,
   quizWidgetHtml,
 } = require('./lib/mcpQuizWidget.js');
+const { CHATGPT_QUIZ_INSTRUCTIONS } = require('./lib/mcpQuizGuidance.js');
 const { parseLegacyQuestion } = require('./lib/normalizer.js');
 
-const SERVER_INFO = { name: 'ez-quiz', version: '2.0.0' };
+const SERVER_INFO = { name: 'ez-quiz', version: '2.1.0' };
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
 const LEGACY_TYPES = new Set(['MC', 'TF', 'YN', 'MT']);
 
@@ -27,6 +28,7 @@ const tools = [{
     'Before calling it, write and fact-check the entire question set from the conversation and any source material the user supplied.',
     'Do not call it with placeholders, generation status, raw source text, or incomplete questions.',
     'Prefer 5 to 10 questions unless the user requests another count, and keep every question self-contained.',
+    'Set the difficulty field to the level you actually wrote; expert and relative difficulty requests must change the reasoning burden, not merely the label.',
   ].join(' '),
   inputSchema: openQuizInputSchema,
   outputSchema: quizOutputSchema,
@@ -300,12 +302,7 @@ async function dispatch(message, event) {
         resources: { subscribe: false, listChanged: false },
       },
       serverInfo: SERVER_INFO,
-      instructions: [
-        'When the user asks for an EZ Quiz, write and fact-check the complete quiz yourself, then call open_quiz exactly once with structured questions.',
-        'Use the conversation and user-supplied sources as the knowledge context.',
-        'Do not ask EZ Quiz to generate questions, do not send raw source material to the tool, and do not create loading or placeholder quiz calls.',
-        'The EZ Quiz component owns question navigation, scoring, results review, and retakes.',
-      ].join(' '),
+      instructions: CHATGPT_QUIZ_INSTRUCTIONS,
     });
   }
   if (message.method === 'ping') return rpcResult(id, {});
