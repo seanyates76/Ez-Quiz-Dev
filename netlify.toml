@@ -90,6 +90,13 @@
   status = 200
   force = true
 
+# Stable public MCP endpoint used by the ChatGPT plugin submission.
+[[redirects]]
+  from = "/mcp"
+  to = "/.netlify/functions/mcp"
+  status = 200
+  force = true
+
 # SPA fallback. Note: Edge Functions run before redirects,
 # so /beta is handled by the edge function and won't be swallowed by this.
 [[redirects]]
