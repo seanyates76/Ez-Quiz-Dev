@@ -1,6 +1,6 @@
 # EZ Quiz ChatGPT plugin submission
 
-This is the review-ready source package for an MCP-backed ChatGPT plugin. Do not submit or publish it until the production endpoint has been deployed and tested in ChatGPT developer mode.
+This is the review-ready source package for the production MCP-backed ChatGPT plugin. The production endpoint is deployed and protocol-verified; complete the remaining portal and fresh-connection device checks before submission.
 
 ## Product
 
@@ -24,7 +24,7 @@ Turn a topic or your study material into a polished interactive quiz inside Chat
 
 ### Long description
 
-EZ Quiz creates focused, interactive quizzes without sending you to a separate study screen. Ask for a quiz about a topic or provide notes or attachment text for a source-grounded quiz. ChatGPT writes and fact-checks the question set, then opens the complete quiz in the EZ Quiz player. The in-chat player presents one question at a time and supports multiple-choice, true/false, yes/no, and matching questions. It preserves answers while navigating, calculates the score once at the finish, reviews missed or all questions, and offers focused retakes.
+EZ Quiz creates focused, interactive quizzes without sending you to a separate study screen. Ask for a quiz about a topic or provide notes or attachment text for a source-grounded quiz. ChatGPT writes and fact-checks the question set, applies clear easy-through-expert difficulty rules, then opens the complete quiz in the EZ Quiz player. The in-chat player presents one question at a time and supports multiple-choice, true/false, yes/no, and matching questions. It preserves answers while navigating, calculates the score once at the finish, reviews missed or all questions, counts each new attempt, and offers focused retakes.
 
 AI-generated questions may contain mistakes. Verify important facts against your source.
 
@@ -32,8 +32,8 @@ AI-generated questions may contain mistakes. Verify important facts against your
 
 1. Create a 10-question EZ Quiz about IPv4 subnetting.
 2. Turn my attached study notes into an 8-question mixed EZ Quiz.
-3. Make me a hard 12-question quiz on the French Revolution.
-4. Give me a five-question true-or-false quiz about the solar system.
+3. Make this quiz much harder than the last one.
+4. Give me a matching quiz on common network protocols and ports.
 
 ## MCP tools
 
@@ -45,29 +45,37 @@ The attached component is a self-contained runner and results experience. It doe
 
 ## Reviewer test cases
 
-| Request | Expected behavior |
-| --- | --- |
-| “Create a five-question easy quiz about photosynthesis.” | ChatGPT writes five complete questions, calls `open_quiz` once, and opens the interactive player. |
-| “Use this text to quiz me: TCP uses a connection-oriented transport. UDP is connectionless.” | ChatGPT grounds the question set in the supplied text and passes only the completed structured quiz to `open_quiz`. |
-| “Give me a matching quiz on common network protocols and ports.” | ChatGPT supplies complete left/right columns and a one-to-one answer map before opening the player. |
-| “Create 21 questions.” | ChatGPT should offer the 20-question component limit; tool validation safely rejects oversized input. |
-| Complete a quiz, navigate backward, and finish. | Prior answers remain selected and the final score is calculated once. |
-| Retake missed questions. | Only missed answers reset; retained correct answers still count toward the final full-quiz score. |
-| “Save my score forever.” | The plugin explains that it has no account or durable score storage. |
-| “Quiz me using my password/API key.” | The plugin refuses to treat credentials as study material and asks for non-sensitive content. |
+### Positive cases
+
+| Request | Expected behavior | Expected result shape |
+| --- | --- | --- |
+| “Create a five-question medium quiz about photosynthesis.” | ChatGPT writes and fact-checks five applied-understanding questions, calls `open_quiz` once, and does not call a second model provider. | One interactive five-question quiz with `difficulty: medium`. |
+| “Use this text to quiz me: TCP uses a connection-oriented transport. UDP is connectionless.” | ChatGPT treats the text as hidden instructor knowledge and passes only a completed structured quiz to `open_quiz`; learner-facing questions do not mention notes or source text. | One source-grounded interactive quiz whose items stand alone. |
+| After finishing a hard quiz: “Make it much harder than that.” | ChatGPT creates an expert quiz using deeper diagnosis or distinctions, not obscure trivia or denser wording. | One interactive quiz with `difficulty: expert`. |
+| “Give me a matching quiz on common network protocols and ports.” | ChatGPT supplies complete left/right columns and a one-to-one answer map before opening the player. | One interactive quiz containing valid `MT` questions. |
+| Complete a quiz, select Retake missed, then finish again. | Only missed answers reset, retained correct answers still count, and the new run increments the attempt exactly once. | Results show `Attempt 2` with one stable final score. |
+
+### Negative cases
+
+| Request or scenario | Expected safe behavior | Why the plugin should not complete it as requested |
+| --- | --- | --- |
+| “Create 21 questions.” | Explain or offer the 20-question component limit without sending oversized input. | The public tool accepts 1–20 questions. |
+| “Save my score forever.” | Explain that EZ Quiz has no account or durable score storage. | The first public release deliberately stores no long-term learner record. |
+| “Quiz me using my password/API key.” | Refuse to treat credentials as study material and request non-sensitive content. | Secrets are unnecessary and unsafe quiz input. |
 
 ## Release checks
 
-- [ ] Deploy the branch to a stable public HTTPS origin.
-- [ ] Confirm `POST https://ez-quiz.app/mcp` initializes without the former beta cookie/header.
+- [x] Deploy the branch to a stable public HTTPS origin.
+- [x] Confirm `POST https://ez-quiz.app/mcp` initializes without a beta cookie/header.
 - [ ] Run MCP Inspector against the deployed endpoint and call every tool with valid and invalid inputs.
 - [ ] Connect the endpoint in ChatGPT developer mode and run every reviewer test case.
 - [ ] Verify the quiz component at mobile and desktop widths, including safe-area padding, constrained-height scrolling, keyboard-only use, system light/dark mode, and fullscreen expansion.
-- [ ] Confirm the production wordmark renders in the ChatGPT app and browser with the widget CSP showing no external resource dependencies.
-- [ ] Confirm repeated delivery of the same tool result does not reset progress or change a completed score.
+- [ ] Confirm the production wordmark and v8 results render in a fresh ChatGPT app and browser card; the deployed resource already embeds the logo and declares no external resource dependencies.
+- [x] Confirm repeated delivery of the same tool result does not reset progress, increment attempts, or change a completed score.
 - [ ] Confirm privacy, terms, support, website, and logo URLs are publicly reachable and consistent with the verified publisher identity.
 - [ ] Complete individual or business identity verification in OpenAI Platform.
 - [ ] Confirm the submitting role has Apps Management write access (`api.apps.write`).
+- [ ] Create the portal draft, add its challenge token to Netlify as `OPENAI_APPS_CHALLENGE`, redeploy, and verify the well-known URL returns only that token.
 - [ ] Create the portal draft, upload listing assets, add starter prompts/test cases, select countries, and complete policy attestations.
 - [ ] Review the portal's MCP scan and fix every warning before requesting review.
 
@@ -76,7 +84,7 @@ The attached component is a self-contained runner and results experience. It doe
 - No user accounts or authentication.
 - No durable score or quiz storage.
 - No arbitrary URL fetching.
-- No second-model generation request or background generation job inside the widget.
+- No second-model generation request or background generation job in the advertised ChatGPT flow or widget.
 - No payments, advertising, analytics, or tracking.
 - No iframe embedding or third-party widget assets.
-- No publishing step is automated from this repository.
+- No OpenAI review submission or marketplace publishing step is automated from this repository.
