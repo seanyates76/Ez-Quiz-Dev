@@ -95,7 +95,7 @@ describe('EZ Quiz MCP server', () => {
     expect(listedTools[0]).toMatchObject({
       inputSchema: { required: ['title', 'topic', 'questions'], additionalProperties: false },
       annotations: { readOnlyHint: true, openWorldHint: false, idempotentHint: true },
-      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v5.html' } },
+      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v6.html' } },
     });
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('source_text');
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('lines');
@@ -144,6 +144,7 @@ describe('EZ Quiz MCP server', () => {
       'ui://ez-quiz/quiz-v3.html',
       'ui://ez-quiz/quiz-v4.html',
       'ui://ez-quiz/quiz-v5.html',
+      'ui://ez-quiz/quiz-v6.html',
     ]);
 
     for (const uri of [
@@ -152,6 +153,7 @@ describe('EZ Quiz MCP server', () => {
       'ui://ez-quiz/quiz-v3.html',
       'ui://ez-quiz/quiz-v4.html',
       'ui://ez-quiz/quiz-v5.html',
+      'ui://ez-quiz/quiz-v6.html',
     ]) {
       const read = await handler(event({ jsonrpc: '2.0', id: 32, method: 'resources/read', params: { uri } }));
       expect(json(read).result.contents[0]).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app' });
@@ -539,7 +541,11 @@ describe('EZ Quiz MCP server', () => {
     clickInput('input[value="false"]');
     document.querySelector('#next').click();
     expect(document.documentElement.dataset.size).toBeUndefined();
-    expect(html).toContain('padding: 20px clamp(22px, 5vw, 28px) 22px;');
+    expect(html).toContain('padding: 20px 22px 22px;');
+    const resultsStyle = window.getComputedStyle(document.querySelector('#root'));
+    expect(resultsStyle.paddingLeft).toBe('22px');
+    expect(resultsStyle.paddingRight).toBe('22px');
+    expect(resultsStyle.paddingBottom).toBe('22px');
     expect(document.querySelector('.result-summary').textContent).toContain('Question 2');
     expect(document.querySelectorAll('.result-actions button')).toHaveLength(2);
     expect(document.querySelector('#retakeMissed').disabled).toBe(false);
