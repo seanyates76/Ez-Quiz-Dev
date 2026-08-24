@@ -19,6 +19,10 @@ Optional security:
 - GENERATE_BEARER_TOKEN: Optional shared secret required in the `Authorization: Bearer <token>` header for quiz generation.
   - Combine with Netlify redirects or an API gateway to keep the token private in zero-trust setups.
   - Async job start returns a separate per-job worker capability for the browser beacon; the shared bearer token is never exposed to client code.
+- EZQ_PLUGIN_WIDGET_ORIGIN: Public HTTPS origin assigned to the ChatGPT plugin UI.
+  - Defaults to `https://ez-quiz.app`.
+  - Keep this stable after submission because OpenAI treats the widget resource URI and origin as reviewable security metadata.
+  - The current widget is self-contained and does not make API or image requests from its sandbox.
 
 AI Generation providers (optional):
 - AI_PROVIDER: `gemini`, `openai`, or `echo`
