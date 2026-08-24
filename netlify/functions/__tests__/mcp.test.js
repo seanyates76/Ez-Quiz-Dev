@@ -85,9 +85,12 @@ describe('EZ Quiz MCP server', () => {
     expect(initialized.statusCode).toBe(200);
     expect(json(initialized).result).toMatchObject({
       protocolVersion: '2025-06-18',
-      serverInfo: { name: 'ez-quiz', version: '2.0.0' },
+      serverInfo: { name: 'ez-quiz', version: '2.1.0' },
     });
     expect(json(initialized).result.instructions).toContain('write and fact-check the complete quiz yourself');
+    expect(json(initialized).result.instructions).toContain('Difficulty comes from the thinking required');
+    expect(json(initialized).result.instructions).toContain('Much harder, extreme, brutal, or expert means expert');
+    expect(json(initialized).result.instructions).toContain('hidden instructor knowledge');
 
     const listed = await handler(event({ jsonrpc: '2.0', id: 2, method: 'tools/list' }));
     const listedTools = json(listed).result.tools;
@@ -95,11 +98,16 @@ describe('EZ Quiz MCP server', () => {
     expect(listedTools[0]).toMatchObject({
       inputSchema: { required: ['title', 'topic', 'questions'], additionalProperties: false },
       annotations: { readOnlyHint: true, openWorldHint: false, idempotentHint: true },
-      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v7.html' } },
+      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v8.html' } },
     });
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('source_text');
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('lines');
     expect(listedTools[0].description).toContain('already written');
+    expect(listedTools[0].description).toContain('reasoning burden');
+    expect(listedTools[0].inputSchema.properties.difficulty.enum).toEqual([
+      'easy', 'medium', 'hard', 'expert', 'mixed',
+    ]);
+    expect(listedTools[0].inputSchema.properties.difficulty.description).toContain('advanced diagnosis');
   });
 
   test('serves a self-contained runner with no generation or network dependencies', async () => {
@@ -146,6 +154,7 @@ describe('EZ Quiz MCP server', () => {
       'ui://ez-quiz/quiz-v5.html',
       'ui://ez-quiz/quiz-v6.html',
       'ui://ez-quiz/quiz-v7.html',
+      'ui://ez-quiz/quiz-v8.html',
     ]);
 
     for (const uri of [
@@ -156,6 +165,7 @@ describe('EZ Quiz MCP server', () => {
       'ui://ez-quiz/quiz-v5.html',
       'ui://ez-quiz/quiz-v6.html',
       'ui://ez-quiz/quiz-v7.html',
+      'ui://ez-quiz/quiz-v8.html',
     ]) {
       const read = await handler(event({ jsonrpc: '2.0', id: 32, method: 'resources/read', params: { uri } }));
       expect(json(read).result.contents[0]).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app' });
@@ -194,6 +204,34 @@ describe('EZ Quiz MCP server', () => {
       jsonrpc: '2.0', id: 5, method: 'tools/call', params: { name: 'open_quiz', arguments: args },
     }));
     expect(json(repeated).result.structuredContent.quizId).toBe(result.structuredContent.quizId);
+  });
+
+  test('accepts expert as a native ChatGPT-authored difficulty tier', async () => {
+    const { handler } = require('../mcp.js');
+    const response = await handler(event({
+      jsonrpc: '2.0', id: 41, method: 'tools/call', params: {
+        name: 'open_quiz',
+        arguments: {
+          title: 'Expert Routing Diagnosis',
+          topic: 'OSPF troubleshooting',
+          difficulty: 'expert',
+          questions: [{
+            type: 'MC',
+            text: 'Two OSPF neighbors remain in EXSTART after MTU values diverge. Which change most directly addresses the adjacency failure?',
+            options: [
+              'Make the interface MTU values agree',
+              'Increase the hello interval on only one router',
+              'Remove the shared area from both interfaces',
+              'Change both router IDs to the same value',
+            ],
+            correct: [0],
+          }],
+        },
+      },
+    }));
+    expect(json(response).result.structuredContent).toMatchObject({
+      difficulty: 'expert', questionCount: 1, aiGenerated: true,
+    });
   });
 
   test('dispatches cached generate_quiz and render_quiz calls without advertising them', async () => {
@@ -312,8 +350,9 @@ describe('EZ Quiz MCP server', () => {
     document.querySelector('#next').click();
 
     expect(document.querySelector('.results-copy h1').textContent).toBe('Quiz complete');
+    expect(document.querySelector('.results-copy p').textContent).toContain('Attempt 1');
     expect(document.querySelector('.score-orb').textContent).toBe('2/2');
-    expect(states.at(-1)).toMatchObject({ mode: 'results', answers: [[1], true] });
+    expect(states.at(-1)).toMatchObject({ mode: 'results', answers: [[1], true], attemptNumber: 1 });
     expect(document.querySelector('.result-stat.correct strong').textContent).toBe('2');
     expect(document.querySelector('.result-stat.missed strong').textContent).toBe('0');
     expect(document.querySelectorAll('.result-actions button')).toHaveLength(2);
@@ -391,10 +430,40 @@ describe('EZ Quiz MCP server', () => {
     clickInput('input[value="true"]');
     document.querySelector('#next').click();
     expect(document.querySelector('.score-orb').textContent).toBe('2/2');
+    expect(document.querySelector('.results-copy p').textContent).toContain('Attempt 2');
+  });
+
+  test('counts each retake once while ignoring stale taps and repeated tool delivery', () => {
+    const output = quiz();
+    const states = [];
+    const { html, script } = widgetDocument();
+    mountWidget(html, { toolOutput: output, setWidgetState: (state) => states.push(state) });
+    window.eval(script);
+    clickInput('input[value="1"]');
+    document.querySelector('#next').click();
+    clickInput('input[value="true"]');
+    document.querySelector('#next').click();
+
+    const staleRetakeAll = document.querySelector('#retakeAll');
+    staleRetakeAll.click();
+    staleRetakeAll.click();
+    expect(states.at(-1)).toMatchObject({ mode: 'quiz', attemptNumber: 2 });
+
+    window.dispatchEvent(new CustomEvent('openai:set_globals', { detail: { globals: { toolOutput: output } } }));
+    expect(states.at(-1).attemptNumber).toBe(2);
+    clickInput('input[value="1"]');
+    document.querySelector('#next').click();
+    clickInput('input[value="true"]');
+    document.querySelector('#next').click();
+    expect(document.querySelector('.results-copy p').textContent).toContain('Attempt 2');
+    expect(states).toContainEqual(expect.objectContaining({
+      quizId: output.quizId, mode: 'results', attemptNumber: 2,
+    }));
   });
 
   test('restores persisted runner state for the same quiz', () => {
     const output = quiz();
+    const setWidgetState = jest.fn();
     const { html, script } = widgetDocument();
     mountWidget(html, {
       toolOutput: output,
@@ -402,13 +471,15 @@ describe('EZ Quiz MCP server', () => {
         version: 2, quizId: output.quizId, mode: 'quiz', attemptIndexes: [0, 1],
         answers: [[1], null], index: 1,
         startedAt: Date.now() - 1000, finishedAt: 0,
+        attemptNumber: 4,
       },
-      setWidgetState: jest.fn(),
+      setWidgetState,
     });
     window.eval(script);
     expect(document.querySelector('h2').textContent).toContain('OSPF');
     document.querySelector('#previous').click();
     expect(document.querySelector('input[value="1"]').checked).toBe(true);
+    expect(setWidgetState).toHaveBeenLastCalledWith(expect.objectContaining({ attemptNumber: 4 }));
   });
 
   test('follows system theme and standard safe-area context without launching a modal', async () => {
@@ -545,7 +616,7 @@ describe('EZ Quiz MCP server', () => {
     expect(document.documentElement.dataset.size).toBeUndefined();
     const resultsView = document.querySelector('.results-view');
     expect(resultsView).not.toBeNull();
-    expect(resultsView.dataset.widgetVersion).toBe('7');
+    expect(resultsView.dataset.widgetVersion).toBe('8');
     expect(resultsView.style.padding).toBe('20px 22px 22px');
     expect(resultsView.contains(document.querySelector('.score-orb'))).toBe(true);
     expect(resultsView.contains(document.querySelector('.result-actions'))).toBe(true);
@@ -553,7 +624,7 @@ describe('EZ Quiz MCP server', () => {
     expect(resultsStyle.paddingLeft).toBe('22px');
     expect(resultsStyle.paddingRight).toBe('22px');
     expect(resultsStyle.paddingBottom).toBe('22px');
-    expect(document.querySelector('.widget-build').textContent).toBe('v7');
+    expect(document.querySelector('.widget-build').textContent).toBe('v8');
     expect(document.querySelector('.result-summary').textContent).toContain('Question 2');
     expect(document.querySelectorAll('.result-actions button')).toHaveLength(2);
     expect(document.querySelector('#retakeMissed').disabled).toBe(false);

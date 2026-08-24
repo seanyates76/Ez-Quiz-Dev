@@ -1,6 +1,10 @@
 'use strict';
 
 const crypto = require('node:crypto');
+const {
+  DIFFICULTY_SCHEMA_DESCRIPTION,
+  QUIZ_DIFFICULTIES,
+} = require('./mcpQuizGuidance.js');
 
 const MAX_QUESTIONS = 20;
 const MAX_OPTIONS = 8;
@@ -106,9 +110,9 @@ const openQuizInputSchema = {
     topic: textField('The subject being tested.', 240),
     difficulty: {
       type: 'string',
-      enum: ['easy', 'medium', 'hard', 'mixed'],
+      enum: [...QUIZ_DIFFICULTIES],
       default: 'medium',
-      description: 'Overall quiz difficulty.',
+      description: DIFFICULTY_SCHEMA_DESCRIPTION,
     },
     questions: {
       type: 'array',
@@ -151,7 +155,7 @@ const quizOutputSchema = {
     quizId: { type: 'string' },
     title: { type: 'string' },
     topic: { type: 'string' },
-    difficulty: { type: 'string', enum: ['easy', 'medium', 'hard', 'mixed'] },
+    difficulty: { type: 'string', enum: [...QUIZ_DIFFICULTIES] },
     questions: { type: 'array', items: canonicalQuestionOutputSchema },
     questionCount: { type: 'integer' },
     aiGenerated: { type: 'boolean' },
@@ -260,8 +264,8 @@ function normalizeOpenQuizArgs(value) {
   const title = strictString(raw.title, 'title', 160);
   const topic = strictString(raw.topic, 'topic', 240);
   const difficulty = String(raw.difficulty || 'medium').trim().toLowerCase();
-  if (!['easy', 'medium', 'hard', 'mixed'].includes(difficulty)) {
-    throw new Error('difficulty must be easy, medium, hard, or mixed');
+  if (!QUIZ_DIFFICULTIES.includes(difficulty)) {
+    throw new Error(`difficulty must be ${QUIZ_DIFFICULTIES.slice(0, -1).join(', ')}, or ${QUIZ_DIFFICULTIES.at(-1)}`);
   }
   if (!Array.isArray(raw.questions) || raw.questions.length < 1 || raw.questions.length > MAX_QUESTIONS) {
     throw new Error(`questions must contain 1 to ${MAX_QUESTIONS} items`);

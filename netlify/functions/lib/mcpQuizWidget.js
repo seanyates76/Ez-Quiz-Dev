@@ -4,7 +4,7 @@ const { BRAND_WORDMARK_DATA_URI } = require('./mcpQuizBrand.js');
 
 // Widget template URIs are cache keys. Publish breaking layout revisions under
 // a fresh URI while continuing to serve old aliases for cached tool descriptors.
-const QUIZ_WIDGET_VERSION = 7;
+const QUIZ_WIDGET_VERSION = 8;
 const QUIZ_WIDGET_URI = `ui://ez-quiz/quiz-v${QUIZ_WIDGET_VERSION}.html`;
 const QUIZ_WIDGET_ALIASES = Object.freeze([
   'ui://ez-quiz/quiz-v1.html',
@@ -13,6 +13,7 @@ const QUIZ_WIDGET_ALIASES = Object.freeze([
   'ui://ez-quiz/quiz-v4.html',
   'ui://ez-quiz/quiz-v5.html',
   'ui://ez-quiz/quiz-v6.html',
+  'ui://ez-quiz/quiz-v7.html',
   QUIZ_WIDGET_URI,
 ]);
 const QUIZ_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app';
@@ -471,6 +472,7 @@ function quizWidgetHtml() {
       let index = 0;
       let startedAt = 0;
       let finishedAt = 0;
+      let attemptNumber = 1;
 
       const esc = (value) => String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -609,6 +611,7 @@ function quizWidgetHtml() {
           index,
           startedAt,
           finishedAt,
+          attemptNumber,
         };
       }
 
@@ -690,6 +693,11 @@ function quizWidgetHtml() {
         return indexes.length === value.length && new Set(indexes).size === indexes.length ? indexes : null;
       }
 
+      function validAttemptNumber(value) {
+        const parsed = Number(value);
+        return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : 1;
+      }
+
       function restoreState(data) {
         const prior = window.openai && window.openai.widgetState;
         if (!prior || prior.version !== 2 || String(prior.quizId || '') !== data.quizId) return false;
@@ -701,6 +709,7 @@ function quizWidgetHtml() {
         mode = prior.mode === 'results' ? 'results' : 'quiz';
         startedAt = Number(prior.startedAt) > 0 ? Number(prior.startedAt) : Date.now();
         finishedAt = mode === 'results' && Number(prior.finishedAt) > 0 ? Number(prior.finishedAt) : 0;
+        attemptNumber = validAttemptNumber(prior.attemptNumber);
         return true;
       }
 
@@ -849,11 +858,14 @@ function quizWidgetHtml() {
       }
 
       function beginRetake(indexes) {
-        if (!indexes.length) return;
-        indexes.forEach((questionIndex) => { answers[questionIndex] = null; });
-        attemptIndexes = indexes.slice();
-        index = 0;
+        if (mode !== 'results' || !quiz) return;
+        const nextIndexes = validAttemptIndexes(indexes, quiz.questions.length);
+        if (!nextIndexes) return;
         mode = 'quiz';
+        attemptNumber += 1;
+        nextIndexes.forEach((questionIndex) => { answers[questionIndex] = null; });
+        attemptIndexes = nextIndexes;
+        index = 0;
         startedAt = Date.now();
         finishedAt = 0;
         saveQuizState();
@@ -875,7 +887,7 @@ function quizWidgetHtml() {
           : '<strong>All correct.</strong> You are ready for a harder round.';
         renderHtml(
           '<section class="results-view" data-widget-version="${QUIZ_WIDGET_VERSION}" style="padding:20px 22px 22px"><div class="results-head"><div class="score-orb" aria-label="' + score + ' out of ' + quiz.questions.length + '">' + score + '/' + quiz.questions.length + '</div>' +
-          '<div class="results-copy"><h1>Quiz complete</h1><p>' + esc(message) + ' · ' + formatDuration(finishedAt - startedAt) + '</p></div></div>' +
+          '<div class="results-copy"><h1>Quiz complete</h1><p>' + esc(message) + ' · Attempt ' + attemptNumber + ' · ' + formatDuration(finishedAt - startedAt) + '</p></div></div>' +
           '<div class="result-progress"><div class="progress" role="progressbar" aria-label="Final score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + percent + '">' +
           '<span style="width:' + percent + '%"></span></div></div>' +
           '<div class="result-stats" aria-label="Quiz results"><div class="result-stat correct"><strong>' + score + '</strong><span>Correct</span></div>' +
@@ -921,6 +933,7 @@ function quizWidgetHtml() {
           index = 0;
           startedAt = Date.now();
           finishedAt = 0;
+          attemptNumber = 1;
         }
         if (mode === 'results') renderResults(); else renderQuestion();
         return true;
@@ -976,7 +989,7 @@ function quizWidgetHtml() {
 
       request('ui/initialize', {
         protocolVersion: '2026-01-26',
-        appInfo: { name: 'ez-quiz-player', title: 'EZ Quiz', version: '4.1.0', websiteUrl: '${SITE_ORIGIN}' },
+        appInfo: { name: 'ez-quiz-player', title: 'EZ Quiz', version: '4.2.0', websiteUrl: '${SITE_ORIGIN}' },
         appCapabilities: {},
       }).then((result) => {
         bridgeInitialized = true;
