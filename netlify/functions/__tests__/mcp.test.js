@@ -95,7 +95,7 @@ describe('EZ Quiz MCP server', () => {
     expect(listedTools[0]).toMatchObject({
       inputSchema: { required: ['title', 'topic', 'questions'], additionalProperties: false },
       annotations: { readOnlyHint: true, openWorldHint: false, idempotentHint: true },
-      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v4.html' } },
+      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v5.html' } },
     });
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('source_text');
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('lines');
@@ -143,6 +143,7 @@ describe('EZ Quiz MCP server', () => {
       'ui://ez-quiz/quiz-v2.html',
       'ui://ez-quiz/quiz-v3.html',
       'ui://ez-quiz/quiz-v4.html',
+      'ui://ez-quiz/quiz-v5.html',
     ]);
 
     for (const uri of [
@@ -150,6 +151,7 @@ describe('EZ Quiz MCP server', () => {
       'ui://ez-quiz/quiz-v2.html',
       'ui://ez-quiz/quiz-v3.html',
       'ui://ez-quiz/quiz-v4.html',
+      'ui://ez-quiz/quiz-v5.html',
     ]) {
       const read = await handler(event({ jsonrpc: '2.0', id: 32, method: 'resources/read', params: { uri } }));
       expect(json(read).result.contents[0]).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app' });

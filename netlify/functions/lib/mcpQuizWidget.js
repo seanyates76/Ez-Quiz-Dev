@@ -4,11 +4,12 @@ const { BRAND_WORDMARK_DATA_URI } = require('./mcpQuizBrand.js');
 
 // Widget template URIs are cache keys. Publish breaking layout revisions under
 // a fresh URI while continuing to serve old aliases for cached tool descriptors.
-const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v4.html';
+const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v5.html';
 const QUIZ_WIDGET_ALIASES = Object.freeze([
   'ui://ez-quiz/quiz-v1.html',
   'ui://ez-quiz/quiz-v2.html',
   'ui://ez-quiz/quiz-v3.html',
+  'ui://ez-quiz/quiz-v4.html',
   QUIZ_WIDGET_URI,
 ]);
 const QUIZ_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app';
