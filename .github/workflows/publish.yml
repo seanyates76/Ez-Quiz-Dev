@@ -76,6 +76,10 @@ jobs:
                 exit 1
               fi
             done
+            if [ ! -f .publicpreserve ] || ! grep -Fxq "README.md" .publicpreserve; then
+              echo 'README.md must remain listed in .publicpreserve so the production README is not overwritten.' >&2
+              exit 1
+            fi
 
             mkdir -p filtered
             RSYNC_EXCLUDES=("--exclude=.git/" "--exclude=.github/workflows/publish*.yml")
@@ -87,14 +91,6 @@ jobs:
             done
             RSYNC_EXCLUDES+=("--exclude-from=.publicignore")
             rsync -a --delete "${RSYNC_EXCLUDES[@]}" ./ ./filtered/
-
-            # `public-mirror/` is a source-only staging area. Promote its README
-            # to the public mirror root without publishing the staging directory.
-            if [ ! -f public-mirror/README.md ]; then
-              echo "Missing public-mirror/README.md. The public mirror README is managed from that draft." >&2
-              exit 1
-            fi
-            cp public-mirror/README.md filtered/README.md
 
             # Allow a small, explicit set of shared public-safe workflows to flow
             # downstream even though `.publicignore` blocks the workflow directory
@@ -152,12 +148,12 @@ jobs:
             HAS_PAT="${HAS_PAT:-false}"
             HAS_DEPLOY_KEY="${HAS_DEPLOY_KEY:-false}"
             cd public-repo
+            git fetch origin main
             git fetch origin "$SYNC_BRANCH" || true
-            if git rev-parse --verify "origin/$SYNC_BRANCH" >/dev/null 2>&1; then
-              git checkout -B "$SYNC_BRANCH" "origin/$SYNC_BRANCH"
-            else
-              git checkout -B "$SYNC_BRANCH"
-            fi
+            # Rebuild staging from the current production branch every time. This
+            # keeps the mirror PR focused and prevents old staging commits from
+            # accumulating after production-only hotfixes land.
+            git checkout -B "$SYNC_BRANCH" origin/main
             # Preserve repo-specific downstream files (for example the production README)
             # without turning every ignored source path into permanent mirror residue.
             PRESERVE_ARGS=()
@@ -165,10 +161,6 @@ jobs:
               PRESERVE_ARGS+=(--exclude-from=../.publicpreserve)
             fi
             rsync -a --delete --exclude=.git/ "${PRESERVE_ARGS[@]}" ../filtered/ ./
-            # `.publicpreserve` protects downstream-only files during sync.
-            # README.md is the one managed replacement: it is promoted from
-            # public-mirror/README.md into filtered/README.md above.
-            cp ../filtered/README.md ./README.md
             git add -A
             if git diff --cached --quiet; then
               echo "No changes to publish."
