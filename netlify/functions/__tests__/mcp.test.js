@@ -95,7 +95,7 @@ describe('EZ Quiz MCP server', () => {
     expect(listedTools[0]).toMatchObject({
       inputSchema: { required: ['title', 'topic', 'questions'], additionalProperties: false },
       annotations: { readOnlyHint: true, openWorldHint: false, idempotentHint: true },
-      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v3.html' } },
+      _meta: { ui: { resourceUri: 'ui://ez-quiz/quiz-v4.html' } },
     });
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('source_text');
     expect(listedTools[0].inputSchema.properties).not.toHaveProperty('lines');
@@ -121,8 +121,9 @@ describe('EZ Quiz MCP server', () => {
     expect(resource.text).toContain('ui/notifications/size-changed');
     expect(resource.text).toContain('notifyIntrinsicHeight');
     expect(resource.text).toContain('safeArea');
-    expect(resource.text).toContain('maxHeight');
     expect(resource.text).toContain('openai:set_globals');
+    expect(resource.text).not.toContain('data-size');
+    expect(resource.text).not.toContain('ResizeObserver');
     expect(resource.text).toContain('Previous');
     expect(resource.text).toContain('Retake missed');
     expect(resource.text).not.toContain('Building your quiz');
@@ -141,9 +142,15 @@ describe('EZ Quiz MCP server', () => {
       'ui://ez-quiz/quiz-v1.html',
       'ui://ez-quiz/quiz-v2.html',
       'ui://ez-quiz/quiz-v3.html',
+      'ui://ez-quiz/quiz-v4.html',
     ]);
 
-    for (const uri of ['ui://ez-quiz/quiz-v1.html', 'ui://ez-quiz/quiz-v2.html', 'ui://ez-quiz/quiz-v3.html']) {
+    for (const uri of [
+      'ui://ez-quiz/quiz-v1.html',
+      'ui://ez-quiz/quiz-v2.html',
+      'ui://ez-quiz/quiz-v3.html',
+      'ui://ez-quiz/quiz-v4.html',
+    ]) {
       const read = await handler(event({ jsonrpc: '2.0', id: 32, method: 'resources/read', params: { uri } }));
       expect(json(read).result.contents[0]).toMatchObject({ uri, mimeType: 'text/html;profile=mcp-app' });
     }
@@ -258,7 +265,7 @@ describe('EZ Quiz MCP server', () => {
     expect(json(response).result.content[0].text).toContain('1 to 20');
   });
 
-  test('uses original runner navigation, reports intrinsic height, and calculates the score once on Finish', async () => {
+  test('uses original runner navigation, reports intrinsic height once, and calculates the score once on Finish', async () => {
     const states = [];
     const notifyIntrinsicHeight = jest.fn();
     const { html, script } = widgetDocument();
@@ -272,7 +279,7 @@ describe('EZ Quiz MCP server', () => {
     await flushWidget();
 
     expect(document.documentElement.dataset.theme).toBe('dark');
-    expect(document.documentElement.dataset.size).toBe('compact');
+    expect(document.documentElement.dataset.size).toBeUndefined();
     expect(document.documentElement.dataset.constrained).toBeUndefined();
     expect(document.documentElement.style.getPropertyValue('--safe-left')).toBe('10px');
     expect(document.querySelector('#app').style.maxHeight).toBe('');
@@ -283,11 +290,11 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('#next').textContent).toBe('Next');
     expect(document.querySelector('.question-content').contains(document.querySelector('#next'))).toBe(false);
     expect(document.querySelector('.runner-actions').parentElement).toBe(document.querySelector('.question-layout'));
-    expect(getComputedStyle(document.querySelector('.question-content')).paddingLeft).toBe('18px');
-    expect(getComputedStyle(document.querySelector('.runner-actions')).paddingLeft).toBe('18px');
-    expect(window.parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(html).toContain('--content-pad-x: clamp(18px, 4vw, 24px);');
+    expect(html).toContain('padding: 16px var(--content-pad-x) 8px;');
+    expect(html).toContain('padding: 9px var(--content-pad-x) 14px;');
+    expect(window.parent.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
       method: 'ui/notifications/size-changed',
-      params: { height: expect.any(Number) },
     }), '*');
     expect(notifyIntrinsicHeight).toHaveBeenCalled();
 
@@ -422,24 +429,41 @@ describe('EZ Quiz MCP server', () => {
     expect(mediaListeners).toHaveLength(1);
   });
 
-  test('uses standard container dimensions as a compactness hint without hard-clamping the card', async () => {
+  test('does not feed host height changes back into visual density or a second sizing channel', async () => {
     const requestDisplayMode = jest.fn().mockResolvedValue({ mode: 'fullscreen' });
+    const notifyIntrinsicHeight = jest.fn();
     const { html, script } = widgetDocument();
     mountWidget(html, {
       toolOutput: quiz(), displayMode: 'inline', requestDisplayMode,
       containerDimensions: { maxHeight: 420 },
       safeAreaInsets: { top: 5, bottom: 7, left: 4, right: 4 },
+      notifyIntrinsicHeight,
     });
     window.eval(script);
     await flushWidget();
-    expect(document.documentElement.dataset.size).toBe('tight');
-    expect(document.querySelector('#app').style.height).toBe('');
-    expect(document.querySelector('#app').style.maxHeight).toBe('');
-    expect(html).toContain(':root[data-size="tight"] .question-content { padding: 8px 16px 5px; }');
+    await flushWidget();
+    const density = document.querySelector('#root').dataset.density;
+    const reportsBeforeHeightChanges = notifyIntrinsicHeight.mock.calls.length;
+    [560, 418, 562, 416].forEach((maxHeight) => {
+      window.dispatchEvent(new MessageEvent('message', {
+        source: window.parent,
+        data: {
+          jsonrpc: '2.0',
+          method: 'ui/notifications/host-context-changed',
+          params: { containerDimensions: { maxHeight } },
+        },
+      }));
+    });
+    await flushWidget();
+    expect(document.documentElement.dataset.size).toBeUndefined();
+    expect(document.querySelector('#root').dataset.density).toBe(density);
+    expect(html).not.toContain('data-size');
     expect(document.querySelector('#next')).not.toBeNull();
-    expect(window.parent.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+    expect(window.parent.postMessage).not.toHaveBeenCalledWith(expect.objectContaining({
       method: 'ui/notifications/size-changed',
     }), '*');
+    expect(reportsBeforeHeightChanges).toBeGreaterThan(0);
+    expect(notifyIntrinsicHeight.mock.calls.length - reportsBeforeHeightChanges).toBeLessThanOrEqual(1);
     expect(requestDisplayMode).not.toHaveBeenCalled();
   });
 
@@ -468,7 +492,9 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('#app').dataset.view).toBe('quiz');
     expect(document.querySelector('h2').textContent).toContain('subnet mask');
     expect(html).toContain(':root[data-display-mode="fullscreen"] body');
+    expect(html).toContain('min-height: 100svh;');
     expect(html).toContain('background: var(--surface);');
+    expect(html).not.toContain(':root[data-display-mode="fullscreen"] body { height: 100%');
   });
 
   test('compacts a text-heavy question while keeping navigation outside clipped content', () => {
@@ -494,7 +520,7 @@ describe('EZ Quiz MCP server', () => {
     expect(document.querySelector('#next').textContent).toBe('Finish');
     expect(document.querySelector('#app').style.height).toBe('');
     expect(document.querySelector('#app').style.maxHeight).toBe('');
-    expect(html).toContain(':root[data-size="compact"] .runner-actions { padding: 7px 18px 10px; }');
+    expect(html).toContain('.ezq-main[data-density="tight"] .answer { min-height: 40px;');
   });
 
   test('keeps a padded, compact results summary and both retake actions in the card', () => {
@@ -510,8 +536,8 @@ describe('EZ Quiz MCP server', () => {
     document.querySelector('#next').click();
     clickInput('input[value="false"]');
     document.querySelector('#next').click();
-    expect(document.documentElement.dataset.size).toBe('tight');
-    expect(html).toContain(':root[data-size="tight"] .app[data-view="results"] .ezq-main { padding: 10px 16px; }');
+    expect(document.documentElement.dataset.size).toBeUndefined();
+    expect(html).toContain('padding: 18px var(--content-pad-x);');
     expect(document.querySelector('.result-summary').textContent).toContain('Question 2');
     expect(document.querySelectorAll('.result-actions button')).toHaveLength(2);
     expect(document.querySelector('#retakeMissed').disabled).toBe(false);

@@ -4,10 +4,11 @@ const { BRAND_WORDMARK_DATA_URI } = require('./mcpQuizBrand.js');
 
 // Widget template URIs are cache keys. Publish breaking layout revisions under
 // a fresh URI while continuing to serve old aliases for cached tool descriptors.
-const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v3.html';
+const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v4.html';
 const QUIZ_WIDGET_ALIASES = Object.freeze([
   'ui://ez-quiz/quiz-v1.html',
   'ui://ez-quiz/quiz-v2.html',
+  'ui://ez-quiz/quiz-v3.html',
   QUIZ_WIDGET_URI,
 ]);
 const QUIZ_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app';
@@ -44,6 +45,7 @@ function quizWidgetHtml() {
       --safe-right: 0px;
       --safe-bottom: 0px;
       --safe-left: 0px;
+      --content-pad-x: clamp(18px, 4vw, 24px);
       --radius-card: 19px;
       --radius-control: 14px;
     }
@@ -121,7 +123,6 @@ function quizWidgetHtml() {
       background: var(--surface);
       box-shadow: var(--shadow);
     }
-    .app[data-view="quiz"] { min-height: 520px; }
     .brandbar {
       position: relative;
       z-index: 2;
@@ -163,13 +164,12 @@ function quizWidgetHtml() {
     .ezq-main:focus { outline: none; }
     .app[data-view="results"] .ezq-main {
       display: block;
-      padding: 18px 20px;
+      padding: 18px var(--content-pad-x);
       overflow: visible;
     }
-    .app[data-view="results"] { min-height: 340px; }
     .app[data-view="status"] .ezq-main {
       display: block;
-      padding: 18px 20px;
+      padding: 18px var(--content-pad-x);
     }
     .question-layout {
       display: flex;
@@ -180,7 +180,7 @@ function quizWidgetHtml() {
     .question-content {
       flex: 1 1 auto;
       min-height: 0;
-      padding: 16px 20px 8px;
+      padding: 16px var(--content-pad-x) 8px;
       overflow: visible;
     }
     .topline {
@@ -266,7 +266,7 @@ function quizWidgetHtml() {
       grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr);
       gap: 10px;
       margin: 0;
-      padding: 9px 20px 13px;
+      padding: 9px var(--content-pad-x) 14px;
       border-top: 1px solid var(--border);
       background: var(--surface);
       box-shadow: 0 -8px 18px color-mix(in srgb, var(--surface) 86%, transparent);
@@ -363,98 +363,30 @@ function quizWidgetHtml() {
     .result-summary strong { color: var(--text); }
     .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
     .result-note { margin: 13px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
-    :root[data-size="compact"] body {
-      padding:
-        calc(8px + var(--safe-top))
-        calc(8px + var(--safe-right))
-        calc(9px + var(--safe-bottom))
-        calc(8px + var(--safe-left));
-    }
-    :root[data-size="compact"] .app[data-view="quiz"] { min-height: 460px; }
-    :root[data-size="compact"] .brandbar { min-height: 50px; padding-top: 7px; padding-bottom: 6px; }
-    :root[data-size="compact"] .brand-logo { width: min(146px, 44vw); max-height: 34px; }
-    :root[data-size="compact"] .question-content { padding: 12px 18px 6px; }
-    :root[data-size="compact"] .topline { margin-bottom: 4px; }
-    :root[data-size="compact"] .progress { height: 5px; margin-bottom: 8px; }
-    :root[data-size="compact"] h2 { margin-bottom: 9px; font-size: 16px; line-height: 1.24; }
-    :root[data-size="compact"] .answers,
-    :root[data-size="compact"] .match-list { gap: 5px; }
-    :root[data-size="compact"] .answer { min-height: 40px; padding: 7px 10px; }
-    :root[data-size="compact"] .answer span { font-size: 13px; line-height: 1.25; }
-    :root[data-size="compact"] .answer input { width: 18px; height: 18px; }
-    :root[data-size="compact"] .runner-actions { padding: 7px 18px 10px; }
-    :root[data-size="compact"] .runner-actions button { min-height: 40px; }
-    :root[data-size="compact"] .app[data-view="results"] .ezq-main { padding: 14px 18px; }
-    :root[data-size="compact"] .score-orb { width: 70px; height: 70px; border-width: 6px; font-size: 19px; }
-    :root[data-size="compact"] .result-progress { margin: 12px 0 10px; }
-    :root[data-size="compact"] .result-stat { padding-top: 8px; padding-bottom: 8px; }
-    :root[data-size="compact"] .result-actions { margin-top: 11px; }
-    :root[data-size="compact"] .result-actions button { min-height: 40px; }
-    :root[data-size="tight"] body {
-      padding:
-        calc(6px + var(--safe-top))
-        calc(6px + var(--safe-right))
-        calc(7px + var(--safe-bottom))
-        calc(6px + var(--safe-left));
-    }
-    :root[data-size="tight"] .app[data-view="quiz"] { min-height: 340px; }
-    :root[data-size="tight"] .brandbar { min-height: 46px; padding: 6px 14px 5px; }
-    :root[data-size="tight"] .brand-logo { width: min(140px, 43vw); max-height: 31px; }
-    :root[data-size="tight"] .tag { display: none; }
-    :root[data-size="tight"] .question-content { padding: 8px 16px 5px; }
-    :root[data-size="tight"] .topline { margin-bottom: 2px; }
-    :root[data-size="tight"] .eyebrow,
-    :root[data-size="tight"] .timer { font-size: 11px; }
-    :root[data-size="tight"] .progress { height: 4px; margin-bottom: 6px; }
-    :root[data-size="tight"] h2 { margin-bottom: 7px; font-size: 14px; line-height: 1.2; }
-    :root[data-size="tight"] .answers,
-    :root[data-size="tight"] .match-list { gap: 4px; }
-    :root[data-size="tight"] .answer { min-height: 34px; gap: 8px; padding: 5px 9px; border-radius: 11px; }
-    :root[data-size="tight"] .answer span { font-size: 12px; line-height: 1.2; }
-    :root[data-size="tight"] .answer input { width: 17px; height: 17px; }
-    :root[data-size="tight"] .runner-actions { gap: 7px; padding: 5px 16px 7px; }
-    :root[data-size="tight"] .runner-actions button { min-height: 38px; padding-top: 7px; padding-bottom: 7px; }
-    :root[data-size="tight"] .app[data-view="results"] { min-height: 300px; }
-    :root[data-size="tight"] .app[data-view="results"] .ezq-main { padding: 10px 16px; }
-    :root[data-size="tight"] .results-head { gap: 10px; }
-    :root[data-size="tight"] .score-orb { width: 58px; height: 58px; border-width: 5px; font-size: 17px; }
-    :root[data-size="tight"] .results-copy h1 { font-size: 18px; }
-    :root[data-size="tight"] .results-copy p { font-size: 12px; }
-    :root[data-size="tight"] .result-progress { margin: 9px 0 8px; }
-    :root[data-size="tight"] .result-stats { gap: 5px; margin-bottom: 8px; }
-    :root[data-size="tight"] .result-stat { padding: 6px 5px; border-radius: 10px; }
-    :root[data-size="tight"] .result-stat strong { font-size: 16px; }
-    :root[data-size="tight"] .result-summary { min-height: 40px; padding: 8px 10px; font-size: 12px; }
-    :root[data-size="tight"] .result-actions { gap: 7px; margin-top: 8px; }
-    :root[data-size="tight"] .result-actions button { min-height: 38px; padding: 7px 9px; font-size: 12px; }
-    :root[data-size="tight"] .result-note { margin-top: 7px; font-size: 10px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .question-content { padding-top: 10px; padding-bottom: 6px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .topline { margin-bottom: 4px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .eyebrow,
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .timer { font-size: 12px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .progress { height: 5px; margin-bottom: 8px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] h2 { margin-bottom: 8px; font-size: 16px; line-height: 1.22; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .answers,
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .match-list { gap: 5px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .answer { min-height: 40px; gap: 10px; padding: 7px 12px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .answer span { font-size: 13px; line-height: 1.25; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .match { gap: 7px; padding: 7px 10px; font-size: 13px; }
-    :root:not([data-size="tight"]) .ezq-main[data-density="tight"] .match select { padding-top: 7px; padding-bottom: 7px; }
-    :root[data-display-mode="fullscreen"],
-    :root[data-display-mode="fullscreen"] body { height: 100%; min-height: 100%; }
+    .ezq-main[data-density="tight"] .question-content { padding-top: 10px; padding-bottom: 6px; }
+    .ezq-main[data-density="tight"] .topline { margin-bottom: 4px; }
+    .ezq-main[data-density="tight"] .eyebrow,
+    .ezq-main[data-density="tight"] .timer { font-size: 12px; }
+    .ezq-main[data-density="tight"] .progress { height: 5px; margin-bottom: 8px; }
+    .ezq-main[data-density="tight"] h2 { margin-bottom: 8px; font-size: 16px; line-height: 1.22; }
+    .ezq-main[data-density="tight"] .answers,
+    .ezq-main[data-density="tight"] .match-list { gap: 5px; }
+    .ezq-main[data-density="tight"] .answer { min-height: 40px; gap: 10px; padding: 7px 12px; }
+    .ezq-main[data-density="tight"] .answer span { font-size: 13px; line-height: 1.25; }
+    .ezq-main[data-density="tight"] .match { gap: 7px; padding: 7px 10px; font-size: 13px; }
+    .ezq-main[data-density="tight"] .match select { padding-top: 7px; padding-bottom: 7px; }
     :root[data-display-mode="fullscreen"] body {
-      padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+      min-height: 100svh;
+      padding:
+        calc(16px + var(--safe-top))
+        calc(16px + var(--safe-right))
+        calc(20px + var(--safe-bottom))
+        calc(16px + var(--safe-left));
       background: var(--surface);
     }
     :root[data-display-mode="fullscreen"] .app {
       width: 100%;
-      max-width: none;
-      height: 100%;
-      max-height: none;
-      min-height: 0;
-      border: 0;
-      border-radius: 0;
-      box-shadow: none;
+      max-width: 760px;
     }
     @media (max-width: 460px) {
       body {
@@ -465,12 +397,9 @@ function quizWidgetHtml() {
           calc(10px + var(--safe-left));
       }
       .app { min-height: 210px; border-radius: 17px; }
-      .app[data-view="quiz"] { min-height: 500px; }
       .brandbar { min-height: 52px; padding: 7px 14px 6px; }
       .brand-logo { width: min(146px, 48vw); max-height: 34px; }
       .tag { max-width: 126px; }
-      .question-content { padding-right: 18px; padding-left: 18px; }
-      .runner-actions { padding-right: 18px; padding-left: 18px; }
       h2 { font-size: 17px; }
       .answer { min-height: 46px; padding: 9px 11px; }
       .match { grid-template-columns: 1fr; }
@@ -524,6 +453,9 @@ function quizWidgetHtml() {
       let nextRequestId = 1;
       let heightFrame = 0;
       let lastReportedHeight = 0;
+      let bridgeInitialized = false;
+      let hostLayoutKey = '';
+      let hostContextState = {};
       let timerHandle = null;
       let quiz = null;
       let quizKey = '';
@@ -548,29 +480,30 @@ function quizWidgetHtml() {
         if (heightFrame) cancelFrame(heightFrame);
         heightFrame = requestFrame(() => {
           heightFrame = 0;
-          const bodyStyle = window.getComputedStyle ? window.getComputedStyle(document.body) : null;
-          const verticalPadding = bodyStyle
-            ? (Number.parseFloat(bodyStyle.paddingTop) || 0) + (Number.parseFloat(bodyStyle.paddingBottom) || 0)
-            : 0;
-          const appHeight = Math.max(
-            app.scrollHeight || 0,
-            app.offsetHeight || 0,
-            app.getBoundingClientRect ? app.getBoundingClientRect().height : 0,
-            app.dataset.view === 'quiz' ? 340 : 220
-          );
-          const height = Math.ceil(appHeight + verticalPadding);
           try {
-            if (Math.abs(height - lastReportedHeight) > 1) {
-              lastReportedHeight = height;
-              window.parent.postMessage({
-                jsonrpc: '2.0',
-                method: 'ui/notifications/size-changed',
-                params: { height },
-              }, '*');
-              if (window.openai && typeof window.openai.notifyIntrinsicHeight === 'function') {
-                window.openai.notifyIntrinsicHeight();
-              }
+            if (window.openai && typeof window.openai.notifyIntrinsicHeight === 'function') {
+              window.openai.notifyIntrinsicHeight();
+              return;
             }
+            if (!bridgeInitialized) return;
+            const bodyStyle = window.getComputedStyle ? window.getComputedStyle(document.body) : null;
+            const verticalPadding = bodyStyle
+              ? (Number.parseFloat(bodyStyle.paddingTop) || 0) + (Number.parseFloat(bodyStyle.paddingBottom) || 0)
+              : 0;
+            const appHeight = Math.max(
+              app.scrollHeight || 0,
+              app.offsetHeight || 0,
+              app.getBoundingClientRect ? app.getBoundingClientRect().height : 0,
+              220
+            );
+            const height = Math.ceil(appHeight + verticalPadding);
+            if (Math.abs(height - lastReportedHeight) <= 1) return;
+            lastReportedHeight = height;
+            window.parent.postMessage({
+              jsonrpc: '2.0',
+              method: 'ui/notifications/size-changed',
+              params: { height },
+            }, '*');
           } catch {}
         });
       }
@@ -588,10 +521,7 @@ function quizWidgetHtml() {
           ? question.options.join(' ')
           : (question.type === 'MT' ? question.left.concat(question.right).join(' ') : '');
         const complexity = question.text.length + optionText.length;
-        const hostSize = document.documentElement.dataset.size || '';
-        const shouldStartTight = hostSize === 'tight' || (
-          hostSize === 'compact' && (complexity > 320 || (question.options && question.options.length > 4))
-        );
+        const shouldStartTight = complexity > 320 || (question.options && question.options.length > 4);
         root.dataset.density = shouldStartTight ? 'tight' : '';
         requestFrame(() => {
           const content = root.querySelector('.question-content');
@@ -609,7 +539,9 @@ function quizWidgetHtml() {
       }
 
       function applyHostContext(globals) {
-        const context = globals && typeof globals === 'object' ? globals : (window.openai || {});
+        const update = globals && typeof globals === 'object' ? globals : {};
+        hostContextState = { ...hostContextState, ...update };
+        const context = hostContextState;
         const requestedTheme = String(context.theme || '').toLowerCase();
         const theme = requestedTheme === 'dark' || requestedTheme === 'light'
           ? requestedTheme
@@ -629,19 +561,11 @@ function quizWidgetHtml() {
         document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
         document.documentElement.style.setProperty('--safe-left', left + 'px');
 
-        const dimensions = context.containerDimensions && typeof context.containerDimensions === 'object'
-          ? context.containerDimensions
-          : {};
-        const fixedHeight = Number(dimensions.height || 0);
-        const maxHeight = Number(dimensions.maxHeight || context.maxHeight || fixedHeight || 0);
         const displayMode = String(context.displayMode || 'inline').toLowerCase();
         document.documentElement.dataset.displayMode = displayMode;
-        const usableHeight = maxHeight > 0 ? Math.max(0, maxHeight - top - bottom) : 0;
-        document.documentElement.dataset.size = usableHeight > 0 && usableHeight <= 440
-          ? 'tight'
-          : (usableHeight > 0 && usableHeight <= 560 ? 'compact' : 'comfortable');
-        app.style.height = '';
-        app.style.maxHeight = '';
+        const layoutKey = [theme, displayMode, top, right, bottom, left].join('|');
+        if (layoutKey === hostLayoutKey) return;
+        hostLayoutKey = layoutKey;
         if (mode === 'quiz' && quiz) fitQuestionToViewport(quiz.questions[currentOriginalIndex()]);
         scheduleHeightReport();
       }
@@ -1038,23 +962,22 @@ function quizWidgetHtml() {
           if (!window.openai || !window.openai.theme) applyHostContext(window.openai || {});
         });
       }
-      if (typeof ResizeObserver !== 'undefined') {
-        const observer = new ResizeObserver(scheduleHeightReport);
-        observer.observe(app);
-      }
+      document.getElementById('brandLogo').addEventListener('load', scheduleHeightReport, { once: true });
 
       applyHostContext(window.openai || {});
       const initialOutput = hostToolResult(window.openai || {});
       if (initialOutput) loadToolResult(initialOutput);
 
       request('ui/initialize', {
-        protocolVersion: '2025-11-21',
-        appInfo: { name: 'ez-quiz-player', title: 'EZ Quiz', version: '4.0.0', websiteUrl: '${SITE_ORIGIN}' },
+        protocolVersion: '2026-01-26',
+        appInfo: { name: 'ez-quiz-player', title: 'EZ Quiz', version: '4.1.0', websiteUrl: '${SITE_ORIGIN}' },
         appCapabilities: {},
       }).then((result) => {
+        bridgeInitialized = true;
         window.parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized' }, '*');
         if (result && result.hostContext) applyHostContext(result.hostContext);
         if (!initialOutput && result && result.toolResult) loadToolResult(result.toolResult);
+        scheduleHeightReport();
       }).catch(() => {});
       scheduleHeightReport();
     })();
