@@ -4,13 +4,15 @@ const { BRAND_WORDMARK_DATA_URI } = require('./mcpQuizBrand.js');
 
 // Widget template URIs are cache keys. Publish breaking layout revisions under
 // a fresh URI while continuing to serve old aliases for cached tool descriptors.
-const QUIZ_WIDGET_URI = 'ui://ez-quiz/quiz-v6.html';
+const QUIZ_WIDGET_VERSION = 7;
+const QUIZ_WIDGET_URI = `ui://ez-quiz/quiz-v${QUIZ_WIDGET_VERSION}.html`;
 const QUIZ_WIDGET_ALIASES = Object.freeze([
   'ui://ez-quiz/quiz-v1.html',
   'ui://ez-quiz/quiz-v2.html',
   'ui://ez-quiz/quiz-v3.html',
   'ui://ez-quiz/quiz-v4.html',
   'ui://ez-quiz/quiz-v5.html',
+  'ui://ez-quiz/quiz-v6.html',
   QUIZ_WIDGET_URI,
 ]);
 const QUIZ_WIDGET_MIME_TYPE = 'text/html;profile=mcp-app';
@@ -166,8 +168,7 @@ function quizWidgetHtml() {
     .ezq-main:focus { outline: none; }
     .app[data-view="results"] .ezq-main {
       display: block;
-      /* Embedded WebViews must resolve this gutter without modern CSS math. */
-      padding: 20px 22px 22px;
+      padding: 0;
       overflow: visible;
     }
     .app[data-view="status"] .ezq-main {
@@ -323,6 +324,7 @@ function quizWidgetHtml() {
       font-weight: 850;
     }
     .status-card p { margin: 8px 0 0; color: var(--muted); }
+    .results-view { padding: 20px 22px 22px; }
     .results-head { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 16px; }
     .score-orb {
       display: grid;
@@ -366,6 +368,7 @@ function quizWidgetHtml() {
     .result-summary strong { color: var(--text); }
     .result-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
     .result-note { margin: 13px 0 0; color: var(--muted); font-size: 12px; text-align: center; }
+    .widget-build { margin-left: 5px; font-size: 9px; letter-spacing: .04em; opacity: .55; }
     .ezq-main[data-density="tight"] .question-content { padding-top: 10px; padding-bottom: 6px; }
     .ezq-main[data-density="tight"] .topline { margin-bottom: 4px; }
     .ezq-main[data-density="tight"] .eyebrow,
@@ -871,7 +874,7 @@ function quizWidgetHtml() {
           ? '<strong>Review next:</strong> ' + missed.map((questionIndex) => 'Question ' + (questionIndex + 1)).join(', ')
           : '<strong>All correct.</strong> You are ready for a harder round.';
         renderHtml(
-          '<div class="results-head"><div class="score-orb" aria-label="' + score + ' out of ' + quiz.questions.length + '">' + score + '/' + quiz.questions.length + '</div>' +
+          '<section class="results-view" data-widget-version="${QUIZ_WIDGET_VERSION}" style="padding:20px 22px 22px"><div class="results-head"><div class="score-orb" aria-label="' + score + ' out of ' + quiz.questions.length + '">' + score + '/' + quiz.questions.length + '</div>' +
           '<div class="results-copy"><h1>Quiz complete</h1><p>' + esc(message) + ' · ' + formatDuration(finishedAt - startedAt) + '</p></div></div>' +
           '<div class="result-progress"><div class="progress" role="progressbar" aria-label="Final score" aria-valuemin="0" aria-valuemax="100" aria-valuenow="' + percent + '">' +
           '<span style="width:' + percent + '%"></span></div></div>' +
@@ -881,7 +884,7 @@ function quizWidgetHtml() {
           '<div class="result-summary">' + missedSummary + '</div>' +
           '<div class="result-actions"><button id="retakeMissed" class="primary" type="button" ' + (!missed.length ? 'disabled' : '') + '>Retake missed</button>' +
           '<button id="retakeAll" class="secondary" type="button">Retake all</button></div>' +
-          '<p class="result-note">' + esc(quiz.title) + '</p>',
+          '<p class="result-note">' + esc(quiz.title) + '<span class="widget-build">v${QUIZ_WIDGET_VERSION}</span></p></section>',
           'results'
         );
         document.getElementById('retakeMissed').addEventListener('click', () => beginRetake(missed));
