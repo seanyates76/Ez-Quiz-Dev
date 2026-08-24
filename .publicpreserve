@@ -2,3 +2,4 @@
 # These are excluded only from the destination sync pass, so the mirror
 # will not overwrite or delete the downstream copy.
 README.md
+public/readme-media/
