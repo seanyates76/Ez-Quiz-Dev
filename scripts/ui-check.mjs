@@ -112,7 +112,8 @@ async function run() {
       let html = readFileSync(join(root, 'index.html'), 'utf8');
       const css = readFileSync(join(root, 'styles.css'), 'utf8');
       html = html
-        .replace(/<script[\s\S]*?<\/script>/g, '')
+        .replace(/<script/gi, '&lt;script')
+        .replace(/<\/script\s*>/gi, '&lt;/script&gt;')
         .replace(/<link[^>]+styles\.css[^>]*>/i, `<style>${css}</style>`)
         .replace(/<body(\s[^>]*)?>/i, (m) => m.includes('data-visual') ? m : m.replace('<body', '<body data-visual="soft"'));
       await page.setContent(html, { waitUntil: 'domcontentloaded' });
