@@ -4,14 +4,24 @@ Create focused practice quizzes from a topic or study material.
 
 Live app: https://ez-quiz.app/
 
-> Draft note: This file is the upstream draft/source copy for the public/product README. It is kept in the dev repo for review and is not copied to the production mirror automatically.
-
 ## What It Does
 
 - Create quizzes from topics.
 - Import study material.
 - Choose difficulty and quiz length.
 - Practice and review missed answers.
+
+## Practice Flow
+
+Answer questions at your own pace, with progress and a timer kept in view.
+
+![Taking an EZ Quiz question](public/readme-media/taking-the-quiz.png)
+
+Review incorrect answers with the correct answer and explanation, then retake only the questions you missed.
+
+![Quiz results and review](public/readme-media/results.png)
+
+![Retake missed questions](public/readme-media/retake-missed.png)
 
 ## What's New in v3.6.0
 
@@ -45,4 +55,3 @@ Live app: https://ez-quiz.app/
 
 - Main development happens in `seanyates76/Ez-Quiz-Dev`.
 - The production mirror is `seanyates76/Ez-Quiz-App`.
-- This draft can be reviewed here before any intentional public README rollout.
