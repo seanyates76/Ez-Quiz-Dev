@@ -22,8 +22,8 @@
     "yauzl": "^3.4.0"
   },
   "devDependencies": {
-    "jest": "^30.4.2",
-    "jest-environment-jsdom": "^30.4.1",
+    "jest": "^30.5.1",
+    "jest-environment-jsdom": "^30.5.1",
     "jsdom": "^27.4.0",
     "netlify-cli": "^26.1.0",
     "puppeteer": "^24.43.1"
