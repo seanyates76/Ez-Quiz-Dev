@@ -1,18 +1,21 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-edition="standalone" data-app-version="4.0.0">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>EZ Quiz</title>
+  <title>EZ Quiz · Standalone</title>
+  <meta name="description" content="Your own study space. Create, import, practice, and keep your quizzes. Optional AI with your own key." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=1.5.45"></script>
-  <link rel="stylesheet" href="styles.css?v=1.5.45" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=1.5.45">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=1.5.45">
-  <script src="js/boot-beta.js?v=1.5.45"></script>
+  <script src="js/theme-preload.js?v=4.0.0"></script>
+  <link rel="stylesheet" href="styles.css?v=4.0.0" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=4.0.0">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=4.0.0">
+  <script src="js/boot-beta.js?v=4.0.0"></script>
+  <link rel="stylesheet" href="styles.standalone.css?v=4.0.0" />
 </head>
 <body>
+  <a class="skip-link" href="#generatorCard">Skip to quiz builder</a>
   <header class="site-header" role="banner">
     <div class="site-header__row">
       <div class="brand">
@@ -26,6 +29,7 @@
                data-light="icons/brand-title-source-light.png" />
         </a>
       </div>
+      <span class="edition-label">Standalone <span>4.0</span></span>
       <nav class="header-actions" aria-label="Utility">
         <button id="helpBtn" class="icon-btn" title="Help" aria-haspopup="dialog" aria-controls="helpModal">?</button>
         <button id="settingsBtn" class="icon-btn" title="Settings" aria-haspopup="dialog" aria-controls="settingsModal">⚙</button>
@@ -35,121 +39,39 @@
 
   <main class="container" id="app" role="main">
     <section id="landingIntro" class="landing-intro" aria-labelledby="landingTitle">
-      <button id="landingIntroClose" class="preview-close landing-intro-close" type="button" aria-label="Close info panel">
-        <span aria-hidden="true">×</span>
-      </button>
+      <button id="landingIntroClose" class="preview-close landing-intro-close" type="button" aria-label="Close info panel"><span aria-hidden="true">×</span></button>
       <div class="landing-copy">
-        <p class="landing-kicker">Create, practice, review</p>
-        <h1 id="landingTitle">Welcome to EZ Quiz 3.6.0!</h1>
-        <p class="landing-dek">Create focused practice quizzes from a topic or study material.</p>
+        <p class="landing-kicker">SMART. SIMPLE. FAST. EZ.</p>
+        <h1 id="landingTitle">A little practice.<br /><span>A lot of progress.</span></h1>
+        <p class="landing-dek">A study space to make your own. Turn a topic or your notes into a quiz, work through it, and come back stronger.</p>
+        <div class="keepsake-note"><span aria-hidden="true">✦</span> Made to keep. Free to make yours.</div>
       </div>
-      <div id="landingPreview" class="landing-preview" aria-label="Intro sections">
-        <div class="preview-tabs" role="tablist" aria-label="Intro sections">
-          <button id="landingTabNew" class="preview-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="landingPanelNew" data-preview-tab="0">What’s new</button>
-          <button id="landingTabSoon" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelSoon" data-preview-tab="1" tabindex="-1">Coming soon</button>
-          <button id="landingTabTips" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelTips" data-preview-tab="2" tabindex="-1">Tips</button>
+      <div id="landingPreview" class="landing-preview" aria-label="About this edition">
+        <div class="preview-tabs" role="tablist" aria-label="About this edition">
+          <button id="landingTabNew" class="preview-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="landingPanelNew" data-preview-tab="0">Your study space</button>
+          <button id="landingTabSoon" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelSoon" data-preview-tab="1" tabindex="-1">Your data</button>
+          <button id="landingTabTips" class="preview-tab" type="button" role="tab" aria-selected="false" aria-controls="landingPanelTips" data-preview-tab="2" tabindex="-1">Get started</button>
         </div>
         <div id="landingPanelNew" class="preview-panel" role="tabpanel" aria-labelledby="landingTabNew" data-preview-panel="0">
-          <div class="feature-card-list" data-feature-cards>
-            <article class="landing-feature-card">
-              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureUpTo50" data-feature-card-toggle>
-                <span class="landing-feature-card__copy">
-                  <span class="landing-feature-card__title">Up to 50 questions</span>
-                  <span class="landing-feature-card__summary">Build longer practice quizzes for full study sessions.</span>
-                </span>
-                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
-              </button>
-              <div id="featureUpTo50" class="landing-feature-card__detail" data-feature-card-detail hidden>
-                <p>Choose 30 or 50 questions when you want more review in one quiz.</p>
-              </div>
-            </article>
-            <article class="landing-feature-card">
-              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureLongSources" data-feature-card-toggle>
-                <span class="landing-feature-card__copy">
-                  <span class="landing-feature-card__title">Better long-source quizzes</span>
-                  <span class="landing-feature-card__summary">Larger study material is split into useful sections before generation.</span>
-                </span>
-                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
-              </button>
-              <div id="featureLongSources" class="landing-feature-card__detail" data-feature-card-detail hidden>
-                <p>Big notes are grouped first, so questions can cover more of the material.</p>
-              </div>
-            </article>
-            <article class="landing-feature-card">
-              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureCleanerQuestions" data-feature-card-toggle>
-                <span class="landing-feature-card__copy">
-                  <span class="landing-feature-card__title">Cleaner questions from notes</span>
-                  <span class="landing-feature-card__summary">Questions should feel like quiz questions, not references to your document.</span>
-                </span>
-                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
-              </button>
-              <div id="featureCleanerQuestions" class="landing-feature-card__detail" data-feature-card-detail hidden>
-                <p>Questions now avoid document callouts and focus on the material itself.</p>
-              </div>
-            </article>
-            <article class="landing-feature-card">
-              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureTopicBatching" data-feature-card-toggle>
-                <span class="landing-feature-card__copy">
-                  <span class="landing-feature-card__title">Topic batching</span>
-                  <span class="landing-feature-card__summary">Topic-only quizzes now build in smaller batches for better quality.</span>
-                </span>
-                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
-              </button>
-              <div id="featureTopicBatching" class="landing-feature-card__detail" data-feature-card-detail hidden>
-                <p>Short topic prompts can stay focused while still reaching your chosen count.</p>
-              </div>
-            </article>
-            <article class="landing-feature-card">
-              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureStatusCard" data-feature-card-toggle>
-                <span class="landing-feature-card__copy">
-                  <span class="landing-feature-card__title">New generation status card</span>
-                  <span class="landing-feature-card__summary">Quiz building now has a clearer persistent status area with stop support.</span>
-                </span>
-                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
-              </button>
-              <div id="featureStatusCard" class="landing-feature-card__detail" data-feature-card-detail hidden>
-                <p>The card stays in place while a quiz builds and after it finishes.</p>
-              </div>
-            </article>
-            <article class="landing-feature-card">
-              <button class="landing-feature-card__toggle" type="button" aria-expanded="false" aria-controls="featureImportCoverage" data-feature-card-toggle>
-                <span class="landing-feature-card__copy">
-                  <span class="landing-feature-card__title">Better import coverage</span>
-                  <span class="landing-feature-card__summary">PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images are covered more clearly.</span>
-                </span>
-                <span class="landing-feature-card__chevron" aria-hidden="true">›</span>
-              </button>
-              <div id="featureImportCoverage" class="landing-feature-card__detail" data-feature-card-detail hidden>
-                <p>The supported formats are easier to see before you add study material.</p>
-              </div>
-            </article>
-          </div>
+          <ol class="edition-features">
+            <li><span class="feature-number">01</span><div><strong>Make it a quiz</strong><p>Bring your notes, write your own, or use AI with your own key.</p></div></li>
+            <li><span class="feature-number">02</span><div><strong>Find what sticks</strong><p>Five difficulty levels, four question types, and room to challenge yourself.</p></div></li>
+            <li><span class="feature-number">03</span><div><strong>Keep getting better</strong><p>Review your answers, retake what you missed, and save your quiz as a file.</p></div></li>
+          </ol>
         </div>
         <div id="landingPanelSoon" class="preview-panel" role="tabpanel" aria-labelledby="landingTabSoon" data-preview-panel="1" hidden>
-          <ul class="roadmap-list">
-            <li><span>Bring your own API key</span><small>Use your own provider key for larger private study material.</small></li>
-            <li><span>Better PDF handling</span><small>Cleaner reads from messy or heavily formatted PDFs.</small></li>
-            <li><span>Quiz sharing</span><small>Send a quiz link to someone else.</small></li>
-            <li><span>Teacher-friendly builder</span><small>Faster editing for classroom-ready questions.</small></li>
-            <li><span>Separate pages for building, reviewing, and sharing</span><small>Clearer spaces for each part of quiz work.</small></li>
-            <li><span>Flashcards or missed-concept review</span><small>Practice the areas you missed after a quiz.</small></li>
-          </ul>
+          <h2 class="preview-heading">A clear boundary.</h2><p>Your practice, results, and text imports stay on your device. AI requests go through your local launcher to the provider you choose.</p><p>Your key stays in this tab’s memory and is forgotten when you close or reload the page. No EZ Quiz account, analytics, or hosted AI relay.</p><a href="privacy.html">Read the data guide →</a>
         </div>
         <div id="landingPanelTips" class="preview-panel" role="tabpanel" aria-labelledby="landingTabTips" data-preview-panel="2" hidden>
-          <ul class="tips-list">
-            <li>Create builds the quiz. Start begins it.</li>
-            <li>Better study material makes better quizzes.</li>
-            <li>If a quiz feels too broad, use fewer questions or a smaller source.</li>
-          </ul>
+          <h2 class="preview-heading">Start with a little curiosity.</h2><p>Try the demo below, or open the editor and make a quiz by hand. Neither needs a key.</p><p>For AI, <a href="standalone.html">download and run the local edition</a>, add your key in Settings, and choose Create Quiz. Start Quiz begins your practice.</p>
         </div>
       </div>
-      <div class="landing-intro-footer">
-        <button id="landingIntroDontShow" class="preview-hide" type="button">Don’t show again</button>
-      </div>
+      <div class="landing-intro-footer"><button id="landingIntroDontShow" class="preview-hide" type="button">Don’t show again</button></div>
     </section>
 
     <!-- Generator Card -->
-    <section id="generatorCard" class="card">
+    <section id="generatorCard" class="card" aria-labelledby="builderTitle" tabindex="-1">
+      <div class="builder-heading"><div><p class="section-eyebrow">CREATE &amp; IMPORT</p><h2 id="builderTitle">What are we learning?</h2></div><button id="aiSettingsBtn" class="connection-button" type="button" aria-haspopup="dialog" aria-controls="settingsModal"><span class="connection-dot" aria-hidden="true"></span><span id="aiConnectionStatus">AI is optional · Add your key</span><span aria-hidden="true">↗</span></button></div>
       <div id="updateBanner" class="update-banner hidden" hidden role="status" aria-live="polite">
         <span>Update available. Refresh to apply.</span>
         <span class="flex-spacer"></span>
@@ -162,7 +84,7 @@
         <label class="toolbar-field">
           <span class="toolbar-label">Topic</span>
           <div class="input-affix topic-affix">
-            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="Short topic, e.g. Biology exam review" />
+            <input id="topicInput" type="text" class="toolbar-input has-affix" placeholder="e.g. CCNA routing, world history, or a new curiosity" />
             <button id="importBtn" class="affix-btn" type="button" title="Attach notes or documents" aria-label="Attach notes or documents">
               <svg class="icon-clip" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
                 <!-- Material Symbols Rounded “attach_file” icon -->
@@ -233,6 +155,15 @@
         <button id="cancelGenerationBtn" class="btn generation-status-cancel" type="button">Stop generation</button>
       </div>
 
+      <div class="starter-tools" role="group" aria-label="Work with quizzes without AI">
+        <span class="starter-label">No key? Start here.</span>
+        <button id="quickDemoBtn" class="btn btn-ghost" type="button">Try a demo <span aria-hidden="true">→</span></button>
+        <button id="quickEditorBtn" class="btn btn-ghost" type="button">Write a quiz</button>
+        <button id="quickLoadBtn" class="btn btn-ghost" type="button">Open .txt</button>
+        <button id="quickLastBtn" class="btn btn-ghost" type="button">Last quiz</button>
+        <button id="quickExportBtn" class="btn btn-ghost" type="button">Save .txt</button>
+      </div>
+      <p class="provider-note">AI generation sends your topic and attached study text to your selected provider. Its API charges apply.</p>
       <!-- Subtle hint when inputs change after generation -->
       <div id="status" class="build-status" role="status" aria-live="polite" data-build-state="idle">
         Add a topic or study material, then create a quiz.
@@ -287,14 +218,14 @@
               <div class="spacer"></div>
               <label class="opt-switch small mirror-toggle">
                 <input type="checkbox" id="mirrorToggle" />
-                <span class="mirror-toggle-label">Debug / Mirror</span>
+                <span class="mirror-toggle-label">View quiz text</span>
               </label>
             </div>
           </div>
           <div id="interactiveEditor" aria-live="polite"></div>
           <div class="adv-panels" data-editor-panels>
             <div class="adv-left" data-editor-panel="manual" hidden>
-              <textarea id="editor" class="editor" rows="12" placeholder="MC|Question?|A) 1;B) 2|A&#10;TF|Statement.|T&#10;YN|Question?|Y&#10;MT|Match.|1) L1;2) L2|A) R1;B) R2|1-A,2-B"></textarea>
+              <textarea id="editor" aria-label="Manual quiz lines" class="editor" rows="12" placeholder="MC|Question?|A) 1;B) 2|A&#10;TF|Statement.|T&#10;YN|Question?|Y&#10;MT|Match.|1) L1;2) L2|A) R1;B) R2|1-A,2-B"></textarea>
             </div>
             <div class="adv-right">
               <div id="mirrorBox" class="mirror-box" data-on="false" data-empty="true">
@@ -404,7 +335,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
   <footer class="container" role="contentinfo">
     <nav aria-label="Footer">
       <div class="footer-links" role="list">
-        <a id="versionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" role="listitem">v3.6.0</a>
+        <a id="versionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" role="listitem">v4.0.0</a>
         <span aria-hidden="true">•</span>
         <a id="privacyLink" href="#" data-modal="privacyModal" role="listitem">Privacy</a>
         <span aria-hidden="true">•</span>
@@ -412,10 +343,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       </div>
       <div class="support-cta" aria-label="Support">
         <a id="bmcButton" href="https://www.buymeacoffee.com/seanyates78" target="_blank" rel="noopener noreferrer nofollow" aria-label="Buy me a coffee">
-          <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="217" height="60" />
+          <span aria-hidden="true">☕</span> Support EZ Quiz
         </a>
       </div>
-      <div class="footer-meta"><small class="muted">No tracking • Open source</small></div>
+      <div class="footer-meta"><small class="muted">Built by Sean Yates · Open source, yours to keep</small><div class="footer-source-links"><a href="standalone.html">Run locally</a><a href="https://github.com/seanyates76/Ez-Quiz-App" target="_blank" rel="noopener noreferrer">Source code ↗</a></div></div>
     </nav>
   </footer>
 
@@ -565,7 +496,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
               <dd><strong>A:</strong> Nothing changes until you finish or exit. Updates only apply once you refresh or start a new quiz, so your current run is never interrupted.</dd>
 
               <dt><strong>Q:</strong> How does feedback work?</dt>
-              <dd><strong>A:</strong> Feedback is sent securely through a server function. Messages are sanitized, rate‑limited, and delivered to the maintainer’s inbox.</dd>
+              <dd><strong>A:</strong> The feedback panel opens an email draft in your email app. Review it there and send it yourself.</dd>
             </dl>
           </details>
         </section>
@@ -601,6 +532,20 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         <button id="settingsClose" class="icon-btn" title="Close">✕</button>
       </header>
       <div class="modal__body">
+        <fieldset class="fieldgroup ai-fieldgroup">
+          <legend>Your AI connection</legend>
+          <p class="muted small">Optional. Run the <a href="standalone.html">local edition</a> to use your own key. The demo, manual editor, and saved quizzes need no AI.</p>
+          <div class="ai-fields">
+            <label for="aiProvider">Provider<select id="aiProvider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label>
+            <label for="aiModel">Model<input id="aiModel" type="text" list="aiModels" autocomplete="off" spellcheck="false" /><datalist id="aiModels"></datalist></label>
+          </div>
+          <label for="aiKey">API key<input id="aiKey" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" aria-describedby="aiKeyHelp" placeholder="Paste your own API key" /></label>
+          <p id="aiKeyHelp" class="muted small">Kept only in this tab’s memory. EZ Quiz does not save your key to browser storage. Closing or reloading the page forgets it.</p>
+          <div class="ai-actions"><button id="aiSave" class="btn primary" type="button">Use this key</button><button id="aiLoadModels" class="btn" type="button">Load models</button><button id="aiForget" class="btn btn-ghost" type="button">Forget key</button></div>
+          <p class="small"><a id="aiKeyLink" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Get a Gemini API key</a> · <a href="privacy.html">How your data is handled</a></p>
+          <p id="aiSettingsStatus" class="small" role="status" aria-live="polite">Choosing Use this key does not contact the provider. Load models checks access without generating a quiz.</p>
+        </fieldset>
+
         <fieldset class="fieldgroup">
           <legend>Timer</legend>
           <label><input type="checkbox" id="timerEnabled" /> <span>Enable timer</span></label>
@@ -628,9 +573,9 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <button id="resetApp" class="btn danger">Reset App</button>
         </div>
         <p class="muted small settings-version" data-version-copy>
-          Version <a id="settingsVersionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" data-version-label>v3.6.0</a>
+          Version <a id="settingsVersionInfoBtn" href="#" aria-haspopup="dialog" aria-controls="releaseNotesModal" data-version-label>v4.0.0</a>
           <span aria-hidden="true">·</span>
-          <span data-version-mode>Production</span> build
+          <span data-version-mode>Standalone</span> build
         </p>
       </div>
       <footer class="modal__footer">
@@ -649,13 +594,13 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       </header>
       <div class="modal__body">
         <section class="release-notes release-notes--production">
-          <h4>v3.6.0</h4>
+          <h4>v4.0.0</h4>
           <ul>
-            <li>Generation now shows true question progress, preserves ready questions when stopped, and clearly reports partial results.</li>
-            <li>Topic-only quizzes now build in smaller batches while preserving the requested count.</li>
-            <li>Larger study material is planned in sections, with cleaner question wording.</li>
-            <li>Public quiz lengths include 30 and 50 questions.</li>
-            <li>Imports support PDF, DOCX, TXT, Markdown, HTML, CSV, JSON, RTF, and images.</li>
+            <li>Standalone edition: launch locally with Node.js, without an install step or a hosted AI service.</li>
+            <li>Bring your Gemini or OpenAI key. It stays in the current tab’s memory.</li>
+            <li>Demo, manual editing, imports, export, practice, and review stay close at hand.</li>
+            <li>Local DOCX extraction, provider model selection, and clear privacy documentation.</li>
+            <li>The original EZ Quiz identity, preserved in a calmer desktop and mobile layout.</li>
           </ul>
         </section>
         <section>
@@ -735,33 +680,11 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         <button id="privacyClose" class="icon-btn" title="Close">✕</button>
       </header>
       <div class="modal__body">
-        <section>
-          <p class="muted small">Effective: 17 September 2025</p>
-          <p>EZ Quiz runs primarily on your device. We avoid collecting personal data and keep the experience self-contained whenever possible.</p>
-        </section>
-        <section>
-          <h4>What We Don’t Collect</h4>
-          <ul>
-            <li>No accounts, analytics scripts, or advertising trackers.</li>
-            <li>No storage of your quiz content on our servers.</li>
-          </ul>
-        </section>
-        <section>
-          <h4>Stored Locally</h4>
-          <p>The app may store theme or timer preferences and the most recent quiz in your browser’s storage so you can pick up where you left off.</p>
-        </section>
-        <section>
-          <h4>Serverless Calls</h4>
-          <p>Optional AI generation and feedback submission use Netlify Functions. Requests include only the information needed to fulfil them. Third-party providers apply their own policies.</p>
-        </section>
-        <section>
-          <h4>Your Choices</h4>
-          <ul>
-            <li>Use the <strong>Reset App</strong> button or <code>?clear=1</code> to clear cached data.</li>
-            <li>Skip AI generation entirely—the editor works offline.</li>
-            <li>Contact us via the feedback panel for questions or requests.</li>
-          </ul>
-        </section>
+        <p>Practice, scoring, manual quizzes, and text imports run on your device. EZ Quiz includes no analytics, advertising trackers, or accounts.</p>
+        <h4>Your API key</h4><p>Keys stay in this tab’s memory. EZ Quiz never saves them to browser storage. Forget key, closing the page, or reloading clears the key from this tab; Reset App also clears EZ Quiz data.</p>
+        <h4>When you use AI</h4><p>The local launcher sends the requested topic, study text, or question to your selected provider over HTTPS. PDF and image extraction asks before sending the file. The provider receives your key and request and applies its own data and billing policies.</p>
+        <h4>Keeping your work</h4><p>Your latest quiz is saved locally. Export .txt for a durable copy. In-progress answers and explanations are kept in memory, not backed up.</p>
+        <p><a href="privacy.html">Full privacy and data guide →</a></p>
       </div>
       <footer class="modal__footer">
         <button id="privacyOk" class="btn">Close</button>
@@ -788,7 +711,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         </section>
         <section>
           <h4>License</h4>
-          <p>You receive a personal, non-transferable license to use the app. Please do not reverse-engineer or redistribute it outside of what’s permitted by the project’s open-source license.</p>
+          <p>EZ Quiz is open-source software under the MIT license. You may use, copy, modify, and redistribute it under that license, including its copyright and permission notice.</p>
         </section>
         <section>
           <h4>Your Content</h4>
@@ -812,10 +735,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=1.5.45"></script>
-  <script type="module" src="js/auto-refresh.js?v=1.5.45"></script>
-  <script type="module" src="js/patches.js?v=1.5.45"></script>
-  <script type="module" src="js/editor.gui.js?v=1.5.45"></script>
+  <script type="module" src="js/main.js?v=4.0.0"></script>
+  <script type="module" src="js/auto-refresh.js?v=4.0.0"></script>
+  <script type="module" src="js/patches.js?v=4.0.0"></script>
+  <script type="module" src="js/editor.gui.js?v=4.0.0"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">
@@ -862,7 +785,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       <span id="feedbackCount" class="muted small">0/500</span>
       <span class="flex-spacer"></span>
       <button id="feedbackCancel" class="btn" type="button">Cancel</button>
-      <button id="feedbackSend" class="btn primary" type="button">Send</button>
+      <button id="feedbackSend" class="btn primary" type="button">Open email draft</button>
     </div>
     <div id="feedbackStatus" class="status" aria-live="polite"></div>
   </div>

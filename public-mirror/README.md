@@ -1,48 +1,37 @@
-# EZ Quiz
+# EZ Quiz · Standalone
 
-Create focused practice quizzes from a topic or study material.
+**A little practice. A lot of progress.**
 
-Live app: https://ez-quiz.app/
+Create, keep, and practice your own quizzes. EZ Quiz is a free MIT-licensed study app by Sean Yates. This preservation edition keeps the original quiz workflow and brand available without a hosted AI backend.
 
-> Draft note: This file is the upstream draft/source copy for the public/product README. It is kept in the dev repo for review and is not copied to the production mirror automatically.
+## Get started
 
-## What It Does
+Install Node.js 22+, download and extract the repository, and run:
 
-- Create quizzes from topics.
-- Import study material.
-- Choose difficulty and quiz length.
-- Practice and review missed answers.
+```sh
+npm start
+```
 
-## What's New in v3.6.0
+Open http://127.0.0.1:8787. No npm install, account, database, or Netlify setup is needed for standalone use. Keep the terminal open while using the local launcher.
 
-- Up to 50 questions.
-- Better long-source quizzes.
-- Cleaner question wording from notes and study material.
-- Topic-only batching.
-- Generation status card with cancel support.
-- Clearer import coverage.
+## Make it yours
 
-## Supported Study Material
+- Demo, manual editor, quiz import/export, timer, scoring, review, and missed-question retakes.
+- Four question formats, five difficulty levels, and quizzes up to 50 questions.
+- Optional Gemini or OpenAI generation and answer explanations with your own key.
+- Local text and DOCX imports; optional AI extraction of PDFs/images with confirmation.
+- Browser-local preferences and last quiz, with portable .txt exports.
 
-- DOCX, TXT, Markdown, HTML, CSV, JSON, and RTF.
-- PDF and images when media extraction is available.
+Your key stays only in the current tab’s memory. Forget key, closing the page, or reloading clears it from that tab. EZ Quiz does not save it to browser storage. Provider charges and policies apply to AI use.
 
-## Privacy
+Read [the standalone guide](STANDALONE.md), [privacy/data details](public/privacy.html), and [security boundaries](SECURITY.md). Manual practice works offline after shell caching; cloud AI requires the local launcher, internet, and a compatible provider account.
 
-- No tracking.
-- No data sales.
-- AI runs only when the user asks EZ Quiz to create, import, or generate.
+This is a local browser app, not a native installer. The separate ChatGPT plugin and older hosted paths remain distinct. Models and third-party services can change; the source and manual quiz workflow are yours to keep.
 
-## Roadmap
+## Source and support
 
-- Bring your own API key.
-- Better PDF handling.
-- Sharing.
-- Teacher-friendly builder.
-- Missed-concept review.
+Development: [Ez-Quiz-Dev](https://github.com/seanyates76/Ez-Quiz-Dev). Public mirror: [Ez-Quiz-App](https://github.com/seanyates76/Ez-Quiz-App). [Support Sean](https://buymeacoffee.com/seanyates78).
 
-## Development
+MIT license: [LICENSE.txt](LICENSE.txt).
 
-- Main development happens in `seanyates76/Ez-Quiz-Dev`.
-- The production mirror is `seanyates76/Ez-Quiz-App`.
-- This draft can be reviewed here before any intentional public README rollout.
+<!-- Upstream source for a manually reviewed public README promotion. Mirror preservation rules are unchanged. -->

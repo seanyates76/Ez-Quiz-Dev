@@ -69,10 +69,12 @@ describe('public/index.html structure', () => {
     expect(toolbarStart.getAttribute('aria-describedby')).toBe('startHelp');
   });
 
-  test('landing intro headline includes the v3.6.0 release label', () => {
+  test('landing intro keeps the product headline and visible release label', () => {
     const title = document.getElementById('landingTitle');
     expect(title).not.toBeNull();
-    expect(title.textContent.trim()).toBe('Welcome to EZ Quiz 3.6.0!');
+    expect(title.textContent.trim()).toBe('A little practice.A lot of progress.');
+    expect(document.querySelector('.edition-label').textContent).toContain('Standalone');
+    expect(document.getElementById('versionInfoBtn').textContent).toBe('v4.0.0');
   });
 
   test('uses unique IDs and exposes both release-notes triggers', () => {
@@ -172,27 +174,14 @@ describe('public/index.html structure', () => {
     expect(document.getElementById('narrowSourceCancel').textContent.trim()).toBe('Cancel');
   });
 
-  test('landing intro exposes feature cards, roadmap, and tips styling hooks', () => {
-    const featureCards = document.querySelectorAll('#landingPanelNew .landing-feature-card');
-    const roadmapItems = document.querySelectorAll('#landingPanelSoon .roadmap-list li');
-    const tips = document.querySelectorAll('#landingPanelTips .tips-list li');
-    expect(featureCards).toHaveLength(6);
-    expect(roadmapItems).toHaveLength(6);
-    expect(tips).toHaveLength(3);
-
-    featureCards.forEach((card) => {
-      const toggle = card.querySelector('[data-feature-card-toggle]');
-      const detailId = toggle && toggle.getAttribute('aria-controls');
-      expect(toggle).not.toBeNull();
-      expect(toggle.tagName).toBe('BUTTON');
-      expect(toggle.getAttribute('aria-expanded')).toBe('false');
-      expect(detailId).toBeTruthy();
-      expect(document.getElementById(detailId).hidden).toBe(true);
+  test('standalone exposes accessible connection controls and no-key shortcuts', () => {
+    ['quickDemoBtn', 'quickEditorBtn', 'quickLoadBtn', 'quickLastBtn', 'quickExportBtn', 'aiSettingsBtn', 'aiSave', 'aiForget'].forEach(id => {
+      expect(document.getElementById(id).tagName).toBe('BUTTON');
     });
-
-    const css = readFile('public/styles.css');
-    expect(css).toContain('.landing-feature-card');
-    expect(css).toContain('.roadmap-list');
-    expect(css).toContain('.tips-list');
+    expect(document.getElementById('aiKey').type).toBe('password');
+    expect(document.getElementById('aiRemember')).toBeNull();
+    expect(document.getElementById('aiSettingsStatus').getAttribute('role')).toBe('status');
+    expect(readFile('public/styles.standalone.css')).toContain('@media (max-width:760px)');
   });
+
 });
