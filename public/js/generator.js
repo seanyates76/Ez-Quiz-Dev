@@ -9,14 +9,14 @@ import {
   startAsyncGeneration,
   stopAsyncGeneration,
   triggerAsyncGeneration,
-} from './api.js?v=1.5.45';
+} from './api.js?v=4.0.0';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=1.5.45';
-import { buildGeneratorPayload } from './generator-payload.js?v=1.5.45';
-import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=1.5.45';
+import { announce } from './a11y-announcer.js?v=4.0.0';
+import { buildGeneratorPayload } from './generator-payload.js?v=4.0.0';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=4.0.0';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
 
@@ -519,6 +519,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
         session.stopRefreshPending = true;
         if(typeof session.wakePoll === 'function') session.wakePoll();
       }
+      return;
+    }
+    if(S.standalone){
+      try{ session.controller.abort(); }catch{}
       return;
     }
     activeGenerationSession = null;
@@ -1149,6 +1153,10 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }
   } catch {}
   async function postIngest(payload, { signal } = {}){
+    if(S.standalone){
+      try{ return { ok: true, status: 200, data: await S.standalone.import(payload, { signal }) }; }
+      catch(err){ if(err.name === 'AbortError') throw err; return { ok: false, status: 400, data: { error: err.message } }; }
+    }
     const endpoint = '/.netlify/functions/ingest-media';
     try{
       const res = await fetch(endpoint, {
@@ -1700,6 +1708,17 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       setBuildStatus('creating', '');
       generateBtn.disabled = true;
       const options = generationOptions(payload, types);
+      if(S.standalone){
+        stopGenerationStatusRotation();
+        options.onProgress = (completedCount) => {
+          if(!isActiveGeneration(session.id) || session.stopped) return;
+          setGenerationStatusState('generating', {
+            requestId: session.id, metadata: formatGenerationMetadata(payload),
+            phase: 'Building your quiz.', message: 'Completed questions are kept if you stop.',
+            completedCount, requestedCount: payload.count, largeSource: true,
+          });
+        };
+      }
       let out;
       if(shouldUseAsyncGeneration(payload.count, options)){
         try{
@@ -1790,7 +1809,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       setLastGen(payload);
       const requested = Number(payload.count || parsed.questions.length);
       const completed = parsed.questions.length;
-      const finalState = out && out.stopped
+      const finalState = session.stopped || (out && out.stopped)
         ? 'stopped'
         : (completed > 0 && requested > completed ? 'partial' : 'success');
       setGenerationStatusState(finalState, {
@@ -1804,7 +1823,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
       setPrimaryAction();
     }catch(err){
       if(!isActiveGeneration(session.id)) return;
-      if(err && err.name === 'AbortError'){
+      if(session.stopped || (err && err.name === 'AbortError')){
         setGenerationStatusState('stopped', {
           requestId: session.id,
           metadata: formatGenerationMetadata(payload),
