@@ -1,83 +1,18 @@
 <!doctype html>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Privacy Policy — EZ Quiz</title>
-<link rel="stylesheet" href="styles.css">
-<main class="container">
-  <div class="card">
-    <h1>Privacy Policy</h1>
-    <p style="color:var(--muted)">Effective: 21 August 2026</p>
-
-    <h2>Overview</h2>
-    <p>EZ Quiz is a lightweight, installable web app that runs primarily on-device. We designed it to minimize the collection and processing of personal data. This policy explains what the app does locally, what limited serverless calls may occur, and your choices.</p>
-
-    <h2>What We Don’t Collect</h2>
-    <ul>
-      <li>No account creation</li>
-      <li>No analytics, tracking pixels, or ad networks</li>
-      <li>No storage of your quiz content on our servers</li>
-    </ul>
-
-    <h2>Data Processed Locally (On Your Device)</h2>
-    <p>The app may store small settings in your browser’s storage to improve your experience:</p>
-    <ul>
-      <li><strong>Theme and UI preferences</strong> (e.g., dark/light mode, timer settings)</li>
-      <li><strong>Progress state</strong> (in-memory while the app is open)</li>
-    </ul>
-    <p>You can clear these at any time using the in‑app “Reset App” action or your browser’s site data controls.</p>
-    <p><em>Cookie note:</em> A single, optional cookie may be used to remember display preferences (e.g., “Always show advanced options”). It stores a simple true/false value and expires after roughly one year.</p>
-
-    <h2>Service Worker and Offline Use</h2>
-    <p>EZ Quiz uses a service worker to cache the app shell (HTML/CSS/JS/icons) for offline access. Cached assets remain on your device until you clear site data or the app refreshes its cache during updates.</p>
-
-    <h2>Optional AI Features</h2>
-    <p>If you click “Create Quiz,” the app may call a serverless function that in turn calls a third‑party AI API (e.g., Google Gemini or OpenAI) to create quiz questions from your provided topic or study material, length, and options. If you click “Explain” in Results, the app may call a serverless function to explain the relevant quiz question using that question, answer choices, and correct-answer context. We forward only what’s necessary to perform each request. Responses are returned to your browser and are not persisted by us.</p>
-    <ul>
-      <li><strong>Third‑party processors:</strong> Google (Gemini) and/or OpenAI, depending on configuration.</li>
-      <li><strong>Content transmitted:</strong> for quiz generation, your chosen topic or study material and generation parameters; for explanations, the relevant quiz question, answer choices, and correct-answer context. We do not include your prior quiz answers, selected learner answers, or local settings.</li>
-      <li><strong>Retention by providers:</strong> subject to each provider’s policies. Review their privacy documentation if you use AI generation.</li>
-    </ul>
-
-    <h2>ChatGPT Plugin</h2>
-    <p>When you use EZ Quiz inside ChatGPT, ChatGPT sends the EZ Quiz tool only the information needed for the action you requested. This may include a quiz topic, generation settings, study text you intentionally supplied, or quiz lines you asked us to open. EZ Quiz returns the generated or validated quiz to ChatGPT so it can be shown in the conversation and in the interactive quiz player.</p>
-    <ul>
-      <li><strong>Purpose:</strong> generate, validate, and display the quiz you requested.</li>
-      <li><strong>Recipients:</strong> our hosting provider (Netlify), the configured AI provider when generation is requested, and OpenAI as the ChatGPT host.</li>
-      <li><strong>Our retention:</strong> EZ Quiz does not create user accounts or save ChatGPT quiz requests in an application database. Hosting security logs and AI-provider processing may be retained under those providers’ policies.</li>
-      <li><strong>Interactive state:</strong> current question and score may be held by the ChatGPT interface while the quiz is open. EZ Quiz does not use that state for advertising or profiling.</li>
-    </ul>
-    <p>Do not submit passwords, API keys, government identifiers, payment-card information, protected health information, or other sensitive personal data. You can avoid server processing by using the standalone app with manually entered quiz lines, and you can remove a ChatGPT conversation using ChatGPT’s controls.</p>
-
-    <h2>Feedback (Optional)</h2>
-    <p>If you choose to send feedback using the in‑app panel, we collect only what you submit:</p>
-    <ul>
-      <li><strong>Message</strong> (required) and <strong>Email</strong> (optional) that you type into the form.</li>
-      <li><strong>Basic rate‑limit data</strong> (IP address), used transiently to prevent spam/abuse. This is stored in memory for a short window and not persisted by us.</li>
-    </ul>
-    <p>Your feedback is relayed via email to the maintainer’s inbox. We do not create a database of submissions, but the email copy may be retained in the maintainer’s mailbox. Do not include sensitive personal information in feedback.</p>
-
-    <h2>Payments and External Links</h2>
-    <p>The “☕ Support” link navigates to an external donations page (e.g., Buy Me a Coffee). Interactions there are governed by that site’s terms and privacy policy.</p>
-
-    <h2>Children’s Privacy</h2>
-    <p>EZ Quiz is a general‑audience app. It does not knowingly collect personal information from children. If you believe a child has provided personal information via a third‑party form or service linked from the app, contact us so we can assist.</p>
-
-    <h2>Security</h2>
-    <p>We follow reasonable practices for a static web app and serverless functions, including HTTPS, scoped API keys, and least‑privilege configuration. Because the app runs in your browser, the security of your device and browser also matters.</p>
-
-    <h2>Your Choices</h2>
-    <ul>
-      <li>Use the app entirely offline with manual input (no AI calls)</li>
-      <li>Clear data via “Reset App” or by clearing your browser’s site storage</li>
-      <li>Decline to use external links or AI features</li>
-    </ul>
-
-    <h2>Changes to This Policy</h2>
-    <p>We may update this policy as the app evolves (for example, if we add providers or settings). We will revise the “Effective” date and publish the latest version here.</p>
-
-    <h2>Contact</h2>
-    <p>Questions, privacy requests, or concerns? Email <a href="mailto:ez.quizapp@gmail.com">ez.quizapp@gmail.com</a> or use the <a href="/support.html">support page</a>.</p>
-  </div>
-  <p><a href="/">← Back to app</a></p>
-  
-</main>
+<html lang="en" data-edition="standalone"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>Privacy and data guide · EZ Quiz</title><script src="js/theme-preload.js?v=4.0.0"></script><link rel="stylesheet" href="styles.css?v=4.0.0" /><link rel="stylesheet" href="styles.tokens.css?v=4.0.0" /><link rel="stylesheet" href="styles.standalone.css?v=4.0.0" /></head><body><main class="guide-page"><a href="./">← EZ Quiz</a>
+<p class="section-eyebrow">EFFECTIVE 16 SEPTEMBER 2026</p><h1>Your study space.<br />Your choices.</h1>
+<p>This guide describes the standalone edition. The ChatGPT plugin and older hosted editions use a different path, described below. EZ Quiz does not include analytics, advertising trackers, or user accounts.</p>
+<h2>What stays on your device</h2><table><thead><tr><th>Data</th><th>Where and for how long</th></tr></thead><tbody>
+<tr><td>Theme, timer, editor preferences and latest quiz</td><td>Browser storage until cleared or replaced</td></tr>
+<tr><td>Answers, current score and fetched explanations</td><td>Page memory for the current session</td></tr>
+<tr><td>Plain-text study material</td><td>Read in your browser; sent to AI only when you choose Create Quiz</td></tr>
+<tr><td>DOCX content</td><td>Read by the local launcher without contacting AI; extracted text stays in the page until generation</td></tr>
+<tr><td>API key</td><td>Page memory by default; optionally unencrypted browser storage when Remember on this device is enabled</td></tr>
+<tr><td>App shell</td><td>Service-worker cache for offline access; API responses and session tokens are excluded</td></tr>
+</tbody></table><p>An existing preference cookie may also retain a display or beta preference. Reset App clears EZ Quiz browser storage and caches; browser site-data controls can also clear cookies. Exported quiz files remain wherever you saved them.</p>
+<h2>When data leaves your computer</h2><p><strong>Create Quiz</strong> sends your topic, selected options, and relevant study text to your chosen provider through the local launcher. Source material may be split into batches. <strong>Explain</strong> sends the selected question, choices, and correct-answer context, without learner answers. <strong>Load models</strong> uses your key to retrieve available model IDs without submitting study text.</p><p>PDF and image extraction asks before sending the file to the chosen provider. Gemini handles PDFs; image support depends on the selected model. Text and DOCX extraction do not call an AI provider.</p><p>The local launcher forwards requests over HTTPS to <code>generativelanguage.googleapis.com</code> or <code>api.openai.com</code>. It does not write keys or study content to disk, log request bodies, or route requests through an EZ Quiz cloud server. No provider fallback occurs. The provider sees your API key, request, and connection metadata and applies its own billing and data policies.</p>
+<h2>Keys and the limits of local storage</h2><p>Remember on this device is off by default. Enabling it saves the key as readable text in this browser profile, not an encrypted vault. Code running in the app’s origin, browser extensions with sufficient access, and someone with access to the profile could read it. Use a dedicated key with limits supported by your provider.</p><p><strong>Forget key</strong> removes the saved key and clears it from this tab; other open tabs receive a storage-removal event. Changing providers also forgets the previous key. Forgetting a key does not revoke it at the provider or undo a request already sent. Revoke or rotate it in the provider console when needed.</p>
+<h2>Local access and offline use</h2><p>The launcher binds to <code>127.0.0.1</code>, checks the Host and Origin, requires a per-run request token, and serves only files under <code>public/</code>. Its content policy restricts the page’s network requests to the local origin. These controls do not protect a compromised device or malicious replacement of the application files.</p><p>Manual quiz practice works offline after the app shell has cached successfully. The local launcher is required for DOCX extraction and AI calls. Cloud AI additionally needs internet and a compatible provider account. Offline does not mean that cloud AI runs on your device.</p>
+<h2>ChatGPT plugin and older hosted editions</h2><p>The ChatGPT plugin is separate from the local launcher. Content explicitly sent to an EZ Quiz tool passes through the hosting service and ChatGPT’s infrastructure. The current plugin’s native quiz player uses questions authored by ChatGPT; older generation endpoints may call the configured AI provider. Hosting logs and platform retention follow those services’ policies.</p><p>Older hosted async generation can temporarily persist generation jobs and quiz material in its job store. The standalone edition does not use that store or those endpoints. Claims about local-only storage in this guide apply to the standalone path, not every historical deployment.</p>
+<h2>Feedback and external links</h2><p>Standalone feedback opens a draft in your email application; you choose whether to send it. Sent feedback may remain in the maintainer’s mailbox. Older hosted feedback forms use a server endpoint. Provider consoles, GitHub, ChatGPT, and the support link are external services with their own policies. Visiting the hosted website also creates ordinary hosting connection metadata.</p>
+<h2>Keep a copy and stay in control</h2><p>Use the app without AI, export your quizzes, forget a key, or clear site data. AI output can contain mistakes; check the questions and answers against your study material. The application’s local controls do not determine provider retention.</p><p>Provider references: <a href="https://ai.google.dev/gemini-api/docs/api-key">Gemini API key guidance</a>, <a href="https://ai.google.dev/gemini-api/terms">Gemini API terms</a>, and <a href="https://platform.openai.com/docs/guides/your-data">OpenAI API data controls</a>.</p><p>Questions or privacy requests: <a href="mailto:ez.quizapp@gmail.com">ez.quizapp@gmail.com</a>.</p><p><a href="./">Back to your quizzes →</a></p></main></body></html>

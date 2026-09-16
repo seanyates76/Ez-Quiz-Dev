@@ -1,3 +1,12 @@
+## 4.0.0 — Standalone preservation edition
+
+- Add a dependency-free local Node launcher and per-request Gemini/OpenAI BYOK.
+- Keep keys in memory by default with explicit remember/forget controls.
+- Preserve the quiz engine, source batching, difficulty guidance, review, and export.
+- Add local DOCX extraction, explicit PDF/image transfer confirmation, model discovery, and safe provider errors.
+- Refresh the landing page and provide direct no-key actions.
+- Update service-worker boundaries, local setup, privacy, security, and MIT-license documentation.
+
 Changelog
 =========
 
