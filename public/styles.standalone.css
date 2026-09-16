@@ -68,7 +68,6 @@ html[data-edition="standalone"][data-theme="light"] { --edition-gold:#956700; --
 .ai-fieldgroup { display:block; }
 .ai-fields { display:grid; grid-template-columns:1fr 1.5fr; gap:14px; }
 [data-edition="standalone"] .ai-fieldgroup label { display:flex; flex-direction:column; gap:7px; font-size:13px; margin-bottom:14px; }
-[data-edition="standalone"] .ai-fieldgroup .ai-remember { flex-direction:row; align-items:center; }
 .ai-fieldgroup input:not([type="checkbox"]), .ai-fieldgroup select { display:block; width:100%; min-width:0; min-height:42px; box-sizing:border-box; padding:10px; background:var(--surface-0); color:var(--text); border:1px solid var(--hairline); border-radius:8px; font:inherit; }
 .ai-actions { display:flex; flex-wrap:wrap; gap:8px; }
 #aiSettingsStatus { min-height:2.8em; line-height:1.5; }

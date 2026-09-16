@@ -19,7 +19,7 @@ The production mirror is a filtered mirror, not the main workshop.
 - Run `npm start` with Node 22+; no npm install is needed for this path.
 - `standalone/server.cjs` serves only public/ on 127.0.0.1 and proxies explicit per-request BYOK to fixed provider APIs.
 - `standalone/media.cjs` handles bounded local DOCX/text extraction.
-- `public/js/standalone.js` owns credential memory and explicit persistence, and exposes transport through the shared state.
+- `public/js/standalone.js` owns credentials in tab memory and non-secret provider/model preferences, and exposes transport through the shared state.
 - The index selects standalone mode; hosted generation and the ChatGPT MCP integration remain separate legacy paths.
 - Test with `npm ci && npm test`. No real provider calls or keys belong in tests.
 - Keep runtime code free of npm-only dependencies and preserve Host, Origin, request-token, CSP, error-redaction, and cache boundaries.

@@ -1,17 +1,15 @@
 import { S } from './state.js';
 const CONFIG_KEY = 'ezq.ai.config';
-const SECRET_KEY = 'ezq.ai.key';
+const LEGACY_SECRET_KEY = 'ezq.ai.key';
 const DEFAULTS = { gemini: 'gemini-3.5-flash-lite', openai: 'gpt-4.1-mini' };
 let apiKey = '';
 let config = { provider: 'gemini', model: DEFAULTS.gemini };
 let token = '';
 export function forgetKey() {
   apiKey = '';
-  try { localStorage.removeItem(SECRET_KEY); } catch {}
+  try { localStorage.removeItem(LEGACY_SECRET_KEY); } catch {}
   const field = document.getElementById('aiKey');
   if (field) field.value = '';
-  const remember = document.getElementById('aiRemember');
-  if (remember) remember.checked = false;
   reflectConnection();
 }
 function reflectConnection() {
@@ -69,14 +67,16 @@ export function wireStandalone() {
       return localRequest('/api/import', payload, { ...options, needsKey });
     },
   };
+  apiKey = '';
+  // Remove keys saved by early previews; credentials are never restored from storage.
+  try { localStorage.removeItem(LEGACY_SECRET_KEY); } catch {}
   try {
     const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
     if (saved && Object.hasOwn(DEFAULTS, saved.provider)) config = { provider: saved.provider, model: String(saved.model || DEFAULTS[saved.provider]) };
-    apiKey = localStorage.getItem(SECRET_KEY) || '';
   } catch {}
   const $ = id => document.getElementById(id);
-  const provider = $('aiProvider'), model = $('aiModel'), key = $('aiKey'), remember = $('aiRemember'), status = $('aiSettingsStatus');
-  provider.value = config.provider; model.value = config.model; key.value = apiKey; remember.checked = !!apiKey;
+  const provider = $('aiProvider'), model = $('aiModel'), key = $('aiKey'), status = $('aiSettingsStatus');
+  provider.value = config.provider; model.value = config.model; key.value = apiKey;
   function updateKeyLink() {
     const gemini = provider.value === 'gemini';
     $('aiKeyLink').href = gemini ? 'https://aistudio.google.com/api-keys' : 'https://platform.openai.com/api-keys';
@@ -85,23 +85,16 @@ export function wireStandalone() {
   function save() {
     config = { provider: provider.value, model: model.value.trim() || DEFAULTS[provider.value] };
     apiKey = key.value.trim();
-    let persisted = false;
-    try {
-      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
-      if (remember.checked && apiKey) { localStorage.setItem(SECRET_KEY, apiKey); persisted = true; }
-      else localStorage.removeItem(SECRET_KEY);
-    } catch {}
+    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch {}
     model.value = config.model; reflectConnection();
-    status.textContent = !apiKey ? 'No key saved. The demo and editor are ready to use.' : persisted ? 'Saved on this browser profile. Use Forget key to remove it.' : 'Key ready for this tab only. It will be forgotten when the page closes or reloads.';
+    status.textContent = !apiKey ? 'No key set. The demo and editor are ready to use.' : 'Key ready for this tab only. It will be forgotten when the page closes or reloads.';
   }
   provider.addEventListener('change', () => {
     forgetKey(); config = { provider: provider.value, model: DEFAULTS[provider.value] }; model.value = config.model;
     $('aiModels').replaceChildren(); updateKeyLink(); save();
   });
   $('aiSave').addEventListener('click', save);
-  $('aiForget').addEventListener('click', () => { forgetKey(); status.textContent = 'Key forgotten from this tab and browser storage.'; });
-  remember.addEventListener('change', () => { if (!remember.checked) { try { localStorage.removeItem(SECRET_KEY); } catch {} } });
-  window.addEventListener('storage', event => { if (event.key === SECRET_KEY && !event.newValue) { apiKey = ''; key.value = ''; remember.checked = false; reflectConnection(); } });
+  $('aiForget').addEventListener('click', () => { forgetKey(); status.textContent = 'Key forgotten from this tab.'; });
   $('aiLoadModels').addEventListener('click', async () => {
     save(); const button = $('aiLoadModels'); button.disabled = true; status.textContent = 'Checking access and loading model IDs…';
     try {
@@ -124,7 +117,7 @@ export function wireStandalone() {
   $('quickExportBtn')?.addEventListener('click', () => $('exportTxtBtn').click());
   updateKeyLink(); reflectConnection();
   if (!localOrigin()) {
-    for (const id of ['aiProvider', 'aiModel', 'aiKey', 'aiRemember', 'aiSave', 'aiLoadModels']) $(id).disabled = true;
+    for (const id of ['aiProvider', 'aiModel', 'aiKey', 'aiSave', 'aiLoadModels']) $(id).disabled = true;
     status.textContent = 'Download and run the local edition to add a key. This web copy supports manual quizzes and the demo.';
   }
 }

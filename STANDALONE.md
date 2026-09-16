@@ -21,7 +21,7 @@ Open http://127.0.0.1:8787 and leave the terminal open. Stop with Ctrl+C. **No n
 - **Create Quiz:** optional Gemini or OpenAI generation through your local launcher.
 - **Results:** review, explain on demand, or retake missed questions.
 
-Settings contains the provider, model ID, and API key. Keys stay in the current tab unless **Remember on this device** is checked. Saving a key makes no provider call. Load models checks access and retrieves model IDs. Choose a model that supports the required text or image input; listing a model does not guarantee every feature.
+Settings contains the provider, model ID, and API key. Keys stay only in the current tab’s memory and are forgotten when you close or reload the page. Choosing Use this key makes no provider call. Load models checks access and retrieves model IDs. Choose a model that supports the required text or image input; listing a model does not guarantee every feature.
 
 [Gemini key console](https://aistudio.google.com/api-keys) · [OpenAI key console](https://platform.openai.com/api-keys)
 
@@ -46,7 +46,7 @@ Export important quizzes. Local storage can be cleared, and current answers/expl
 
 The launcher binds only to 127.0.0.1, checks Host/Origin, uses a per-process request token, and serves only public assets. Provider URLs are fixed. Keys travel in HTTPS headers to the selected provider and are not logged or written by the launcher. No hosted fallback is used.
 
-Remembered keys are **unencrypted browser storage**, not an OS credential vault. Forget key clears browser persistence and this tab; reset clears EZ Quiz data. Neither revokes the provider key. Other local code, browser extensions, or a compromised machine can defeat these boundaries.
+EZ Quiz does not save keys to browser storage. Forget key clears the key from this tab; reset also clears EZ Quiz data. Other tabs have independent keys. Neither action revokes the provider key. Same-origin code, sufficiently privileged browser extensions, or a compromised machine can access a key while it is in use.
 
 See [SECURITY.md](SECURITY.md) and [the complete data guide](public/privacy.html). The separate ChatGPT plugin and historical hosted generation infrastructure have different data paths.
 

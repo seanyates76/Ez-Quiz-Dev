@@ -179,7 +179,7 @@ describe('public/index.html structure', () => {
       expect(document.getElementById(id).tagName).toBe('BUTTON');
     });
     expect(document.getElementById('aiKey').type).toBe('password');
-    expect(document.getElementById('aiRemember').checked).toBe(false);
+    expect(document.getElementById('aiRemember')).toBeNull();
     expect(document.getElementById('aiSettingsStatus').getAttribute('role')).toBe('status');
     expect(readFile('public/styles.standalone.css')).toContain('@media (max-width:760px)');
   });

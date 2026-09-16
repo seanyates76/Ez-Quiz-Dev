@@ -17,23 +17,31 @@ beforeEach(async () => {
 });
 afterEach(() => { delete global.fetch; delete window.__EZQ__; delete document.documentElement.dataset.edition; });
 const el = id => document.getElementById(id);
-test('a key is memory-only by default and explicit remember/forget owns persistence', () => {
+test('keys stay in memory and forget prevents further provider requests', async () => {
+  global.fetch = jest.fn();
   el('aiKey').value = 'test-key-not-a-real-secret';
   el('aiSave').click();
   expect(localStorage.getItem('ezq.ai.key')).toBeNull();
   expect(el('aiConnectionStatus').textContent).toContain('key ready');
   expect(localStorage.getItem('ezq.ai.config')).not.toContain('test-key');
-  el('aiRemember').checked = true;
-  el('aiSave').click();
-  expect(localStorage.getItem('ezq.ai.key')).toBe('test-key-not-a-real-secret');
+  expect(Object.values(localStorage).join(' ')).not.toContain('test-key-not-a-real-secret');
+  expect(Object.values(sessionStorage).join(' ')).not.toContain('test-key-not-a-real-secret');
   el('aiForget').click();
+  expect(localStorage.getItem('ezq.ai.key')).toBeNull();
+  expect(el('aiKey').value).toBe('');
+  expect(el('aiConnectionStatus').textContent).toContain('Add your key');
+  await expect(api.localRequest('/api/generate', { topic: 'test' })).rejects.toThrow('Add your API key');
+  expect(fetch).not.toHaveBeenCalled();
+});
+test('startup removes a saved preview key without restoring it', () => {
+  localStorage.setItem('ezq.ai.key', 'old-preview-key');
+  api.wireStandalone();
   expect(localStorage.getItem('ezq.ai.key')).toBeNull();
   expect(el('aiKey').value).toBe('');
   expect(el('aiConnectionStatus').textContent).toContain('Add your key');
 });
 test('changing provider forgets the previous provider key', () => {
   el('aiKey').value = 'test-key';
-  el('aiRemember').checked = true;
   el('aiSave').click();
   el('aiProvider').value = 'openai';
   el('aiProvider').dispatchEvent(new Event('change'));

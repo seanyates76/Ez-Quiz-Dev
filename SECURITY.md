@@ -11,13 +11,14 @@ EZ Quiz 4.0 adds a local standalone path. The latest main remains the developmen
 - Only public/ files are served, with path and realpath checks. Repository files and environment secrets are outside that root.
 - CSP restricts browser connections to the local origin; code and assets are local. No remote donation image is loaded.
 - The Node launcher contacts only fixed Gemini/OpenAI HTTPS API endpoints. Provider redirects are rejected.
+- The browser keeps keys only in tab memory, without localStorage or sessionStorage persistence. Closing or reloading the page forgets them.
 - Provider keys are per-request, never process-global environment variables. Errors do not echo provider bodies, headers, URLs, or thrown messages that may contain keys.
 - Request bodies, source text, file sizes, DOCX expansion, concurrency, and provider time are bounded.
 - The service worker caches known static assets only. API responses, including local session tokens, are excluded.
 
 ## What these controls do not promise
 
-Remember on this device stores a readable key in browser localStorage. It is opt-in and is not an encrypted credential vault. Same-origin script, sufficiently privileged extensions, a modified application, malware, or access to the browser profile may expose it.
+Keeping a key in tab memory limits persistence; it does not isolate the key from same-origin script, sufficiently privileged extensions, a modified application, or malware while it is in use. Forget key clears this tab only. Other open tabs hold their own independent keys.
 
 Forgetting a key does not revoke it upstream or recall a request already sent. Stopping generation does not guarantee that the provider stops billing work already accepted. Provider policies govern remote retention. Model output is untrusted text, not authoritative study material.
 

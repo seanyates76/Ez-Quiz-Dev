@@ -60,7 +60,7 @@
           </ol>
         </div>
         <div id="landingPanelSoon" class="preview-panel" role="tabpanel" aria-labelledby="landingTabSoon" data-preview-panel="1" hidden>
-          <h2 class="preview-heading">A clear boundary.</h2><p>Your practice, results, and text imports stay on your device. AI requests go through your local launcher to the provider you choose.</p><p>Your key stays in memory unless you choose to remember it. No EZ Quiz account, analytics, or hosted AI relay.</p><a href="privacy.html">Read the data guide →</a>
+          <h2 class="preview-heading">A clear boundary.</h2><p>Your practice, results, and text imports stay on your device. AI requests go through your local launcher to the provider you choose.</p><p>Your key stays in this tab’s memory and is forgotten when you close or reload the page. No EZ Quiz account, analytics, or hosted AI relay.</p><a href="privacy.html">Read the data guide →</a>
         </div>
         <div id="landingPanelTips" class="preview-panel" role="tabpanel" aria-labelledby="landingTabTips" data-preview-panel="2" hidden>
           <h2 class="preview-heading">Start with a little curiosity.</h2><p>Try the demo below, or open the editor and make a quiz by hand. Neither needs a key.</p><p>For AI, <a href="standalone.html">download and run the local edition</a>, add your key in Settings, and choose Create Quiz. Start Quiz begins your practice.</p>
@@ -540,11 +540,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
             <label for="aiModel">Model<input id="aiModel" type="text" list="aiModels" autocomplete="off" spellcheck="false" /><datalist id="aiModels"></datalist></label>
           </div>
           <label for="aiKey">API key<input id="aiKey" type="password" autocomplete="off" spellcheck="false" autocapitalize="none" aria-describedby="aiKeyHelp" placeholder="Paste your own API key" /></label>
-          <p id="aiKeyHelp" class="muted small">Kept in this tab by default. Remembering saves it unencrypted in this browser profile; other code or extensions with access to the profile may read it.</p>
-          <label class="ai-remember"><input id="aiRemember" type="checkbox" /> <span>Remember on this device</span></label>
+          <p id="aiKeyHelp" class="muted small">Kept only in this tab’s memory. EZ Quiz does not save your key to browser storage. Closing or reloading the page forgets it.</p>
           <div class="ai-actions"><button id="aiSave" class="btn primary" type="button">Use this key</button><button id="aiLoadModels" class="btn" type="button">Load models</button><button id="aiForget" class="btn btn-ghost" type="button">Forget key</button></div>
           <p class="small"><a id="aiKeyLink" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Get a Gemini API key</a> · <a href="privacy.html">How your data is handled</a></p>
-          <p id="aiSettingsStatus" class="small" role="status" aria-live="polite">Saving a key does not contact the provider. Load models checks access without generating a quiz.</p>
+          <p id="aiSettingsStatus" class="small" role="status" aria-live="polite">Choosing Use this key does not contact the provider. Load models checks access without generating a quiz.</p>
         </fieldset>
 
         <fieldset class="fieldgroup">
@@ -598,7 +597,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <h4>v4.0.0</h4>
           <ul>
             <li>Standalone edition: launch locally with Node.js, without an install step or a hosted AI service.</li>
-            <li>Bring your Gemini or OpenAI key. Keep it in memory, or explicitly remember it on this device.</li>
+            <li>Bring your Gemini or OpenAI key. It stays in the current tab’s memory.</li>
             <li>Demo, manual editing, imports, export, practice, and review stay close at hand.</li>
             <li>Local DOCX extraction, provider model selection, and clear privacy documentation.</li>
             <li>The original EZ Quiz identity, preserved in a calmer desktop and mobile layout.</li>
@@ -682,7 +681,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       </header>
       <div class="modal__body">
         <p>Practice, scoring, manual quizzes, and text imports run on your device. EZ Quiz includes no analytics, advertising trackers, or accounts.</p>
-        <h4>Your API key</h4><p>Keys stay in this tab unless you choose “Remember on this device,” which stores the key unencrypted in your browser profile. Forget key removes it; Reset App clears EZ Quiz data.</p>
+        <h4>Your API key</h4><p>Keys stay in this tab’s memory. EZ Quiz never saves them to browser storage. Forget key, closing the page, or reloading clears the key from this tab; Reset App also clears EZ Quiz data.</p>
         <h4>When you use AI</h4><p>The local launcher sends the requested topic, study text, or question to your selected provider over HTTPS. PDF and image extraction asks before sending the file. The provider receives your key and request and applies its own data and billing policies.</p>
         <h4>Keeping your work</h4><p>Your latest quiz is saved locally. Export .txt for a durable copy. In-progress answers and explanations are kept in memory, not backed up.</p>
         <p><a href="privacy.html">Full privacy and data guide →</a></p>

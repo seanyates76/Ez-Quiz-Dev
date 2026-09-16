@@ -22,7 +22,7 @@ Open http://127.0.0.1:8787. No npm install, account, database, or Netlify setup 
 - Local text and DOCX imports; optional AI extraction of PDFs/images with confirmation.
 - Browser-local preferences and last quiz, with portable .txt exports.
 
-Your key stays in memory by default. Remember on this device stores it unencrypted in your browser profile; Forget key removes it. Provider charges and policies apply to AI use.
+Your key stays only in the current tab’s memory. Forget key, closing the page, or reloading clears it from that tab. EZ Quiz does not save it to browser storage. Provider charges and policies apply to AI use.
 
 Read [the standalone guide](STANDALONE.md), [privacy/data details](public/privacy.html), and [security boundaries](SECURITY.md). Manual practice works offline after shell caching; cloud AI requires the local launcher, internet, and a compatible provider account.
 
