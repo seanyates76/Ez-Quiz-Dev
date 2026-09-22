@@ -129,12 +129,13 @@ describe('landing intro shell', () => {
     expect(document.activeElement).toBe(toggle);
   });
 
-  test('standalone intro explains the product, data boundary, and no-key path', async () => {
+  test('standalone shell keeps direct no-key actions and AI setup guidance', async () => {
     const doc = await loadDocument('public/index.html');
-    expect(doc.querySelectorAll('.edition-features li')).toHaveLength(3);
-    expect(doc.getElementById('landingPanelSoon').textContent).toContain('local launcher');
-    expect(doc.getElementById('landingPanelTips').textContent).toContain('Neither needs a key');
-    expect(doc.getElementById('landingPanelTips').querySelector('a').getAttribute('href')).toBe('standalone.html');
+    for (const id of ['quickDemoBtn', 'quickEditorBtn', 'quickLoadBtn']) {
+      expect(doc.getElementById(id)).not.toBeNull();
+    }
+    expect(doc.querySelector('.ai-fieldgroup').textContent).toContain('local edition');
+    expect(doc.querySelector('.ai-fieldgroup a').getAttribute('href')).toBe('standalone.html');
   });
 
   test('stored never preference hides the shell on init', () => {

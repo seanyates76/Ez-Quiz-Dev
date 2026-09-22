@@ -1,6 +1,6 @@
 {
   "name": "ez-quiz-app",
-  "version": "4.0.0",
+  "version": "3.6.0",
   "private": true,
   "license": "MIT",
   "description": "Standalone BYOK quiz app, with preserved Netlify and ChatGPT integrations",

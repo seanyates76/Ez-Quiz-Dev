@@ -147,7 +147,7 @@ function createLocalServer({ fetchImpl = fetch } = {}) {
     try {
       if (req.headers.host !== host || (req.headers.origin && req.headers.origin !== origin) || req.headers['sec-fetch-site'] === 'cross-site') throw failure('Local access only. Open the address printed by the launcher.', 403);
       const url = new URL(req.url, origin);
-      if (url.pathname === '/api/session' && req.method === 'GET') { json(200, { token, version: '4.0.0' }); return; }
+      if (url.pathname === '/api/session' && req.method === 'GET') { json(200, { token, version: '3.6.0' }); return; }
       if (url.pathname.startsWith('/api/')) {
         const supplied = Buffer.from(String(req.headers['x-ezq-token'] || ''));
         if (req.method !== 'POST' || req.headers.origin !== origin || supplied.length !== token.length || !timingSafeEqual(supplied, Buffer.from(token))) throw failure('Reload EZ Quiz to reconnect to the local launcher.', 403);
@@ -184,7 +184,7 @@ if (require.main === module) {
   else {
     const server = createLocalServer();
     server.on('error', err => { process.stderr.write(err.code === 'EADDRINUSE' ? 'Port ' + port + ' is in use. Set EZQ_PORT to another port.\n' : 'Could not start EZ Quiz.\n'); process.exitCode = 1; });
-    server.listen(port, '127.0.0.1', () => process.stdout.write('\nEZ Quiz 4.0 · Standalone\nOpen http://127.0.0.1:' + port + '\nKeep this window open. Press Ctrl+C to stop.\n\n'));
+    server.listen(port, '127.0.0.1', () => process.stdout.write('\nEZ Quiz · Standalone preview\nOpen http://127.0.0.1:' + port + '\nKeep this window open. Press Ctrl+C to stop.\n\n'));
   }
 }
 module.exports = { createLocalServer, handleApi, credentials };

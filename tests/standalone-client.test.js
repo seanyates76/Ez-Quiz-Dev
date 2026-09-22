@@ -17,28 +17,27 @@ beforeEach(async () => {
 });
 afterEach(() => { delete global.fetch; delete window.__EZQ__; delete document.documentElement.dataset.edition; });
 const el = id => document.getElementById(id);
-test('keys stay in memory and forget prevents further provider requests', async () => {
+test('keys are saved by default and forget prevents further provider requests', async () => {
   global.fetch = jest.fn();
   el('aiKey').value = 'test-key-not-a-real-secret';
   el('aiSave').click();
-  expect(localStorage.getItem('ezq.ai.key')).toBeNull();
+  expect(localStorage.getItem('ezq.ai.key')).toBe('test-key-not-a-real-secret');
   expect(el('aiConnectionStatus').textContent).toContain('key ready');
   expect(localStorage.getItem('ezq.ai.config')).not.toContain('test-key');
-  expect(Object.values(localStorage).join(' ')).not.toContain('test-key-not-a-real-secret');
   expect(Object.values(sessionStorage).join(' ')).not.toContain('test-key-not-a-real-secret');
   el('aiForget').click();
   expect(localStorage.getItem('ezq.ai.key')).toBeNull();
   expect(el('aiKey').value).toBe('');
-  expect(el('aiConnectionStatus').textContent).toContain('Add your key');
+  expect(el('aiConnectionStatus').textContent).toContain('Set up AI');
   await expect(api.localRequest('/api/generate', { topic: 'test' })).rejects.toThrow('Add your API key');
   expect(fetch).not.toHaveBeenCalled();
 });
-test('startup removes a saved preview key without restoring it', () => {
+test('startup restores the saved key', () => {
   localStorage.setItem('ezq.ai.key', 'old-preview-key');
   api.wireStandalone();
-  expect(localStorage.getItem('ezq.ai.key')).toBeNull();
-  expect(el('aiKey').value).toBe('');
-  expect(el('aiConnectionStatus').textContent).toContain('Add your key');
+  expect(localStorage.getItem('ezq.ai.key')).toBe('old-preview-key');
+  expect(el('aiKey').value).toBe('old-preview-key');
+  expect(el('aiConnectionStatus').textContent).toContain('key ready');
 });
 test('changing provider forgets the previous provider key', () => {
   el('aiKey').value = 'test-key';
@@ -83,4 +82,24 @@ test('cancelled batching preserves accepted questions and does not start another
   expect(out.completedCount).toBe(5);
   expect(request).toHaveBeenCalledTimes(2);
   expect(progress).toHaveBeenCalledWith(5);
+});
+
+test('single-visit mode removes a saved key and does not restore it', () => {
+  el('aiKey').value = 'test-key';
+  el('aiSave').click();
+  el('aiRemember').checked = false;
+  el('aiSave').click();
+  expect(localStorage.getItem('ezq.ai.key')).toBeNull();
+  expect(el('aiConnectionStatus').textContent).toContain('key ready');
+  expect(el('aiSettingsStatus').textContent).toBe('Key ready for this visit.');
+  api.wireStandalone();
+  expect(el('aiKey').value).toBe('');
+});
+test('unavailable storage reports single-visit use rather than claiming a save', () => {
+  const storage = jest.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('Blocked'); });
+  el('aiKey').value = 'test-key';
+  el('aiSave').click();
+  expect(el('aiSettingsStatus').textContent).toContain('storage is unavailable');
+  expect(el('aiConnectionStatus').textContent).toContain('key ready');
+  storage.mockRestore();
 });

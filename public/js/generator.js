@@ -9,14 +9,14 @@ import {
   startAsyncGeneration,
   stopAsyncGeneration,
   triggerAsyncGeneration,
-} from './api.js?v=4.0.0';
+} from './api.js?v=standalone-ui-1';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=4.0.0';
-import { buildGeneratorPayload } from './generator-payload.js?v=4.0.0';
-import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=4.0.0';
+import { announce } from './a11y-announcer.js?v=standalone-ui-1';
+import { buildGeneratorPayload } from './generator-payload.js?v=standalone-ui-1';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=standalone-ui-1';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
 
@@ -1535,6 +1535,8 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     const label = DIFFICULTY_LABELS[DIFFICULTY_VALUES[idx]];
     difficultySlider.setAttribute('aria-valuetext', label);
     difficultySlider.setAttribute('title', label);
+    const visibleLabel = $('difficultyLabel');
+    if(visibleLabel) visibleLabel.textContent = label;
   }
   function getDifficultyKey(){
     if(!difficultySlider) return 'medium';

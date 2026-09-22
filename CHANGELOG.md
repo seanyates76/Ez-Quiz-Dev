@@ -1,7 +1,7 @@
-## 4.0.0 — Standalone preservation edition
+## Unreleased — Standalone preview
 
 - Add a dependency-free local Node launcher and per-request Gemini/OpenAI BYOK.
-- Keep keys only in tab memory with an explicit Forget key control; no browser credential storage.
+- Remember keys on this device by default, with use-without-saving and Forget key controls.
 - Preserve the quiz engine, source batching, difficulty guidance, review, and export.
 - Add local DOCX extraction, explicit PDF/image transfer confirmation, model discovery, and safe provider errors.
 - Refresh the landing page and provide direct no-key actions.

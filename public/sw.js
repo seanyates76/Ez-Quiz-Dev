@@ -1,6 +1,6 @@
 /* Cache only the app shell. Credentials and API responses never enter this cache. */
-const ASSET_VERSION = '4.0.0';
-const CACHE_NAME = 'ezq-standalone-v4-memory';
+const ASSET_VERSION = 'standalone-ui-1';
+const CACHE_NAME = 'ezq-standalone-ui-1';
 const MODULES = ["theme-preload.js","boot-beta.js","main.js","landing-intro.js","auto-refresh.js","patches.js","editor.gui.js","generator.js","generator-payload.js","source-sections.js","a11y-announcer.js","api.js","explain-api.js","state.js","utils.js","parser.js","veil.js","settings.js","modals.js","quiz.js","beta.mjs","flags.js","settings.beta.js","import-controller.js","file-type-validation.js","media-import-constraints.js","drag-drop.js","standalone.js"];
 const STYLES = ['styles.css', 'styles.tokens.css', 'styles.backdrop.css', 'styles.standalone.css'];
 const STATIC_PATHS = [
@@ -11,7 +11,7 @@ const STATIC_PATHS = [
 ];
 const cacheUrl = p => new URL(p, self.registration.scope).href;
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_PATHS.map(cacheUrl))));
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_PATHS.map(p => new Request(cacheUrl(p), { cache: 'reload' })))));
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(names => Promise.all(names.filter(n => n.startsWith('ezq-') && n !== CACHE_NAME).map(n => caches.delete(n)))).then(() => self.clients.claim()));
@@ -26,7 +26,9 @@ self.addEventListener('fetch', event => {
   if(event.request.mode === 'navigate') {
     event.respondWith(fetch(event.request).catch(async () => {
       const cache = await caches.open(CACHE_NAME);
-      return await cache.match(event.request, { ignoreSearch: true }) || await cache.match(cacheUrl('index.html')) || Response.error();
+      const page = url.pathname.split('/').pop() || 'index';
+      const documentPath = /^(index|standalone|privacy|terms)$/.test(page) ? page + '.html' : null;
+      return await cache.match(event.request, { ignoreSearch: true }) || (documentPath && await cache.match(cacheUrl(documentPath))) || await cache.match(cacheUrl('index.html')) || Response.error();
     }));
     return;
   }

@@ -1,20 +1,20 @@
 import { S } from './state.js';
 const CONFIG_KEY = 'ezq.ai.config';
-const LEGACY_SECRET_KEY = 'ezq.ai.key';
+const SECRET_KEY = 'ezq.ai.key';
 const DEFAULTS = { gemini: 'gemini-3.5-flash-lite', openai: 'gpt-4.1-mini' };
 let apiKey = '';
 let config = { provider: 'gemini', model: DEFAULTS.gemini };
 let token = '';
 export function forgetKey() {
   apiKey = '';
-  try { localStorage.removeItem(LEGACY_SECRET_KEY); } catch {}
+  try { localStorage.removeItem(SECRET_KEY); } catch {}
   const field = document.getElementById('aiKey');
   if (field) field.value = '';
   reflectConnection();
 }
 function reflectConnection() {
   const label = document.getElementById('aiConnectionStatus');
-  if (label) label.textContent = apiKey ? (config.provider === 'gemini' ? 'Gemini' : 'OpenAI') + ' key ready' : 'AI is optional · Add your key';
+  if (label) label.textContent = !localOrigin() ? 'AI setup' : apiKey ? (config.provider === 'gemini' ? 'Gemini' : 'OpenAI') + ' key ready' : 'Set up AI';
 }
 function localOrigin() { return location.protocol === 'http:' && location.hostname === '127.0.0.1'; }
 async function localRequest(route, payload, { signal, needsKey = true } = {}) {
@@ -68,8 +68,9 @@ export function wireStandalone() {
     },
   };
   apiKey = '';
-  // Remove keys saved by early previews; credentials are never restored from storage.
-  try { localStorage.removeItem(LEGACY_SECRET_KEY); } catch {}
+  if (localOrigin()) {
+    try { apiKey = localStorage.getItem(SECRET_KEY) || ''; } catch {}
+  }
   try {
     const saved = JSON.parse(localStorage.getItem(CONFIG_KEY) || 'null');
     if (saved && Object.hasOwn(DEFAULTS, saved.provider)) config = { provider: saved.provider, model: String(saved.model || DEFAULTS[saved.provider]) };
@@ -85,16 +86,27 @@ export function wireStandalone() {
   function save() {
     config = { provider: provider.value, model: model.value.trim() || DEFAULTS[provider.value] };
     apiKey = key.value.trim();
-    try { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); } catch {}
+    let saved = false;
+    try {
+      localStorage.setItem(CONFIG_KEY, JSON.stringify(config));
+      if (apiKey && $('aiRemember').checked) {
+        localStorage.setItem(SECRET_KEY, apiKey);
+        saved = true;
+      } else localStorage.removeItem(SECRET_KEY);
+    } catch {
+      model.value = config.model; reflectConnection();
+      status.textContent = 'Browser storage is unavailable. Your key works for this visit.';
+      return;
+    }
     model.value = config.model; reflectConnection();
-    status.textContent = !apiKey ? 'No key set. The demo and editor are ready to use.' : 'Key ready for this tab only. It will be forgotten when the page closes or reloads.';
+    status.textContent = !apiKey ? 'No key set. The demo and editor are ready to use.' : saved ? 'Settings saved.' : 'Key ready for this visit.';
   }
   provider.addEventListener('change', () => {
     forgetKey(); config = { provider: provider.value, model: DEFAULTS[provider.value] }; model.value = config.model;
     $('aiModels').replaceChildren(); updateKeyLink(); save();
   });
   $('aiSave').addEventListener('click', save);
-  $('aiForget').addEventListener('click', () => { forgetKey(); status.textContent = 'Key forgotten from this tab.'; });
+  $('aiForget').addEventListener('click', () => { forgetKey(); status.textContent = 'Key removed.'; });
   $('aiLoadModels').addEventListener('click', async () => {
     save(); const button = $('aiLoadModels'); button.disabled = true; status.textContent = 'Checking access and loading model IDs…';
     try {

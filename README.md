@@ -1,7 +1,7 @@
 Ez-Quiz Dev
 ===========
 
-**EZ Quiz 4.0: standalone preservation edition.** Run `npm start` with Node.js 22+; no install step is needed for the local app. Optional AI uses your own Gemini or OpenAI key. Start with [STANDALONE.md](STANDALONE.md) for setup, features, data handling, and limits.
+**EZ Quiz: standalone preservation edition.** Run `npm start` with Node.js 22+; no install step is needed for the local app. Optional AI uses your own Gemini or OpenAI key. Start with [STANDALONE.md](STANDALONE.md) for setup, features, data handling, and limits.
 
 The existing Netlify and ChatGPT plugin code is retained as a separate integration. The full-stack development commands below still apply to that path.
 

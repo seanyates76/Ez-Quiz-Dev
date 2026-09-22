@@ -3,9 +3,9 @@ import { wireStandalone } from './standalone.js';
 import { $, byQSA, showUpdateBannerIfReady } from './utils.js';
 import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel } from './settings.js';
 import { wireModals } from './modals.js';
-import { wireGenerator } from './generator.js?v=4.0.0';
-import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=4.0.0';
-import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=4.0.0';
+import { wireGenerator } from './generator.js?v=standalone-ui-1';
+import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=standalone-ui-1';
+import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=standalone-ui-1';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
 function debugLog(message){
@@ -74,23 +74,23 @@ function init(){
   wireResultsControls();
 
   (function hydrateVersionDetails(){
-    const PRODUCTION_VERSION = 'v4.0.0';
+    const PRODUCTION_VERSION = 'v3.6.0';
     const versionCopy = document.querySelector('[data-version-copy]');
     const modeLabel = versionCopy?.querySelector('[data-version-mode]') || null;
     const versionLabel = versionCopy?.querySelector('[data-version-label]') || null;
     const versionLink = document.getElementById('versionInfoBtn');
     const releaseBody = document.querySelector('#releaseNotesModal .modal__body');
     const sections = releaseBody ? Array.from(releaseBody.querySelectorAll('section')) : [];
-    const productionSection = sections.find(section => section.classList.contains('release-notes--production')) || sections[0];
+    const productionSection = sections.find(section => section.classList.contains('release-notes--production'));
     const productionVersion = productionSection?.querySelector('h4')?.textContent?.trim() || PRODUCTION_VERSION;
 
     function applyVersion(mode, version){
       if(modeLabel){ modeLabel.textContent = mode; }
       if(versionLabel){ versionLabel.textContent = version; }
-      if(versionLink){ versionLink.textContent = version; }
+      if(versionLink){ versionLink.textContent = S.standalone ? 'What’s new' : version; }
     }
 
-    applyVersion(S.standalone ? 'Standalone' : 'Production', productionVersion);
+    applyVersion(S.standalone ? 'Standalone preview' : 'Production', productionVersion);
 
   })();
 
