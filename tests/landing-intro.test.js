@@ -129,27 +129,13 @@ describe('landing intro shell', () => {
     expect(document.activeElement).toBe(toggle);
   });
 
-  test('landing intro copy keeps what’s new, roadmap, and tips separate', async () => {
+  test('standalone shell keeps direct no-key actions and AI setup guidance', async () => {
     const doc = await loadDocument('public/index.html');
-    const newPanel = doc.getElementById('landingPanelNew');
-    const soonPanel = doc.getElementById('landingPanelSoon');
-    const tipsPanel = doc.getElementById('landingPanelTips');
-
-    expect(newPanel.querySelectorAll('.landing-feature-card')).toHaveLength(6);
-    expect(newPanel.textContent).toContain('Up to 50 questions');
-    expect(newPanel.textContent).toContain('New generation status card');
-    expect(newPanel.textContent).not.toContain('Bring your own API key');
-
-    expect(soonPanel.textContent).toContain('Bring your own API key');
-    expect(soonPanel.textContent).toContain('Quiz sharing');
-    expect(soonPanel.textContent).not.toContain('Up to 50 questions');
-
-    const tips = Array.from(tipsPanel.querySelectorAll('.tips-list li')).map((item) => item.textContent.trim());
-    expect(tips).toEqual([
-      'Create builds the quiz. Start begins it.',
-      'Better study material makes better quizzes.',
-      'If a quiz feels too broad, use fewer questions or a smaller source.',
-    ]);
+    for (const id of ['quickDemoBtn', 'quickEditorBtn', 'quickLoadBtn']) {
+      expect(doc.getElementById(id)).not.toBeNull();
+    }
+    expect(doc.querySelector('.ai-fieldgroup').textContent).toContain('local edition');
+    expect(doc.querySelector('.ai-fieldgroup a').getAttribute('href')).toBe('standalone.html');
   });
 
   test('stored never preference hides the shell on init', () => {

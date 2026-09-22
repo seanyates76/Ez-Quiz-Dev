@@ -1,6 +1,10 @@
 Ez-Quiz Dev
 ===========
 
+**EZ Quiz: standalone preservation edition.** Run `npm start` with Node.js 22+; no install step is needed for the local app. Optional AI uses your own Gemini or OpenAI key. Start with [STANDALONE.md](STANDALONE.md) for setup, features, data handling, and limits.
+
+The existing Netlify and ChatGPT plugin code is retained as a separate integration. The full-stack development commands below still apply to that path.
+
 [![License](https://img.shields.io/github/license/seanyates76/Ez-Quiz-App)](LICENSE.txt)
 ![Mirror](https://img.shields.io/badge/Mirror-Ez--Quiz--App-blue)
 ![JavaScript](https://img.shields.io/badge/JavaScript-ES%20Modules-f7df1e?logo=javascript&logoColor=000&labelColor=f7df1e)

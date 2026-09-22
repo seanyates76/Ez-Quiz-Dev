@@ -14,6 +14,17 @@ It should stay practical, current, and boring in a good way.
 
 The production mirror is a filtered mirror, not the main workshop.
 
+## Standalone edition
+
+- Run `npm start` with Node 22+; no npm install is needed for this path.
+- `standalone/server.cjs` serves only public/ on 127.0.0.1 and proxies explicit per-request BYOK to fixed provider APIs.
+- `standalone/media.cjs` handles bounded local DOCX/text extraction.
+- `public/js/standalone.js` owns browser-local credentials (with a session-only option) and provider/model preferences, and exposes transport through the shared state.
+- The index selects standalone mode; hosted generation and the ChatGPT MCP integration remain separate legacy paths.
+- Test with `npm ci && npm test`. No real provider calls or keys belong in tests.
+- Keep runtime code free of npm-only dependencies and preserve Host, Origin, request-token, CSP, error-redaction, and cache boundaries.
+- See STANDALONE.md and SECURITY.md. Keep public-mirror/README.md as the reviewed source for manual public README promotion.
+
 ## Core architecture
 
 ### Front end

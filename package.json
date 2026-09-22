@@ -3,7 +3,7 @@
   "version": "3.6.0",
   "private": true,
   "license": "MIT",
-  "description": "Static PWA + Netlify Functions for EZ Quiz",
+  "description": "Standalone BYOK quiz app, with preserved Netlify and ChatGPT integrations",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules jest -i --passWithNoTests",
     "ui:check": "node ./scripts/ui-check.mjs",
@@ -13,7 +13,8 @@
     "fmt:write": "prettier -w . || true",
     "test:parser": "node ./tests/parser.corpus.mjs || echo Parser corpus missing",
     "reiterate": "node ../ezq-dev-tools/reiterate.mjs",
-    "sync:public": "./files/scripts/pull-public.sh"
+    "sync:public": "./files/scripts/pull-public.sh",
+    "start": "node standalone/server.cjs"
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",

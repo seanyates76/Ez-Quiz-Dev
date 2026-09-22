@@ -1,6 +1,6 @@
 import { S } from './state.js';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=1.5.45';
+import { requestLazyExplanation } from './explain-api.js?v=standalone-ui-1';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
@@ -84,7 +84,7 @@ export function renderCurrentQuestion(){
     html += `<div class="options"><label class="opt"><input type="radio" name="yn" data-bool="true" ${yChecked}/> Yes</label><label class="opt"><input type="radio" name="yn" data-bool="false" ${nChecked}/> No</label></div>`;
   } else if(q.type==='MT'){
     const user=Array.isArray(S.quiz.answers[S.quiz.index])?S.quiz.answers[S.quiz.index]:new Array(q.left.length).fill(-1);
-    html += `<div class="mtwrap">` + q.left.map((L,li)=>{ return `<div class="mtrow"><div class="mtleft">${escapeHTML(L)}</div><div class="mtright"><select data-li="${li}"><option value="">— choose —</option>${q.right.map((R,ri)=> `<option value="${ri}" ${user[li]===ri?'selected':''}>${String.fromCharCode(65+ri)}) ${escapeHTML(R)}</option>`).join('')}</select></div></div>`; }).join('') + `</div>`;
+    html += `<div class="mtwrap">` + q.left.map((L,li)=>{ return `<div class="mtrow"><div class="mtleft" id="mt-label-${li}">${escapeHTML(L)}</div><div class="mtright"><select data-li="${li}" aria-labelledby="mt-label-${li}"><option value="">— choose —</option>${q.right.map((R,ri)=> `<option value="${ri}" ${user[li]===ri?'selected':''}>${String.fromCharCode(65+ri)}) ${escapeHTML(R)}</option>`).join('')}</select></div></div>`; }).join('') + `</div>`;
   }
   html += `</div>`; questionHost.innerHTML = html;
   // Progressbar in the body
