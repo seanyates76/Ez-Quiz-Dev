@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Dependency Review
-        uses: actions/dependency-review-action@45529485b5eb76184ced07362d2331fd9d26f03f # v4
+        uses: actions/dependency-review-action@1e966ba708e4b64bb0c9bfb7abb5a232840be16a # v4
         with:
           fail-on-severity: high
           comment-summary-in-pr: true
