@@ -137,8 +137,11 @@ html[data-edition="standalone"] #startToolbarBtn[data-start-disabled="true"] { d
 html[data-edition="standalone"] .starter-tools .btn { min-height: 38px; font-size: 12px; font-weight: 500; padding: 8px 10px; border-color: transparent; background: transparent; }
 html[data-edition="standalone"] .starter-tools .btn:hover { background: var(--edition-field); }
 html[data-edition="standalone"] #quickDemoBtn { color: var(--edition-violet); background: color-mix(in srgb, var(--edition-violet) 9%, transparent); }
-html[data-edition="standalone"] #status[data-build-state="idle"] { display: none; }
-html[data-edition="standalone"] .build-status { max-width: none; margin: 18px 0 0; font-size: 13px; }
+html[data-edition="standalone"] .regen-hint { margin: 16px 0 0; padding: 0; font-size: 12px; }
+html[data-edition="standalone"] .build-status { max-width: none; margin: 18px 0 0; font-size: 13px; line-height: 1.5; }
+html[data-edition="standalone"] .build-status[data-build-state="idle"] {
+  padding: 0; border: 0; background: transparent; color: var(--muted);
+}
 html[data-edition="standalone"] .options-panel { border-top: 1px solid var(--hairline); margin-top: 20px; padding-top: 20px; }
 html[data-edition="standalone"] #quizView,
 html[data-edition="standalone"] #resultsView { margin-top: 24px; padding: 28px; border-radius: 18px; background: var(--edition-card); border-color: var(--edition-border); }
@@ -153,7 +156,16 @@ html[data-edition="standalone"] .footer-meta small { font-size: 11px; }
 html[data-edition="standalone"] .fab-stack { right: 16px; bottom: 16px; gap: 8px; z-index: 60; }
 html[data-edition="standalone"] .fab { box-sizing: border-box; justify-content: center; padding: 0; width: 44px; height: 44px; font-size: 19px; border: 1px solid var(--hairline); background: var(--edition-card); box-shadow: 0 3px 14px #0002; }
 html[data-edition="standalone"] .fab .fab-label { display: none; }
+html[data-edition="standalone"] .modal { z-index: 1000; }
 html[data-edition="standalone"] .modal__dialog { border-radius: 16px; border: 1px solid var(--hairline); }
+#settingsModal .modal__body { gap: 16px; padding: 20px; }
+#settingsModal .fieldgroup { min-width: 0; margin: 0; padding: 18px; border-radius: 12px; }
+#settingsModal .fieldgroup legend { padding-inline: 6px; font-weight: 600; }
+#settingsModal label[for="generationMode"],
+#settingsModal label[for="promptLimitChars"] { display: grid; gap: 8px; width: 100%; }
+#settingsModal label[for="generationMode"] select,
+#settingsModal label[for="promptLimitChars"] select { min-width: 0; box-sizing: border-box; }
+#settingsModal .fieldgroup > p { line-height: 1.55; }
 .ai-fieldgroup { display: block; }
 .ai-fields { display: grid; grid-template-columns: 1fr 1.5fr; gap: 14px; }
 html[data-edition="standalone"] .ai-fieldgroup label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; margin-bottom: 14px; }
@@ -198,7 +210,13 @@ html[data-edition="standalone"] :where(button,a,input,select,textarea):focus-vis
   html[data-edition="standalone"] .footer-links, .footer-source-links { justify-content: center; }
   html[data-edition="standalone"] .footer-meta { text-align: center; }
   .ai-fields { grid-template-columns: 1fr; gap: 0; }
+  #settingsModal .modal__body { padding: 14px; gap: 14px; }
+  #settingsModal .fieldgroup { padding: 14px; }
   html[data-edition="standalone"] #quizView, html[data-edition="standalone"] #resultsView { padding: 18px; }
 }
 @media (max-width: 359px) { .edition-label { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+/* Parser/editor hooks stay available for imports and saved quizzes, but never
+   surface the retired editor UI. */
+html[data-edition="standalone"] .legacy-editor-compat { display: none !important; }
+.learning-status { margin: 12px 0 0; padding-top: 12px; border-top: 1px solid var(--hairline); color: var(--muted); font-size: 0.82rem; line-height: 1.5; }

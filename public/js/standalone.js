@@ -18,7 +18,7 @@ function reflectConnection() {
 }
 function localOrigin() { return location.protocol === 'http:' && location.hostname === '127.0.0.1'; }
 async function localRequest(route, payload, { signal, needsKey = true } = {}) {
-  if (!localOrigin()) throw new Error('AI runs in the local edition. Download EZ Quiz and run npm start; the demo and editor work here without a key.');
+  if (!localOrigin()) throw new Error('AI runs in the local edition. Download EZ Quiz and run npm start; the demo and imports work here without a key.');
   if (needsKey && !apiKey) throw new Error('Add your API key in AI settings first, or try the demo without a key.');
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   const requestSignal = signal ? AbortSignal.any([signal, AbortSignal.timeout(100000)]) : AbortSignal.timeout(100000);
@@ -99,7 +99,7 @@ export function wireStandalone() {
       return;
     }
     model.value = config.model; reflectConnection();
-    status.textContent = !apiKey ? 'No key set. The demo and editor are ready to use.' : saved ? 'Settings saved.' : 'Key ready for this visit.';
+    status.textContent = !apiKey ? 'No key set. The demo and imports are ready to use.' : saved ? 'Settings saved.' : 'Key ready for this visit.';
   }
   provider.addEventListener('change', () => {
     forgetKey(); config = { provider: provider.value, model: DEFAULTS[provider.value] }; model.value = config.model;
@@ -123,13 +123,12 @@ export function wireStandalone() {
     $('advancedBlock').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
   $('quickDemoBtn')?.addEventListener('click', () => { $('demoBtn').click(); $('startToolbarBtn').focus(); });
-  $('quickEditorBtn')?.addEventListener('click', openEditor);
-  $('quickLoadBtn')?.addEventListener('click', () => { openEditor(); $('loadBtn').click(); });
+  $('quickLoadBtn')?.addEventListener('click', () => $('fileInput')?.click());
   $('quickLastBtn')?.addEventListener('click', () => $('loadLastBtn').click());
   $('quickExportBtn')?.addEventListener('click', () => $('exportTxtBtn').click());
   updateKeyLink(); reflectConnection();
   if (!localOrigin()) {
     for (const id of ['aiProvider', 'aiModel', 'aiKey', 'aiSave', 'aiLoadModels']) $(id).disabled = true;
-    status.textContent = 'Download and run the local edition to add a key. This web copy supports manual quizzes and the demo.';
+    status.textContent = 'Download and run the local edition to add a key. This web copy supports saved imports and the demo.';
   }
 }

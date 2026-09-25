@@ -9,19 +9,24 @@ import {
   startAsyncGeneration,
   stopAsyncGeneration,
   triggerAsyncGeneration,
-} from './api.js?v=standalone-ui-1';
+} from './api.js?v=standalone-ui-3';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=standalone-ui-1';
-import { buildGeneratorPayload } from './generator-payload.js?v=standalone-ui-1';
-import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=standalone-ui-1';
+import { announce } from './a11y-announcer.js?v=standalone-ui-3';
+import { buildGeneratorPayload } from './generator-payload.js?v=standalone-ui-3';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=standalone-ui-3';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
+import { getLearningProfile } from './learning.js?v=standalone-ui-3';
 
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;
+
+function currentLearningProfile(){
+  try { return typeof getLearningProfile === 'function' ? getLearningProfile() : null; } catch { return null; }
+}
 
 function formatUnitCount(count, singular, plural = `${singular}s`){
   const n = Number(count) || 0;
@@ -79,7 +84,9 @@ function syncBuildStatusVisibility(statusBox = $('status'), generationStatusCard
 
 function hasStartableQuiz(){
   const startBtn = $('startBtn');
-  return !!(Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0 && startBtn && !startBtn.disabled);
+  const toolbarBtn = $('startToolbarBtn');
+  const enabled = (toolbarBtn && toolbarBtn.dataset.startDisabled !== 'true') || (startBtn && !startBtn.disabled);
+  return !!(Array.isArray(S.quiz?.questions) && S.quiz.questions.length > 0 && enabled);
 }
 
 function syncGeneratorActionHierarchy(){
@@ -830,7 +837,15 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     }
   }
   function generationOptions(payload, types){
-    const opts = { types, difficulty: payload.difficulty };
+    const settings = S.settings || {};
+    const opts = {
+      types,
+      difficulty: payload.difficulty,
+      generationMode: settings.generationMode === 'lite' ? 'lite' : 'full',
+      promptLimitEnabled: !!settings.promptLimitEnabled,
+      promptLimitChars: Number(settings.promptLimitChars) || 120000,
+      learningProfile: currentLearningProfile(),
+    };
     if(payload.sourceText){
       opts.sourceText = payload.sourceText;
       if(payload.sourceName) opts.sourceName = payload.sourceName;
@@ -1504,7 +1519,7 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
           hint.hidden = false; return;
         }
         hint.textContent = 'Enter a topic, choose length and difficulty, then create a quiz.';
-        hint.hidden = false; return;
+        hint.hidden = !!S.standalone; return;
       }
 
       // Quiz loaded
@@ -1651,7 +1666,16 @@ export function wireGenerator({ beginQuiz, syncSettingsFromUI }){
     // Gather options
     const types = [ qtMC?.checked ? 'MC':null, qtTF?.checked? 'TF':null, qtYN?.checked? 'YN':null, qtMT?.checked? 'MT':null ].filter(Boolean);
     const difficulty = getDifficultyKey();
-    const payload = buildGeneratorPayload(withMediaSource({ topic, difficulty, count: snap.count }));
+    const settings = S.settings || {};
+    const payload = buildGeneratorPayload(withMediaSource({
+      topic,
+      difficulty,
+      count: snap.count,
+      learningProfile: currentLearningProfile(),
+      generationMode: settings.generationMode,
+      promptLimitEnabled: settings.promptLimitEnabled,
+      promptLimitChars: settings.promptLimitChars,
+    }));
     return { payload, types };
   }
 

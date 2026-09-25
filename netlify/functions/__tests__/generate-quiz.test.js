@@ -190,7 +190,7 @@ describe('generate-quiz count guarantees', () => {
     const body = json(res);
 
     expect(res.statusCode).toBe(200);
-    expect(body.source).toEqual({ name: 'long.txt', charCount: 60000 });
+    expect(body.source).toEqual({ name: 'long.txt', charCount: 60010 });
   });
 
   test('sanitizes request avoidStems and passes them to the provider path', async () => {

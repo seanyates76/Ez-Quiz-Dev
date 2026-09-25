@@ -7,12 +7,12 @@
   <meta name="description" content="Your own study space. Create, import, practice, and keep your quizzes. Optional AI with your own key." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=standalone-ui-1"></script>
-  <link rel="stylesheet" href="styles.css?v=standalone-ui-1" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=standalone-ui-1">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=standalone-ui-1">
-  <script src="js/boot-beta.js?v=standalone-ui-1"></script>
-  <link rel="stylesheet" href="styles.standalone.css?v=standalone-ui-1" />
+  <script src="js/theme-preload.js?v=standalone-ui-3"></script>
+  <link rel="stylesheet" href="styles.css?v=standalone-ui-3" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=standalone-ui-3">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=standalone-ui-3">
+  <script src="js/boot-beta.js?v=standalone-ui-3"></script>
+  <link rel="stylesheet" href="styles.standalone.css?v=standalone-ui-3" />
 </head>
 <body>
   <a class="skip-link" href="#generatorCard">Skip to quiz builder</a>
@@ -76,7 +76,7 @@
           </div>
         </label>
         <label class="toolbar-field toolbar-field--difficulty">
-          <span class="toolbar-label">Difficulty <output id="difficultyLabel" for="difficultySlider">Medium</output></span>
+          <span class="toolbar-label">Difficulty <span id="difficultyLabel" aria-hidden="true">Medium</span></span>
           <div class="difficulty-stack">
             <div class="difficulty-slider">
               <div class="difficulty-track" aria-hidden="true">
@@ -139,7 +139,6 @@
       <div class="starter-tools" role="group" aria-label="Work with quizzes without AI">
         <span class="starter-label">Or jump right in</span>
         <button id="quickDemoBtn" class="btn btn-ghost" type="button">Try a demo <span aria-hidden="true">→</span></button>
-        <button id="quickEditorBtn" class="btn btn-ghost" type="button">Write a quiz</button>
         <button id="quickLoadBtn" class="btn btn-ghost" type="button">Open quiz</button>
         <button id="quickLastBtn" class="btn btn-ghost" type="button">Last quiz</button>
         <button id="quickExportBtn" class="btn btn-ghost" type="button">Save quiz</button>
@@ -157,8 +156,9 @@
         <span id="mediaSourceLabel" class="media-source-label"></span>
         <button id="clearMediaSourceBtn" class="btn btn-ghost btn-small" type="button">Remove</button>
       </div>
+      <p id="learningStatus" class="learning-status" role="status" aria-live="polite">Your completed quizzes will teach EZ Quiz what to reinforce next.</p>
 
-      <!-- Options Drop-Down (includes Quiz Editor tools) -->
+      <!-- Options Drop-Down -->
       <div id="optionsPanel" class="options-panel" role="region" aria-label="Options" hidden>
         <div class="options-regular">
           <div class="row gap wrap">
@@ -182,12 +182,8 @@
             <div id="defaultsStatus" class="sr-only" role="status" aria-live="polite"></div>
           </div>
         </div>
-        <div class="divider" role="separator" aria-orientation="horizontal"></div>
-        <div class="advanced-disclosure" role="button" tabindex="0" aria-expanded="false" aria-controls="advancedBlock">
-          <span>Quiz Editor</span>
-          <span class="caret" aria-hidden="true">▼</span>
-        </div>
-        <div id="advancedBlock" class="advanced-body" hidden>
+        <div id="legacyQuizTools" class="legacy-editor-compat" hidden aria-hidden="true">
+          <div id="advancedBlock" hidden>
           <div class="adv-head">
             <div class="adv-mode-toggle" role="group" aria-label="Quiz editor mode">
               <button type="button" class="adv-mode-btn is-active" data-editor-mode="interactive" aria-pressed="true">Interactive</button>
@@ -240,6 +236,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           </details>
           <div id="parseErrors" role="alert" aria-live="assertive" class="visually-hidden"></div>
           
+          </div>
         </div>
       </div>
     </section>
@@ -386,10 +383,10 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         </section>
 
         <section>
-          <h4>Options &amp; Quiz Editor</h4>
+          <h4>Options &amp; imports</h4>
           <ul>
             <li>Options: Timer, Theme, Question Types, and Defaults.</li>
-            <li><strong>Advanced / Manual quiz import</strong>: paste or load EZ Quiz formatted lines, then use Start Quiz after the quiz is valid.</li>
+            <li><strong>Open quiz</strong>: load a saved EZ Quiz text file, then use Start Quiz after it is validated.</li>
             <li>Supported types: Multiple Choice (single/multiple), True/False, Yes/No, Matching.</li>
           </ul>
         </section>
@@ -457,11 +454,8 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
               <dt><strong>Q:</strong> What’s the difference between “Create Quiz” and “Start Quiz”?</dt>
               <dd><strong>A:</strong> Create Quiz builds a valid quiz. Start Quiz begins taking the ready quiz.</dd>
 
-              <dt><strong>Q:</strong> Why is the Mirror empty?</dt>
-              <dd><strong>A:</strong> The Mirror is an advanced view for EZ Quiz formatted lines. It stays blank until a quiz is created or manual lines are loaded.</dd>
-
-              <dt><strong>Q:</strong> Can I edit the quiz before starting?</dt>
-              <dd><strong>A:</strong> Yes. Use the Editor to change or add your own questions. When you’re ready, click Start Quiz to run the version you’ve prepared.</dd>
+              <dt><strong>Q:</strong> How does adaptive practice work?</dt>
+              <dd><strong>A:</strong> EZ Quiz saves a small profile in this browser. When you create another quiz, it sends a summary of missed topics, question types, and recent question text to your chosen AI provider to guide the prompt. Clear it any time in Settings.</dd>
 
               <dt><strong>Q:</strong> What are the Retake options?</dt>
               <dd><strong>A:</strong> Retake All repeats the full quiz. The caret menu lets you retake only the questions you missed, or shuffle everything for a fresh run.</dd>
@@ -469,8 +463,8 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
               <dt><strong>Q:</strong> How do I change settings like timer or theme?</dt>
               <dd><strong>A:</strong> Open the ⚙ Settings menu. You can adjust timer length, appearance theme, and reset to defaults at any time (except while a quiz is running).</dd>
 
-              <dt><strong>Q:</strong> Where can I export or copy my quiz?</dt>
-              <dd><strong>A:</strong> In Advanced / Manual quiz import, you’ll find options to copy or export EZ Quiz formatted lines as a .txt file.</dd>
+              <dt><strong>Q:</strong> Where is my learning profile?</dt>
+              <dd><strong>A:</strong> The saved profile stays in this browser. A short summary accompanies future AI quiz requests. Settings shows its status and lets you clear it.</dd>
 
               <dt><strong>Q:</strong> What happens if the app updates mid‑quiz?</dt>
               <dd><strong>A:</strong> Nothing changes until you finish or exit. Updates only apply once you refresh or start a new quiz, so your current run is never interrupted.</dd>
@@ -478,18 +472,6 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
               <dt><strong>Q:</strong> How does feedback work?</dt>
               <dd><strong>A:</strong> The feedback panel opens an email draft in your email app. Review it there and send it yourself.</dd>
             </dl>
-          </details>
-        </section>
-
-        <section>
-          <details class="help-accordion parser-accordion">
-            <summary>Manual Format Reference</summary>
-            <pre class="parser-block" aria-label="Example parser lines">MC|Question?|A) Opt1;B) Opt2;C) Opt3;D) Opt4|A
-TF|Statement.|T
-YN|Question?|Y
-MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
-            <p class="muted small">Tip: For multiple answers, separate with commas (e.g., A,C).</p>
-            <p>Use the exact delimiters shown: pipes <code>|</code>, semicolons <code>;</code>, and labels like <code>A)</code> or <code>1)</code>.</p>
           </details>
         </section>
 
@@ -514,7 +496,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       <div class="modal__body">
         <fieldset class="fieldgroup ai-fieldgroup">
           <legend>Your AI connection</legend>
-          <p class="muted small">Optional. Run the <a href="standalone.html">local edition</a> to use your own key. The demo, manual editor, and saved quizzes need no AI.</p>
+          <p class="muted small">Optional. Run the <a href="standalone.html">local edition</a> to use your own key. Your key stays on this device when you choose Remember key.</p>
           <div class="ai-fields">
             <label for="aiProvider">Provider<select id="aiProvider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label>
             <label for="aiModel">Model<input id="aiModel" type="text" list="aiModels" autocomplete="off" spellcheck="false" /><datalist id="aiModels"></datalist></label>
@@ -525,6 +507,32 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <div class="ai-actions"><button id="aiSave" class="btn primary" type="button">Save settings</button><button id="aiLoadModels" class="btn" type="button">Load models</button><button id="aiForget" class="btn btn-ghost" type="button">Forget key</button></div>
           <p class="small"><a id="aiKeyLink" href="https://aistudio.google.com/api-keys" target="_blank" rel="noopener noreferrer">Get a Gemini API key</a> · <a href="privacy.html">How your data is handled</a></p>
           <p id="aiSettingsStatus" class="small" role="status" aria-live="polite">Choose a provider and add your API key to get started.</p>
+        </fieldset>
+
+        <fieldset class="fieldgroup">
+          <legend>Generation controls</legend>
+          <label for="generationMode">Thinking mode
+            <select id="generationMode">
+              <option value="full" selected>Deep (default)</option>
+              <option value="lite">Lite · save tokens</option>
+            </select>
+          </label>
+          <p class="muted small">Deep uses a larger reasoning budget by default. Lite keeps questions concise and uses less provider quota.</p>
+          <label><input type="checkbox" id="promptLimitEnabled" /> <span>Limit very long study prompts</span></label>
+          <label for="promptLimitChars">Prompt limit
+            <select id="promptLimitChars">
+              <option value="60000">60,000 characters</option>
+              <option value="120000" selected>120,000 characters</option>
+              <option value="240000">240,000 characters</option>
+            </select>
+          </label>
+          <p class="muted small">Off by default for BYOK. When on, the selected cap trims only the source sent to your provider.</p>
+        </fieldset>
+
+        <fieldset class="fieldgroup">
+          <legend>Adaptive learning</legend>
+          <p id="learningSettingsStatus" class="muted small">Saved here; a summary of misses goes to your chosen AI provider when you create a quiz.</p>
+          <button id="clearLearningBtn" class="btn btn-ghost" type="button">Clear learning profile</button>
         </fieldset>
 
         <fieldset class="fieldgroup">
@@ -543,12 +551,6 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
           <label><input type="radio" name="theme" value="light" /> <span>Light</span></label>
           <label><input type="radio" name="theme" value="system" /> <span>System</span></label>
         </fieldset>
-
-        <fieldset class="fieldgroup">
-          <legend>Quiz Editor</legend>
-          <label><input type="checkbox" id="alwaysShowQuizEditor" /> <span>Always show the Quiz Editor panel</span></label>
-        </fieldset>
-
 
         <div class="row">
           <button id="resetApp" class="btn danger">Reset App</button>
@@ -630,7 +632,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
         <section>
           <h4>v1.3.0-beta.0</h4>
           <ul>
-            <li><strong>Interactive Editor (beta):</strong> opt‑in, card‑based authoring for MC/TF/YN that stays in sync with the raw Editor/Mirror (enable in the Quiz Editor).</li>
+            <li><strong>Adaptive practice:</strong> completed quizzes reinforce the topics and question types you miss most.</li>
             <li>Removed the gradient backdrop behind floating buttons; kept subtle shadows.</li>
             <li>Added Reset App (clears caches + unregisters service workers).</li>
             <li>Added URL reset: <code>?clear=1</code> or <code>#clear-cache</code> for stuck devices.</li>
@@ -716,10 +718,9 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=standalone-ui-1"></script>
-  <script type="module" src="js/auto-refresh.js?v=standalone-ui-1"></script>
-  <script type="module" src="js/patches.js?v=standalone-ui-1"></script>
-  <script type="module" src="js/editor.gui.js?v=standalone-ui-1"></script>
+  <script type="module" src="js/main.js?v=standalone-ui-3"></script>
+  <script type="module" src="js/auto-refresh.js?v=standalone-ui-3"></script>
+  <script type="module" src="js/patches.js?v=standalone-ui-3"></script>
 
   <!-- Floating actions: Feedback + Coffee -->
   <div id="floatingActions" class="fab-stack" aria-label="Quick actions">
