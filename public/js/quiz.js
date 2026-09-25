@@ -1,6 +1,7 @@
 import { S } from './state.js';
+import { recordQuizAttempt, syncLearningStatus } from './learning.js?v=standalone-ui-3';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=standalone-ui-1';
+import { requestLazyExplanation } from './explain-api.js?v=standalone-ui-3';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
@@ -171,6 +172,8 @@ export function finishQuiz(auto=false){
     if(Number.isInteger(oi) && oi>=0 && oi<baseLen){ S.quiz.originalAnswers[oi] = ans[i]; }
   }
   S.quiz.score=score;
+  recordQuizAttempt({ topic: S.quiz.topic, questions: qs, answers: ans, compare: compareQA });
+  syncLearningStatus();
   renderResults();
   setMode('results');
 }

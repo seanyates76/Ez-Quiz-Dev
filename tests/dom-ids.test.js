@@ -11,19 +11,12 @@ describe('public/index.html structure', () => {
     document = await loadDocument('public/index.html');
   });
 
-  test('exposes key controls and editor surfaces by id', () => {
+  test('exposes key controls and compatibility hooks by id', () => {
     const expectedIds = [
       ['generatorCard', 'SECTION'],
       ['landingIntro', 'SECTION'],
-      ['landingPreview', 'DIV'],
       ['landingIntroClose', 'BUTTON'],
       ['landingIntroDontShow', 'BUTTON'],
-      ['landingTabNew', 'BUTTON'],
-      ['landingTabSoon', 'BUTTON'],
-      ['landingTabTips', 'BUTTON'],
-      ['landingPanelNew', 'DIV'],
-      ['landingPanelSoon', 'DIV'],
-      ['landingPanelTips', 'DIV'],
       ['generateBtn', 'BUTTON'],
       ['startToolbarBtn', 'BUTTON'],
       ['optionsBtn', 'BUTTON'],
@@ -36,6 +29,7 @@ describe('public/index.html structure', () => {
       ['generationStatusMeta', 'DIV'],
       ['generationStatusSecondary', 'DIV'],
       ['cancelGenerationBtn', 'BUTTON'],
+      ['learningStatus', 'P'],
       ['editor', 'TEXTAREA'],
       ['mirror', 'TEXTAREA'],
       ['importBtn', 'BUTTON'],
@@ -48,6 +42,9 @@ describe('public/index.html structure', () => {
       ['narrowSourceClose', 'BUTTON'],
       ['narrowSourceConfirm', 'BUTTON'],
       ['narrowSourceCancel', 'BUTTON'],
+      ['generationMode', 'SELECT'],
+      ['promptLimitEnabled', 'INPUT'],
+      ['promptLimitChars', 'SELECT'],
     ];
 
     expectedIds.forEach(([id, tag]) => {
@@ -69,12 +66,12 @@ describe('public/index.html structure', () => {
     expect(toolbarStart.getAttribute('aria-describedby')).toBe('startHelp');
   });
 
-  test('landing intro keeps the product headline and visible release label', () => {
+  test('landing intro keeps the product headline and preview label without a new release number', () => {
     const title = document.getElementById('landingTitle');
     expect(title).not.toBeNull();
     expect(title.textContent.trim()).toBe('A little practice.A lot of progress.');
-    expect(document.querySelector('.edition-label').textContent).toContain('Standalone');
-    expect(document.getElementById('versionInfoBtn').textContent).toBe('v4.0.0');
+    expect(document.querySelector('.edition-label').textContent).toContain('Preview');
+    expect(document.getElementById('versionInfoBtn').textContent).toBe('What’s new');
   });
 
   test('uses unique IDs and exposes both release-notes triggers', () => {
@@ -94,8 +91,8 @@ describe('public/index.html structure', () => {
     const moduleFiles = [
       'public/js/main.js',
       'public/js/quiz.js',
-      'public/js/editor.gui.js',
       'public/js/generator.js',
+      'public/js/learning.js',
     ];
     const importVersions = moduleFiles.flatMap((file) => Array.from(
       readFile(file).matchAll(/from\s+['"][^'"]+\?v=([^'"]+)['"]/g),
@@ -114,7 +111,10 @@ describe('public/index.html structure', () => {
     expect(mirror.getAttribute('aria-label')).toContain('Generated quiz lines');
   });
 
-  test('quiz editor advanced block is hidden on load', () => {
+  test('retired editor compatibility hooks are hidden on load', () => {
+    const legacy = document.getElementById('legacyQuizTools');
+    expect(legacy).not.toBeNull();
+    expect(legacy.hasAttribute('hidden')).toBe(true);
     const advancedBlock = document.getElementById('advancedBlock');
     expect(advancedBlock).not.toBeNull();
     expect(advancedBlock.hasAttribute('hidden')).toBe(true);
@@ -175,13 +175,13 @@ describe('public/index.html structure', () => {
   });
 
   test('standalone exposes accessible connection controls and no-key shortcuts', () => {
-    ['quickDemoBtn', 'quickEditorBtn', 'quickLoadBtn', 'quickLastBtn', 'quickExportBtn', 'aiSettingsBtn', 'aiSave', 'aiForget'].forEach(id => {
+    ['quickDemoBtn', 'quickLoadBtn', 'quickLastBtn', 'quickExportBtn', 'aiSettingsBtn', 'aiSave', 'aiForget'].forEach(id => {
       expect(document.getElementById(id).tagName).toBe('BUTTON');
     });
     expect(document.getElementById('aiKey').type).toBe('password');
     expect(document.getElementById('aiRemember').checked).toBe(true);
     expect(document.getElementById('aiSettingsStatus').getAttribute('role')).toBe('status');
-    expect(readFile('public/styles.standalone.css')).toContain('@media (max-width:760px)');
+    expect(readFile('public/styles.standalone.css')).toMatch(/@media\s*\(max-width:\s*760px\)/);
   });
 
 });

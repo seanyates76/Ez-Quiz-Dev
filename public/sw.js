@@ -1,7 +1,7 @@
 /* Cache only the app shell. Credentials and API responses never enter this cache. */
-const ASSET_VERSION = 'standalone-ui-1';
-const CACHE_NAME = 'ezq-standalone-ui-1';
-const MODULES = ["theme-preload.js","boot-beta.js","main.js","landing-intro.js","auto-refresh.js","patches.js","editor.gui.js","generator.js","generator-payload.js","source-sections.js","a11y-announcer.js","api.js","explain-api.js","state.js","utils.js","parser.js","veil.js","settings.js","modals.js","quiz.js","beta.mjs","flags.js","settings.beta.js","import-controller.js","file-type-validation.js","media-import-constraints.js","drag-drop.js","standalone.js"];
+const ASSET_VERSION = 'standalone-ui-3';
+const CACHE_NAME = 'ezq-standalone-ui-3';
+const MODULES = ["theme-preload.js","boot-beta.js","main.js","landing-intro.js","auto-refresh.js","patches.js","learning.js","generator.js","generator-payload.js","source-sections.js","a11y-announcer.js","api.js","explain-api.js","state.js","utils.js","parser.js","veil.js","settings.js","modals.js","quiz.js","beta.mjs","flags.js","settings.beta.js","import-controller.js","file-type-validation.js","media-import-constraints.js","drag-drop.js","standalone.js"];
 const STYLES = ['styles.css', 'styles.tokens.css', 'styles.backdrop.css', 'styles.standalone.css'];
 const STATIC_PATHS = [
   'index.html', 'standalone.html', 'privacy.html', 'terms.html', 'manifest.webmanifest',

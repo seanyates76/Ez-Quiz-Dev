@@ -168,11 +168,35 @@ function difficultyGuidance(difficulty){
   ].join('\n');
 }
 
+function adaptiveLearningGuidance(profile){
+  if(!profile || typeof profile !== 'object') return '';
+  const topics = Array.isArray(profile.weakTopics) ? profile.weakTopics.filter((item) => item && item.name).slice(0, 4) : [];
+  const types = Array.isArray(profile.weakTypes) ? profile.weakTypes.filter((item) => item && item.name).slice(0, 4) : [];
+  const misses = Array.isArray(profile.recentMisses) ? profile.recentMisses.filter((item) => item && item.stem).slice(-6) : [];
+  if(!topics.length && !types.length && !misses.length) return '';
+  const lines = [
+    'Adaptive learner guidance: This is private local performance context. Use it only to reinforce weak areas; never mention the guidance or the learner\'s history.',
+  ];
+  if(topics.length) lines.push(`Weak topics to reinforce: ${topics.map((item) => `${String(item.name).slice(0, 120)} (${Math.round((Number(item.accuracy) || 0) * 100)}% accuracy)`).join('; ')}.`);
+  if(types.length) lines.push(`Question types needing practice: ${types.map((item) => String(item.name).toUpperCase()).join(', ')}.`);
+  if(misses.length) lines.push(`Recent missed concepts to revisit with fresh wording: ${misses.map((item) => String(item.stem).replace(/[\r\n|]+/g, ' ').slice(0, 160)).join(' | ')}.`);
+  lines.push('Keep the new questions meaningfully different from prior stems while targeting the same underlying concepts.');
+  return lines.join('\n');
+}
+
+function modeGuidance(generationMode){
+  return String(generationMode || '').toLowerCase() === 'lite'
+    ? 'Lite generation mode: use concise prompts, compact explanations, and efficient reasoning while preserving correctness and coverage.'
+    : '';
+}
+
 // Utility: build strict prompt compatible with front-end parser
-function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
+function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText, learningProfile, generationMode){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
   const allowLine = `Allowed question types: ${allowed.join(', ')} (use only these).`;
   const diffLine = difficultyGuidance(difficulty);
+  const adaptiveLine = adaptiveLearningGuidance(learningProfile);
+  const modeLine = modeGuidance(generationMode);
   const avoid = Array.isArray(avoidStems) && avoidStems.length
     ? `Avoid repeating these already-used question stems: ${avoidStems.slice(-60).join(' | ')}.`
     : '';
@@ -184,6 +208,8 @@ function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
     sourceBlock,
     allowLine,
     diffLine,
+    adaptiveLine,
+    modeLine,
     avoid,
     `Output format:`,
     `1) First line must be: TITLE: <Professional Title>`,
@@ -204,9 +230,11 @@ function buildPrompt(topic, count, types, difficulty, avoidStems, sourceText){
   ].filter(Boolean).join('\n');
 }
 
-function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
+function buildStructuredPrompt(topic, count, types, difficulty, sourceText, learningProfile, generationMode){
   const allowed = Array.isArray(types) && types.length ? types.map(t=>t.toUpperCase()).filter(t=>/^(MC|TF|YN|MT)$/.test(t)) : ['MC','TF','YN','MT'];
   const diffLine = difficultyGuidance(difficulty);
+  const adaptiveLine = adaptiveLearningGuidance(learningProfile);
+  const modeLine = modeGuidance(generationMode);
   const source = cleanSourceMaterial(sourceText);
   const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   return [
@@ -214,6 +242,8 @@ function buildStructuredPrompt(topic, count, types, difficulty, sourceText){
     source ? sourceFramingInstructions() : '',
     sourceBlock,
     diffLine,
+    adaptiveLine,
+    modeLine,
     `Allowed question types: ${allowed.join(', ')}. Use only these codes.`,
     `Respond with valid minified JSON only. Do not include markdown fences or commentary.`,
     `Schema:`,
@@ -268,11 +298,13 @@ function laneTaskLine(contract) {
   return `Create deterministic study questions about ${contract.contractFlavor.replace(/_/g, ' ')}.`;
 }
 
-function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText, laneContract) {
+function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText, laneContract, learningProfile, generationMode) {
   const contract = normalizeLaneContract(laneContract, count, types);
   if (!contract) return '';
   const source = cleanSourceMaterial(sourceText);
   const diffLine = difficultyGuidance(difficulty);
+  const adaptiveLine = adaptiveLearningGuidance(learningProfile);
+  const modeLine = modeGuidance(generationMode);
   const sourceBlock = source ? privateInstructorKnowledgeBlock(source) : '';
   const avoid = Array.isArray(avoidStems) && avoidStems.length
     ? [
@@ -299,6 +331,8 @@ function buildLanePrompt(topic, count, types, difficulty, avoidStems, sourceText
     source ? sourceFramingInstructions() : '',
     source ? 'Use only the private instructor knowledge below for factual content.' : '',
     diffLine,
+    adaptiveLine,
+    modeLine,
     contract.scenario ? 'Keep scenarios short and answerable.' : 'Do not add scenario framing; use direct standalone stems.',
     `Return only valid EZ Quiz ${contract.questionType} lines.`,
     'No explanations.',
@@ -342,13 +376,14 @@ function stemFromLine(line){
   return (parts.length > 1 ? parts[1] : raw).trim();
 }
 
-function outputTokenBudget(count, kind = 'legacy'){
+function outputTokenBudget(count, kind = 'legacy', generationMode = 'full'){
   const n = Math.max(1, Math.min(50, parseInt(count || 10, 10) || 10));
   const perQuestion = kind === 'structured' ? 220 : 260;
-  return Math.max(2500, Math.min(12000, 900 + (n * perQuestion)));
+  const full = Math.max(2500, Math.min(16000, 1200 + (n * perQuestion)));
+  return String(generationMode || '').toLowerCase() === 'lite' ? Math.max(1800, Math.min(7000, Math.round(full * 0.62))) : full;
 }
 
-async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
+async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-2025', prompt, maxOutputTokens = 1024, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, generationMode = 'full' }){
   if(!apiKey) throw new Error('Missing GEMINI_API_KEY');
   const { GoogleGenerativeAI } = require('@google/generative-ai');
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -358,6 +393,11 @@ async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-20
     contents: [{ role: 'user', parts: [{ text: prompt }] }],
     generationConfig: { temperature: 0.6, topK: 32, topP: 0.9, maxOutputTokens },
   };
+  if (/gemini-(?:2\.5|3)/i.test(String(model || ''))) {
+    request.generationConfig.thinkingConfig = {
+      thinkingBudget: String(generationMode).toLowerCase() === 'lite' ? 512 : 2048,
+    };
+  }
   try {
     const result = await withTimeout(
       () => m.generateContent(request, { timeout: timeoutMs, signal: controller.signal }),
@@ -373,7 +413,7 @@ async function geminiCall({ apiKey, model = 'gemini-2.5-flash-lite-preview-09-20
   }
 }
 
-async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS }){
+async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 800, timeoutMs = DEFAULT_PROVIDER_TIMEOUT_MS, generationMode = 'full' }){
   if(!apiKey) throw new Error('Missing OPENAI_API_KEY');
   const controller = new AbortController();
   let resp;
@@ -393,6 +433,7 @@ async function openaiCall({ apiKey, model = 'gpt-4o-mini', prompt, maxTokens = 8
           ],
           temperature: 0.6,
           max_tokens: maxTokens,
+          ...(/^(?:o[1-9]|gpt-5)/i.test(String(model || '')) ? { reasoning_effort: String(generationMode).toLowerCase() === 'lite' ? 'low' : 'high' } : {}),
         }),
         signal: controller.signal,
       }),
@@ -471,11 +512,11 @@ function echoGenerate({ topic, count, types, kind, avoidStems }){
   return out.join('\n');
 }
 
-async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems, timeoutMs, laneContract }){
+async function callProvider({ provider, model, topic, count, types, difficulty, env, prompt, kind = 'legacy', sourceText, avoidStems, timeoutMs, laneContract, learningProfile, generationMode }){
   const selected = (provider || (env.AI_PROVIDER || 'gemini')).toLowerCase();
   const normalizedCount = Math.max(1, Math.min(50, parseInt(count || 10, 10)));
-  const resolvedPrompt = prompt || buildLanePrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText, laneContract)
-    || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText);
+  const resolvedPrompt = prompt || buildLanePrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText, laneContract, learningProfile, generationMode)
+    || buildPrompt(topic, normalizedCount, types, difficulty, avoidStems, sourceText, learningProfile, generationMode);
   const resolvedTimeoutMs = Number.isFinite(Number(timeoutMs)) && Number(timeoutMs) > 0
     ? Number(timeoutMs)
     : providerTimeoutMs(env);
@@ -484,12 +525,12 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
   try {
     if (selected === 'gemini') {
       const resolvedModel = model || env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025';
-      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind), timeoutMs: resolvedTimeoutMs });
+      const text = await geminiCall({ apiKey: env.GEMINI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxOutputTokens: outputTokenBudget(normalizedCount, kind, generationMode), timeoutMs: resolvedTimeoutMs, generationMode });
       return { provider: 'gemini', model: resolvedModel, text };
     }
     if (selected === 'openai') {
       const resolvedModel = model || env.OPENAI_MODEL || 'gpt-4o-mini';
-      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind), timeoutMs: resolvedTimeoutMs });
+      const text = await openaiCall({ apiKey: env.OPENAI_API_KEY, model: resolvedModel, prompt: resolvedPrompt, maxTokens: outputTokenBudget(normalizedCount, kind, generationMode), timeoutMs: resolvedTimeoutMs, generationMode });
       return { provider: 'openai', model: resolvedModel, text };
     }
     if (selected === 'echo') {
@@ -506,16 +547,16 @@ async function callProvider({ provider, model, topic, count, types, difficulty, 
   }
 }
 
-async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract }){
+async function generateLines({ provider, model, topic, count, types, difficulty, env, avoidStems, sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract, learningProfile, generationMode }){
   const n = Math.max(1, Math.min(50, parseInt(count||10,10)));
-  const prompt = buildLanePrompt(topic, n, types, difficulty, avoidStems, sourceText, laneContract)
-    || buildPrompt(topic, n, types, difficulty, avoidStems, sourceText);
-  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems, timeoutMs: explicitProviderTimeoutMs, laneContract });
+  const prompt = buildLanePrompt(topic, n, types, difficulty, avoidStems, sourceText, laneContract, learningProfile, generationMode)
+    || buildPrompt(topic, n, types, difficulty, avoidStems, sourceText, learningProfile, generationMode);
+  const { provider: usedProvider, model: usedModel, text } = await callProvider({ provider, model, topic, count: n, types, difficulty, env, prompt, kind: 'legacy', sourceText, avoidStems, timeoutMs: explicitProviderTimeoutMs, laneContract, learningProfile, generationMode });
   const { title, lines } = normalizeLegacyLines(text, n);
   return { provider: usedProvider, model: usedModel, title, lines };
 }
 
-async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems, providerTimeoutMs: explicitProviderTimeoutMs, laneContract }){
+async function generateInBatches({ provider, model, topic, count, types, difficulty, env = process.env, batchSize, maxPasses, sourceText, avoidStems, providerTimeoutMs: explicitProviderTimeoutMs, laneContract, learningProfile, generationMode }){
   const targetRaw = count == null ? 10 : count;
   let target = parseInt(targetRaw, 10);
   if(!Number.isFinite(target)) target = 10;
@@ -555,7 +596,7 @@ async function generateInBatches({ provider, model, topic, count, types, difficu
   for(let attempt = 0; attempt < passes && collected.length < target; attempt++){
     const remaining = target - collected.length;
     const ask = Math.min(batch, remaining);
-    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract });
+    const { title, lines, provider: usedProvider, model: usedModel } = await generateLines({ provider, model, topic, count: ask, types, difficulty, env, avoidStems: avoidList.slice(-60), sourceText, providerTimeoutMs: explicitProviderTimeoutMs, laneContract, learningProfile, generationMode });
 
     if(!resolvedTitle && title) resolvedTitle = title;
     if(usedProvider) resolvedProvider = usedProvider;

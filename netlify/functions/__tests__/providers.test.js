@@ -226,10 +226,23 @@ describe('providers helpers', () => {
     expect(out).toMatch(/EXACTLY 2 quiz lines/);
   });
 
+  test('adaptive learner guidance reinforces weak areas without exposing profile framing', () => {
+    const out = buildPrompt('Networking', 2, ['MC'], 'medium', [], '', {
+      attempts: 3,
+      weakTopics: [{ name: 'VLAN trunking', missed: 4, accuracy: 0.25 }],
+      weakTypes: [{ name: 'MC', missed: 4, accuracy: 0.25 }],
+      recentMisses: [{ topic: 'Networking', type: 'MC', stem: 'Which tag is added to a trunk frame?' }],
+    });
+    expect(out).toContain('Weak topics to reinforce: VLAN trunking');
+    expect(out).toContain('Question types needing practice: MC');
+    expect(out).toContain('Which tag is added to a trunk frame?');
+    expect(out).toContain('never mention the guidance');
+  });
+
   test('source material cleanup uses the shared generation cap', () => {
-    const out = buildPrompt('Long Notes', 4, ['MC'], 'medium', [], 'A'.repeat(60010));
+    const out = buildPrompt('Long Notes', 4, ['MC'], 'medium', [], 'A'.repeat(240010));
     const source = out.match(/PRIVATE INSTRUCTOR KNOWLEDGE START\n([\s\S]+)\nPRIVATE INSTRUCTOR KNOWLEDGE END/)[1];
-    expect(source).toHaveLength(60000);
+    expect(source).toHaveLength(240000);
   });
 
   test('source material cannot close or reopen the private knowledge frame', () => {

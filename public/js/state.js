@@ -4,10 +4,13 @@ S.quiz = S.quiz || { questions: [], originalQuestions: [], indexMap: [], origina
 S.quiz.explanations = S.quiz.explanations || {};
 S.media = S.media || { sourceText: '', sourceName: '', sourceKind: '', sourceCharCount: 0, sourceReport: null };
 if (!Object.prototype.hasOwnProperty.call(S.media, 'sourceReport')) S.media.sourceReport = null;
-S.settings = S.settings || { theme: 'dark', timerEnabled: true, countdown: false, durationMs: 0, autoStart: true, requireAnswer: false, showQuizEditor: false, betaEnabled: false };
+S.settings = S.settings || { theme: 'dark', timerEnabled: true, countdown: false, durationMs: 0, autoStart: true, requireAnswer: false, showQuizEditor: false, betaEnabled: false, generationMode: 'full', promptLimitEnabled: false, promptLimitChars: 120000 };
+if (!S.settings.generationMode) S.settings.generationMode = 'full';
+if (S.settings.promptLimitEnabled === undefined) S.settings.promptLimitEnabled = false;
+if (!Number.isFinite(Number(S.settings.promptLimitChars))) S.settings.promptLimitChars = 120000;
 S.ui = S.ui || { primaryMode: 'generate' };
 
-export const STORAGE_KEYS = { theme: 'ezq.theme', settings: 'ezq.settings', defaults: 'ezq.defaults', last: 'ezq.last' };
+export const STORAGE_KEYS = { theme: 'ezq.theme', settings: 'ezq.settings', defaults: 'ezq.defaults', last: 'ezq.last', learning: 'ezq.learning' };
 
 // Bridge: unify __EZQ__ with EZQ so both references point to the same object.
 try {
