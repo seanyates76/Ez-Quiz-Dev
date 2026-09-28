@@ -1,6 +1,7 @@
 import { S } from './state.js';
+import { recordQuizAttempt, syncLearningStatus } from './learning.js?v=standalone-ui-3';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=standalone-ui-1';
+import { requestLazyExplanation } from './explain-api.js?v=standalone-ui-3';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
@@ -9,8 +10,16 @@ const RETAKE_ALL = 'all';
 // Elements helper
 const el = (id) => $(id);
 
+function clearGeneratorToast(){
+  const toast = document.getElementById('toast');
+  if(!toast) return;
+  toast.hidden = true;
+  toast.textContent = '';
+}
+
 export function setMode(mode){
   S.mode = mode;
+  if(mode === 'quiz' || mode === 'results') clearGeneratorToast();
   const generatorCard = el('generatorCard');
   const quizView = el('quizView');
   const resultsView = el('resultsView');
@@ -171,6 +180,8 @@ export function finishQuiz(auto=false){
     if(Number.isInteger(oi) && oi>=0 && oi<baseLen){ S.quiz.originalAnswers[oi] = ans[i]; }
   }
   S.quiz.score=score;
+  recordQuizAttempt({ topic: S.quiz.topic, questions: qs, answers: ans, compare: compareQA });
+  syncLearningStatus();
   renderResults();
   setMode('results');
 }

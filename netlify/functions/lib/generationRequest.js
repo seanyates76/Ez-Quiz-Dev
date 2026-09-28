@@ -6,6 +6,7 @@ const VALID_QUESTION_TYPES = ['MC', 'TF', 'YN', 'MT'];
 const MAX_SOURCE_REPORT_SECTIONS = 100;
 const MAX_SOURCE_REPORT_TEXT_CHARS = 60000;
 const MAX_SOURCE_SECTION_TEXT_CHARS = 4000;
+const MAX_LEARNING_ITEMS = 6;
 
 class GenerationRequestError extends Error {
   constructor(body, status = 400) {
@@ -49,6 +50,31 @@ function sanitizeAvoidStems(raw) {
     if (out.length >= 60) break;
   }
   return out;
+}
+
+function sanitizeLearningProfile(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const clean = (value, max) => String(value == null ? '' : value).replace(/[\r\n|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  const bucketList = (value, maxName) => Array.isArray(value) ? value.slice(0, MAX_LEARNING_ITEMS).map((item) => ({
+    name: clean(item?.name, maxName),
+    missed: boundedNumber(item?.missed, 0, 1000),
+    accuracy: boundedNumber(item?.accuracy, 0, 1),
+  })).filter((item) => item.name) : [];
+  const recentMisses = Array.isArray(raw.recentMisses) ? raw.recentMisses.slice(-MAX_LEARNING_ITEMS).map((item) => ({
+    topic: clean(item?.topic, 120),
+    type: clean(item?.type, 8).toUpperCase(),
+    stem: clean(item?.stem, 160),
+  })).filter((item) => item.topic && item.type && item.stem) : [];
+  const profile = {
+    version: boundedNumber(raw.version, 0, 10, 1),
+    attempts: boundedNumber(raw.attempts, 0, 1000),
+    questions: boundedNumber(raw.questions, 0, 10000),
+    correct: boundedNumber(raw.correct, 0, 10000),
+    weakTopics: bucketList(raw.weakTopics, 120),
+    weakTypes: bucketList(raw.weakTypes, 8),
+    recentMisses,
+  };
+  return profile.attempts || profile.questions || recentMisses.length ? profile : undefined;
 }
 
 function normalizeQuestionTypes(raw) {
@@ -180,6 +206,10 @@ function normalizeGenerationPayload(payload, options = {}) {
   const model = String(body.model || '').trim();
   const avoidStems = sanitizeAvoidStems(body.avoidStems);
   const sourceReport = sanitizeSourceReport(body.sourceReport);
+  const learningProfile = sanitizeLearningProfile(body.learningProfile);
+  const generationMode = String(body.generationMode || 'full').trim().toLowerCase() === 'lite' ? 'lite' : 'full';
+  const promptLimitEnabled = !!body.promptLimitEnabled;
+  const promptLimitChars = Math.max(60000, Math.min(240000, toPositiveInt(body.promptLimitChars, 120000)));
 
   const responseMode = String(env.QUIZ_RESPONSE || '').toLowerCase();
   const useV2 = responseMode === 'v2';
@@ -197,6 +227,10 @@ function normalizeGenerationPayload(payload, options = {}) {
     sourceText,
     sourceName,
     sourceReport,
+    learningProfile,
+    generationMode,
+    promptLimitEnabled,
+    promptLimitChars,
     types,
     difficulty,
     provider,
@@ -218,5 +252,6 @@ module.exports = {
   normalizeGenerationPayload,
   sanitizeSourceReport,
   sanitizeAvoidStems,
+  sanitizeLearningProfile,
   toPositiveInt,
 };

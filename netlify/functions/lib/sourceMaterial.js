@@ -1,6 +1,8 @@
 'use strict';
 
-const MAX_SOURCE_TEXT_CHARS = 60000;
+// BYOK users own the upstream quota; keep the default context generous and
+// let the UI opt into a smaller prompt when token savings matter.
+const MAX_SOURCE_TEXT_CHARS = 240000;
 
 function cleanSourceText(raw) {
   return String(raw || '')

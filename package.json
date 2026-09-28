@@ -6,7 +6,7 @@
   "description": "Standalone BYOK quiz app, with preserved Netlify and ChatGPT integrations",
   "scripts": {
     "test": "NODE_OPTIONS=--experimental-vm-modules jest -i --passWithNoTests",
-    "ui:check": "node ./scripts/ui-check.mjs",
+    "ui:check": "node ./scripts/standalone-ui-check.mjs",
     "lint": "eslint . || true",
     "lint:fix": "eslint . --fix || true",
     "fmt:check": "prettier -c . || true",

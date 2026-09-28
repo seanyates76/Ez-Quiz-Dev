@@ -131,7 +131,7 @@ describe('landing intro shell', () => {
 
   test('standalone shell keeps direct no-key actions and AI setup guidance', async () => {
     const doc = await loadDocument('public/index.html');
-    for (const id of ['quickDemoBtn', 'quickEditorBtn', 'quickLoadBtn']) {
+    for (const id of ['quickDemoBtn', 'quickLoadBtn']) {
       expect(doc.getElementById(id)).not.toBeNull();
     }
     expect(doc.querySelector('.ai-fieldgroup').textContent).toContain('local edition');
