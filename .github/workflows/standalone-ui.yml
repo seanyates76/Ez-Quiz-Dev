@@ -1,0 +1,42 @@
+name: Standalone UI review
+
+on:
+  push:
+    branches: [feat/adaptive-learning-profile]
+  pull_request:
+    branches: [main, beta, feat/standalone-keepsake]
+    paths:
+      - 'public/**'
+      - 'standalone/**'
+      - 'scripts/standalone-ui-check.mjs'
+      - '.github/workflows/standalone-ui.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: standalone-ui-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual-review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903
+        with:
+          node-version: '25'
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --runInBand
+      - run: npm run ui:check
+      - name: Save screenshots and layout report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: standalone-ui-review
+          path: .artifacts/ui
+          if-no-files-found: warn
+          include-hidden-files: true
+          retention-days: 14
