@@ -1,8 +1,6 @@
 name: Standalone UI review
 
 on:
-  push:
-    branches: [feat/adaptive-learning-profile]
   pull_request:
     branches: [main, beta, feat/standalone-keepsake]
     paths:

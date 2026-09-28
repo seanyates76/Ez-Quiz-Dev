@@ -54,15 +54,16 @@ try {
         const builder = await page.evaluate(() => {
           const box = id => document.getElementById(id).getBoundingClientRect();
           const tools = document.querySelector('.starter-tools').getBoundingClientRect();
+          const statusVisible = !!document.getElementById('status').getClientRects().length;
           return {
             retiredEditorHidden: !document.getElementById('legacyQuizTools').getClientRects().length,
-            statusGap: box('status').top - tools.bottom,
-            learningGap: box('learningStatus').top - box('status').bottom,
+            statusGap: statusVisible ? box('status').top - tools.bottom : null,
+            learningGap: box('learningStatus').top - (statusVisible ? box('status').bottom : tools.bottom),
             padding: parseFloat(getComputedStyle(document.getElementById('generatorCard')).paddingLeft),
           };
         });
         assert.ok(builder.retiredEditorHidden, 'Retired editor is visible');
-        assert.ok(builder.statusGap >= 12 && builder.learningGap >= 8, `Crowded builder status: ${JSON.stringify(builder)}`);
+        assert.ok((builder.statusGap === null || builder.statusGap >= 12) && builder.learningGap >= 8, `Crowded builder status: ${JSON.stringify(builder)}`);
         assert.ok(builder.padding >= 18, 'Builder padding is too narrow');
         await click('#optionsBtn');
         await snapshot('options');
@@ -73,8 +74,7 @@ try {
         const modal = await page.evaluate(() => {
           const root = document.getElementById('settingsModal');
           const dialog = root.querySelector('.modal__dialog').getBoundingClientRect();
-          const fab = document.querySelector('.fab-stack').getBoundingClientRect();
-          const top = document.elementFromPoint(fab.left + fab.width / 2, fab.top + fab.height / 2);
+          const top = document.elementFromPoint(innerWidth - 20, innerHeight - 20);
           return {
             contained: dialog.left >= 0 && dialog.right <= innerWidth + 1 && dialog.top >= 0 && dialog.bottom <= innerHeight + 1,
             backdropAboveFab: root.contains(top),
@@ -97,6 +97,8 @@ try {
         assert.equal(saved.promptLimitEnabled, true);
         assert.equal(saved.promptLimitChars, 60000);
         await click('#quickDemoBtn');
+        await snapshot('ready');
+        await layout('ready');
         await click('#startToolbarBtn');
         await page.waitForSelector('#quizView:not(.is-hidden)');
         await snapshot('quiz');

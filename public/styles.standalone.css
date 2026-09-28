@@ -104,6 +104,9 @@ html[data-edition="standalone"] body .gen-toolbar {
 html[data-edition="standalone"] body .gen-toolbar > .toolbar-left {
   display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) 144px; gap: 20px 24px;
 }
+html[data-edition="standalone"][data-theme="light"] body .gen-toolbar {
+  background: transparent; border: 0; box-shadow: none;
+}
 html[data-edition="standalone"] .gen-toolbar > .toolbar-left > .toolbar-field:first-of-type { grid-column: 1 / -1; }
 html[data-edition="standalone"] .toolbar-left > .toolbar-field { gap: 8px; min-width: 0; width: 100%; }
 html[data-edition="standalone"] .toolbar-label { display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 12px; color: var(--muted); margin: 0; text-transform: none; letter-spacing: 0; font-weight: 500; }
@@ -146,16 +149,17 @@ html[data-edition="standalone"] .options-panel { border-top: 1px solid var(--hai
 html[data-edition="standalone"] #quizView,
 html[data-edition="standalone"] #resultsView { margin-top: 24px; padding: 28px; border-radius: 18px; background: var(--edition-card); border-color: var(--edition-border); }
 html[data-edition="standalone"] .missed-item { border-radius: 10px; }
-html[data-edition="standalone"] footer.container { margin: 24px auto 0; padding: 0 0 84px; border: 0; }
+html[data-edition="standalone"] footer.container { margin: 24px auto 0; padding: 0 0 32px; border: 0; }
 html[data-edition="standalone"] footer.container nav { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px; }
 html[data-edition="standalone"] .footer-links { font-size: 11px; justify-content: flex-start; }
 html[data-edition="standalone"] .support-cta { display: none; }
 html[data-edition="standalone"] .footer-meta { text-align: right; margin: 0; }
 html[data-edition="standalone"] .footer-meta small { font-size: 11px; }
 .footer-source-links { display: flex; gap: 16px; justify-content: flex-end; margin-top: 5px; font-size: 11px; }
-html[data-edition="standalone"] .fab-stack { right: 16px; bottom: 16px; gap: 8px; z-index: 60; }
-html[data-edition="standalone"] .fab { box-sizing: border-box; justify-content: center; padding: 0; width: 44px; height: 44px; font-size: 19px; border: 1px solid var(--hairline); background: var(--edition-card); box-shadow: 0 3px 14px #0002; }
-html[data-edition="standalone"] .fab .fab-label { display: none; }
+html[data-edition="standalone"] .fab-stack { position: static; display: flex; gap: 16px; }
+html[data-edition="standalone"] .fab { box-sizing: border-box; justify-content: center; padding: 0; min-height: 44px; font-size: 0; border: 0; background: transparent; box-shadow: none; }
+html[data-edition="standalone"] .fab .fab-label { display: inline; font-size: 11px; color: var(--muted); }
+html[data-edition="standalone"] .fab-panel { z-index: 80; box-sizing: border-box; max-width: calc(100vw - 32px); }
 html[data-edition="standalone"] .modal { z-index: 1000; }
 html[data-edition="standalone"] .modal__dialog { border-radius: 16px; border: 1px solid var(--hairline); }
 #settingsModal .modal__body { gap: 16px; padding: 20px; }
@@ -203,9 +207,9 @@ html[data-edition="standalone"] :where(button,a,input,select,textarea):focus-vis
   html[data-edition="standalone"] .gen-toolbar .action-stack { flex-wrap: wrap; }
   html[data-edition="standalone"] .gen-toolbar .action-stack .btn { flex: 1 1 auto; padding-inline: 14px; }
   html[data-edition="standalone"] .gen-toolbar #optionsBtn { flex: 0 0 auto; padding-inline: 12px; }
-  .starter-tools { margin-top: 22px; padding-top: 16px; gap: 6px; }
-  .starter-label { flex-basis: 100%; margin-bottom: 6px; }
-  html[data-edition="standalone"] .starter-tools .btn { min-height: 40px; }
+  .starter-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 22px; padding-top: 16px; gap: 8px; }
+  .starter-label { grid-column: 1 / -1; margin-bottom: 6px; }
+  html[data-edition="standalone"] .starter-tools .btn { min-height: 44px; width: 100%; text-align: left; justify-content: flex-start; }
   html[data-edition="standalone"] footer.container nav { justify-content: center; text-align: center; gap: 16px; }
   html[data-edition="standalone"] .footer-links, .footer-source-links { justify-content: center; }
   html[data-edition="standalone"] .footer-meta { text-align: center; }
