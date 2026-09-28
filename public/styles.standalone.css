@@ -57,7 +57,8 @@ html[data-edition="standalone"] body .brand-logo {
 .edition-label { color: var(--muted); font-size: 11px; border: 1px solid var(--hairline); border-radius: 5px; padding: 2px 7px; }
 html[data-edition="standalone"] .header-actions { margin-left: auto; gap: 8px; }
 html[data-edition="standalone"] .header-actions .icon-btn {
-  display: grid; place-items: center; width: 40px; height: 40px;
+  display: grid; place-items: center; box-sizing: border-box; width: 40px; height: 40px;
+  padding: 0; line-height: 1;
   border: 1px solid transparent; border-radius: 10px;
   background: transparent; color: var(--muted); box-shadow: none; font-size: 20px;
 }
