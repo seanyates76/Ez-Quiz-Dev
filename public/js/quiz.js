@@ -10,8 +10,16 @@ const RETAKE_ALL = 'all';
 // Elements helper
 const el = (id) => $(id);
 
+function clearGeneratorToast(){
+  const toast = document.getElementById('toast');
+  if(!toast) return;
+  toast.hidden = true;
+  toast.textContent = '';
+}
+
 export function setMode(mode){
   S.mode = mode;
+  if(mode === 'quiz' || mode === 'results') clearGeneratorToast();
   const generatorCard = el('generatorCard');
   const quizView = el('quizView');
   const resultsView = el('resultsView');
