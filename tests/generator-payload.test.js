@@ -76,9 +76,9 @@ describe('buildGeneratorPayload', () => {
       topic: 'Long Notes',
       difficulty: 'medium',
       count: 5,
-      sourceText: 'A'.repeat(60010),
+      sourceText: 'A'.repeat(240010),
     });
 
-    expect(result.sourceText).toHaveLength(60000);
+    expect(result.sourceText).toHaveLength(240000);
   });
 });

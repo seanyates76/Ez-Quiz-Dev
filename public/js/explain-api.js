@@ -9,6 +9,7 @@ function makeExplainError(message, status, body) {
 }
 
 export async function requestLazyExplanation(payload, { signal, timeoutMs = DEFAULT_TIMEOUT_MS } = {}) {
+  if(typeof window !== 'undefined' && window.__EZQ__?.standalone) return window.__EZQ__.standalone.request('/api/explain', payload, { signal });
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), Math.max(5000, timeoutMs));
   const abort = () => controller.abort();

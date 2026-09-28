@@ -1,10 +1,12 @@
 import { S } from './state.js';
+import { wireStandalone } from './standalone.js?v=standalone-ui-3';
 import { $, byQSA, showUpdateBannerIfReady } from './utils.js';
 import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel } from './settings.js';
 import { wireModals } from './modals.js';
-import { wireGenerator } from './generator.js?v=1.5.45';
-import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=1.5.45';
-import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=1.5.45';
+import { wireGenerator } from './generator.js?v=standalone-ui-3';
+import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=standalone-ui-3';
+import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=standalone-ui-3';
+import { syncLearningStatus, resetLearningProfile } from './learning.js?v=standalone-ui-3';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
 function debugLog(message){
@@ -25,6 +27,9 @@ function getEls(){
     requireAnswerEl: $('requireAnswer'),
     quizEditorPrefEl: $('alwaysShowQuizEditor'),
     betaEnabledEl: $('betaEnabled'),
+    generationModeEl: $('generationMode'),
+    promptLimitEnabledEl: $('promptLimitEnabled'),
+    promptLimitCharsEl: $('promptLimitChars'),
   };
 }
 
@@ -43,6 +48,7 @@ function init(){
     window.addEventListener('resize', updateHeaderVars);
   })();
   loadSettingsFromStorage();
+  wireStandalone();
   
   const betaCookieActive = hasCookieFlag('beta');
   const betaActive = hasFlag('beta') || betaCookieActive;
@@ -70,6 +76,13 @@ function init(){
   });
   wireQuizControls();
   wireResultsControls();
+  syncLearningStatus();
+  document.getElementById('clearLearningBtn')?.addEventListener('click', () => {
+    resetLearningProfile();
+    syncLearningStatus();
+    const status = document.getElementById('learningSettingsStatus');
+    if (status) status.textContent = 'Learning profile cleared.';
+  });
 
   (function hydrateVersionDetails(){
     const PRODUCTION_VERSION = 'v3.6.0';
@@ -79,16 +92,16 @@ function init(){
     const versionLink = document.getElementById('versionInfoBtn');
     const releaseBody = document.querySelector('#releaseNotesModal .modal__body');
     const sections = releaseBody ? Array.from(releaseBody.querySelectorAll('section')) : [];
-    const productionSection = sections.find(section => section.classList.contains('release-notes--production')) || sections[0];
+    const productionSection = sections.find(section => section.classList.contains('release-notes--production'));
     const productionVersion = productionSection?.querySelector('h4')?.textContent?.trim() || PRODUCTION_VERSION;
 
     function applyVersion(mode, version){
       if(modeLabel){ modeLabel.textContent = mode; }
       if(versionLabel){ versionLabel.textContent = version; }
-      if(versionLink){ versionLink.textContent = version; }
+      if(versionLink){ versionLink.textContent = S.standalone ? 'What’s new' : version; }
     }
 
-    applyVersion('Production', productionVersion);
+    applyVersion(S.standalone ? 'Standalone preview' : 'Production', productionVersion);
 
   })();
 
@@ -114,10 +127,11 @@ function init(){
 
   // Emergency: hard-reset caches + service workers when needed
   async function hardReset() {
+    S.standalone?.forget();
     // Ensure any pending beta-triggered soft reloads are cancelled
     try { const g = (window.__EZQ__ = window.__EZQ__ || {}); g.__betaRefreshPending = false; } catch {}
 
-    try { localStorage.clear(); } catch {}
+    try { Object.keys(localStorage).filter(key => /^(ezq\.|EZQ)/.test(key)).forEach(key => localStorage.removeItem(key)); } catch {}
     try {
       // Best-effort: ask SWs to clear caches in their context
       if ('serviceWorker' in navigator) {
@@ -130,7 +144,7 @@ function init(){
     try {
       if ('caches' in window) {
         const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
+        await Promise.all(keys.filter(k => k.startsWith('ezq-')).map(k => caches.delete(k)));
       }
     } catch {}
     try {
@@ -223,6 +237,11 @@ function init(){
     async function sendFeedback(){
       if(!msg) return; const text=(msg.value||'').trim(); const em=(email?.value||'').trim();
       if(!text){ if(status) status.textContent='Message required'; return; }
+      if(S.standalone){
+        window.location.href = 'mailto:ez.quizapp@gmail.com?subject=' + encodeURIComponent('EZ Quiz feedback') + '&body=' + encodeURIComponent(text + (em ? '\n\nReply to: ' + em : ''));
+        if(status) status.textContent = 'Your email app will open a draft. Review it there before sending.';
+        return;
+      }
       const last = getLastTs(); const now=Date.now();
       if(now - last < COOLDOWN_MS){
         const remain = Math.ceil((COOLDOWN_MS - (now-last))/1000);

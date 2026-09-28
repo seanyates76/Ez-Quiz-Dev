@@ -1,6 +1,7 @@
 // EZ Quiz: lightweight auto-refresh via ETag/Last-Modified polling
 // Checks index revalidation every 30s (or on visibility) without inline scripts (CSP-safe)
 (function(){
+  if(document.documentElement.dataset.edition === 'standalone') return;
   const CHECK_INTERVAL = 30000; // 30s (more responsive on mobile shortcuts)
   let currentTag = null;
   let reloadedOnControllerChange = false;

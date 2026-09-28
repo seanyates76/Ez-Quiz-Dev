@@ -23,6 +23,9 @@ export function saveSettingsToStorage(){
       durationMs: Number(S.settings.durationMs||0),
       autoStart: !!S.settings.autoStart,
       requireAnswer: !!S.settings.requireAnswer,
+      generationMode: S.settings.generationMode === 'lite' ? 'lite' : 'full',
+      promptLimitEnabled: !!S.settings.promptLimitEnabled,
+      promptLimitChars: Math.max(60000, Math.min(240000, Number(S.settings.promptLimitChars) || 120000)),
       betaEnabled: !!S.settings.betaEnabled,
     }));
   }catch{}
@@ -33,6 +36,9 @@ export function loadSettingsFromStorage(){
   try{ const raw=localStorage.getItem(STORAGE_KEYS.settings); if(raw){ const obj=JSON.parse(raw);
     S.settings.timerEnabled=!!obj.timerEnabled; S.settings.countdown=!!obj.countdown; S.settings.durationMs=Number(obj.durationMs||0);
     if(obj.autoStart!==undefined) S.settings.autoStart=!!obj.autoStart; S.settings.requireAnswer=!!obj.requireAnswer;
+    if(obj.generationMode === 'lite' || obj.generationMode === 'full') S.settings.generationMode = obj.generationMode;
+    if(obj.promptLimitEnabled !== undefined) S.settings.promptLimitEnabled = !!obj.promptLimitEnabled;
+    if(obj.promptLimitChars !== undefined) S.settings.promptLimitChars = Math.max(60000, Math.min(240000, Number(obj.promptLimitChars) || 120000));
     if(obj.betaEnabled!==undefined) S.settings.betaEnabled=!!obj.betaEnabled; } }catch{}
   if(hasFlag('beta')){
     S.settings.betaEnabled = true;
@@ -163,6 +169,10 @@ export function reflectSettingsIntoUI(els){
   if(els.requireAnswerEl) els.requireAnswerEl.checked=!!S.settings.requireAnswer;
   if(els.quizEditorPrefEl) els.quizEditorPrefEl.checked=!!S.settings.showQuizEditor;
   if(els.betaEnabledEl) els.betaEnabledEl.checked=!!S.settings.betaEnabled;
+  if(els.generationModeEl) els.generationModeEl.value=S.settings.generationMode === 'lite' ? 'lite' : 'full';
+  if(els.promptLimitEnabledEl) els.promptLimitEnabledEl.checked=!!S.settings.promptLimitEnabled;
+  if(els.promptLimitCharsEl) els.promptLimitCharsEl.value=String(S.settings.promptLimitChars || 120000);
+  if(els.promptLimitCharsEl) els.promptLimitCharsEl.disabled=!S.settings.promptLimitEnabled;
 }
 
 export function wireSettingsPanel(els){
@@ -172,6 +182,9 @@ export function wireSettingsPanel(els){
   els.timerDurationEl?.addEventListener('input', ()=>{ S.settings.durationMs=mmSsToMs(els.timerDurationEl.value); saveSettingsToStorage(); });
   els.autoStartEl?.addEventListener('change', ()=>{ S.settings.autoStart=!!els.autoStartEl.checked; saveSettingsToStorage(); });
   els.requireAnswerEl?.addEventListener('change', ()=>{ S.settings.requireAnswer=!!els.requireAnswerEl.checked; saveSettingsToStorage(); });
+  els.generationModeEl?.addEventListener('change', ()=>{ S.settings.generationMode=els.generationModeEl.value === 'lite' ? 'lite' : 'full'; saveSettingsToStorage(); });
+  els.promptLimitEnabledEl?.addEventListener('change', ()=>{ S.settings.promptLimitEnabled=!!els.promptLimitEnabledEl.checked; if(els.promptLimitCharsEl) els.promptLimitCharsEl.disabled=!S.settings.promptLimitEnabled; saveSettingsToStorage(); });
+  els.promptLimitCharsEl?.addEventListener('change', ()=>{ S.settings.promptLimitChars=Math.max(60000, Math.min(240000, Number(els.promptLimitCharsEl.value) || 120000)); saveSettingsToStorage(); });
   els.quizEditorPrefEl?.addEventListener('change', ()=>{
     S.settings.showQuizEditor = !!els.quizEditorPrefEl.checked;
     try{

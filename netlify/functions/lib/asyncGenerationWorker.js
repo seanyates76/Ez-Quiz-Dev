@@ -240,6 +240,10 @@ async function runGenerateBatch(job, batch, state) {
     model: options.model,
     sourceName: options.sourceName,
     sourceText: batch.sourceText || '',
+    learningProfile: options.learningProfile,
+    generationMode: options.generationMode,
+    promptLimitEnabled: options.promptLimitEnabled,
+    promptLimitChars: options.promptLimitChars,
     avoidStems: state.avoidStems.slice(-60),
     format: 'legacy-lines',
   };

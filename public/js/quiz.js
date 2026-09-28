@@ -1,6 +1,7 @@
 import { S } from './state.js';
+import { recordQuizAttempt, syncLearningStatus } from './learning.js?v=standalone-ui-3';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=1.5.45';
+import { requestLazyExplanation } from './explain-api.js?v=standalone-ui-3';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
@@ -9,8 +10,16 @@ const RETAKE_ALL = 'all';
 // Elements helper
 const el = (id) => $(id);
 
+function clearGeneratorToast(){
+  const toast = document.getElementById('toast');
+  if(!toast) return;
+  toast.hidden = true;
+  toast.textContent = '';
+}
+
 export function setMode(mode){
   S.mode = mode;
+  if(mode === 'quiz' || mode === 'results') clearGeneratorToast();
   const generatorCard = el('generatorCard');
   const quizView = el('quizView');
   const resultsView = el('resultsView');
@@ -84,7 +93,7 @@ export function renderCurrentQuestion(){
     html += `<div class="options"><label class="opt"><input type="radio" name="yn" data-bool="true" ${yChecked}/> Yes</label><label class="opt"><input type="radio" name="yn" data-bool="false" ${nChecked}/> No</label></div>`;
   } else if(q.type==='MT'){
     const user=Array.isArray(S.quiz.answers[S.quiz.index])?S.quiz.answers[S.quiz.index]:new Array(q.left.length).fill(-1);
-    html += `<div class="mtwrap">` + q.left.map((L,li)=>{ return `<div class="mtrow"><div class="mtleft">${escapeHTML(L)}</div><div class="mtright"><select data-li="${li}"><option value="">— choose —</option>${q.right.map((R,ri)=> `<option value="${ri}" ${user[li]===ri?'selected':''}>${String.fromCharCode(65+ri)}) ${escapeHTML(R)}</option>`).join('')}</select></div></div>`; }).join('') + `</div>`;
+    html += `<div class="mtwrap">` + q.left.map((L,li)=>{ return `<div class="mtrow"><div class="mtleft" id="mt-label-${li}">${escapeHTML(L)}</div><div class="mtright"><select data-li="${li}" aria-labelledby="mt-label-${li}"><option value="">— choose —</option>${q.right.map((R,ri)=> `<option value="${ri}" ${user[li]===ri?'selected':''}>${String.fromCharCode(65+ri)}) ${escapeHTML(R)}</option>`).join('')}</select></div></div>`; }).join('') + `</div>`;
   }
   html += `</div>`; questionHost.innerHTML = html;
   // Progressbar in the body
@@ -171,6 +180,8 @@ export function finishQuiz(auto=false){
     if(Number.isInteger(oi) && oi>=0 && oi<baseLen){ S.quiz.originalAnswers[oi] = ans[i]; }
   }
   S.quiz.score=score;
+  recordQuizAttempt({ topic: S.quiz.topic, questions: qs, answers: ans, compare: compareQA });
+  syncLearningStatus();
   renderResults();
   setMode('results');
 }

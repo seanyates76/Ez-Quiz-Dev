@@ -189,6 +189,10 @@ async function handleGenerateQuiz(event, options = {}) {
     count,
     sourceText,
     sourceName,
+    learningProfile,
+    generationMode,
+    promptLimitEnabled,
+    promptLimitChars,
     types,
     difficulty,
     provider,
@@ -198,7 +202,8 @@ async function handleGenerateQuiz(event, options = {}) {
     wantsStructured,
   } = normalized;
   const laneContract = trustedInternalRequest ? safeInternalLaneContract(options.laneContract) : null;
-  const structuredPrompt = wantsStructured ? buildStructuredPrompt(topic, count, types, difficulty, sourceText) : null;
+  const promptSource = promptLimitEnabled ? sourceText.slice(0, promptLimitChars) : sourceText;
+  const structuredPrompt = wantsStructured ? buildStructuredPrompt(topic, count, types, difficulty, promptSource, learningProfile, generationMode) : null;
   // [quiz-v2: hook] structured payload remains opt-in; default path keeps legacy lines for compatibility.
 
   function buildStructuredResponse({ quiz, provider: providerName, model: modelName, fallbackUsed = false, fallbackFrom, errorPrimary }) {
@@ -289,7 +294,7 @@ async function handleGenerateQuiz(event, options = {}) {
   try {
     if(wantsStructured){
       const primary = await withTimeout(
-        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText, timeoutMs: providerCallTimeoutMs }),
+        callProvider({ provider, model, topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText: promptSource, learningProfile, generationMode, timeoutMs: providerCallTimeoutMs }),
         TIMEOUT_MS
       );
       const quiz = normalizeQuizV2(primary.text, { topic, count, types });
@@ -301,7 +306,7 @@ async function handleGenerateQuiz(event, options = {}) {
       };
     }
 
-    const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, laneContract, env: process.env });
+    const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText: promptSource, avoidStems, laneContract, learningProfile, generationMode, env: process.env });
     return {
       statusCode: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -321,7 +326,7 @@ async function handleGenerateQuiz(event, options = {}) {
       if (canFallbackToGemini && !isTimeout) {
         try {
           const fallback = await withTimeout(
-            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText, timeoutMs: providerCallTimeoutMs }),
+            callProvider({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, env: process.env, prompt: structuredPrompt, kind: 'structured', sourceText: promptSource, learningProfile, generationMode, timeoutMs: providerCallTimeoutMs }),
             TIMEOUT_MS
           );
           const fallbackLen = typeof fallback.text === 'string' ? fallback.text.length : 0;
@@ -365,7 +370,7 @@ async function handleGenerateQuiz(event, options = {}) {
 
       // Structured path failed entirely; fall back to legacy generator so the UI still renders a quiz.
       try {
-        const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText, avoidStems, laneContract, env: process.env });
+        const result = await runGeneratorExact({ provider, model, topic, count, types, difficulty, sourceText: promptSource, avoidStems, laneContract, learningProfile, generationMode, env: process.env });
         console.warn('[quiz-v2]', { reason: 'structured-fallback-legacy' });
         return {
           statusCode: 200,
@@ -385,7 +390,7 @@ async function handleGenerateQuiz(event, options = {}) {
 
     if (canFallbackToGemini && !isTimeout) {
       try {
-        const result = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText, avoidStems, laneContract, env: process.env });
+        const result = await runGeneratorExact({ provider: 'gemini', model: process.env.GEMINI_MODEL || 'gemini-2.5-flash-lite-preview-09-2025', topic, count, types, difficulty, sourceText: promptSource, avoidStems, laneContract, learningProfile, generationMode, env: process.env });
         return {
           statusCode: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },

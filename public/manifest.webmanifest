@@ -1,7 +1,7 @@
 {
-  "name": "EZ Quiz Web",
+  "name": "EZ Quiz · Standalone",
   "short_name": "EZQuiz",
-  "description": "An offline quiz app supporting multiple‑choice, true/false, yes/no, and matching formats.",
+  "description": "Create, keep, and practice your own quizzes. Optional AI with your own key.",
   "icons": [
     {
       "src": "icons/icon-192.png",
@@ -30,7 +30,7 @@
   ],
   "start_url": "index.html",
   "display": "standalone",
-  "theme_color": "#2c2c2c",
-  "background_color": "#222",
+  "theme_color": "#171b24",
+  "background_color": "#171b24",
   "scope": "./"
 }

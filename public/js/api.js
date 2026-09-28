@@ -268,6 +268,7 @@ function stripSignalOption(opts = {}){
 }
 
 export function shouldUseAsyncGeneration(count, opts = {}){
+  if(typeof window !== 'undefined' && window.__EZQ__?.standalone) return false;
   const requested = toPositiveCount(count);
   const sourceText = String(opts && opts.sourceText || '').trim();
   if(!sourceText) return false;
@@ -736,6 +737,10 @@ function isZeroQuestionUnderCountError(err, expected){
 }
 
 async function postGenerate(topic, count, opts = {}){
+  if(typeof window !== 'undefined' && window.__EZQ__?.standalone){
+    const { signal, sourceReport, onProgress, ...requestOpts } = opts;
+    return window.__EZQ__.standalone.request('/api/generate', { topic, count, ...requestOpts }, { signal });
+  }
   const upstreamSignal = opts && opts.signal;
   const requestOpts = stripClientOnlyOptions(opts);
   const payload = JSON.stringify({ topic, count, ...requestOpts });
@@ -1024,6 +1029,7 @@ async function generateSectionLargeSourceWithAI(topic, requested, opts, sectionP
       if(collected.length >= requested) break;
       collected.push(line);
     }
+    if(typeof opts.onProgress === 'function') opts.onProgress(collected.length);
 
     if(collected.length === beforeCount){
       const retry = buildSectionZeroLineRetry(planned, sectionPlan);
@@ -1081,6 +1087,7 @@ async function generateChunkedLargeSourceWithAI(topic, requested, opts = {}){
       if(collected.length >= requested) break;
       collected.push(line);
     }
+    if(typeof opts.onProgress === 'function') opts.onProgress(collected.length);
   }
 
   if(collected.length !== requested){
@@ -1131,6 +1138,7 @@ async function generateTopicOnlyWithAI(topic, count, opts = {}){
       if(collected.length >= requested) break;
       collected.push(line);
     }
+    if(typeof opts.onProgress === 'function') opts.onProgress(collected.length);
   }
 
   if(collected.length !== requested){
