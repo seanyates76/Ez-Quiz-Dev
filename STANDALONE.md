@@ -27,6 +27,10 @@ Settings contains the provider, model ID, and API key. Keys are saved in this br
 
 API usage is billed to your account according to provider terms. Generation uses small batches with bounded fill attempts, which can incur multiple charges. Stopping prevents new batches and aborts the local request, but work already processed by the provider may still be billed.
 
+## Hosted preview
+
+The web preview now supports AI setup without a passphrase. Remember key is checked by default. Hosted requests forward your per-request key and study material through the EZ Quiz service to the chosen provider; the service does not log or persist request bodies. Running locally retains the local-only transport described below.
+
 ## Imports and offline use
 
 | Capability | Requirement |

@@ -103,3 +103,24 @@ test('unavailable storage reports single-visit use rather than claiming a save',
   expect(el('aiConnectionStatus').textContent).toContain('key ready');
   storage.mockRestore();
 });
+
+test('hosted AI setup is enabled, remembers the key, and calls the BYOK endpoint without an unlock step', async () => {
+  const source = readFile('public/js/standalone.js').replace(/^import[^\n]+\n/, '').replace(/export /g, '');
+  const hosted = new Function('S', 'location', source + '\nreturn { wireStandalone, localRequest };')({}, { protocol: 'https:', hostname: 'deploy-preview-84--ez-quiz.netlify.app' });
+  hosted.wireStandalone();
+  for (const id of ['aiProvider', 'aiModel', 'aiKey', 'aiSave', 'aiLoadModels']) expect(el(id).disabled).toBe(false);
+  expect(el('aiRemember').checked).toBe(true);
+  el('aiKey').value = 'hosted-fake-test-key';
+  el('aiSave').click();
+  expect(localStorage.getItem('ezq.ai.key')).toBe('hosted-fake-test-key');
+  el('aiKey').value = '';
+  hosted.wireStandalone();
+  expect(el('aiKey').value).toBe('hosted-fake-test-key');
+  global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ models: ['gemini-test'] }) }));
+  await hosted.localRequest('/api/models', {});
+  expect(fetch).toHaveBeenCalledTimes(1);
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe('/.netlify/functions/standalone-ai');
+  expect(options.headers).not.toHaveProperty('X-EZQ-Token');
+  expect(JSON.parse(options.body)).toEqual({ route: '/api/models', connection: { provider: 'gemini', model: 'gemini-3.5-flash-lite', apiKey: 'hosted-fake-test-key' } });
+});

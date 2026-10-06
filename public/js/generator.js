@@ -9,17 +9,17 @@ import {
   startAsyncGeneration,
   stopAsyncGeneration,
   triggerAsyncGeneration,
-} from './api.js?v=standalone-ui-3';
+} from './api.js?v=standalone-ai-4';
 import { ImportController } from './import-controller.js';
 import { sniffFileKind, isSupportedImportKind, hasImportMetadataMismatch } from './file-type-validation.js';
 import { validateMediaImportSize } from './media-import-constraints.js';
 import { attachDragDrop } from './drag-drop.js';
-import { announce } from './a11y-announcer.js?v=standalone-ui-3';
-import { buildGeneratorPayload } from './generator-payload.js?v=standalone-ui-3';
-import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=standalone-ui-3';
+import { announce } from './a11y-announcer.js?v=standalone-ai-4';
+import { buildGeneratorPayload } from './generator-payload.js?v=standalone-ai-4';
+import { analyzeSourceText, formatSourceSectionSummary, summarizeSourceReport } from './source-sections.js?v=standalone-ai-4';
 import { applyTheme, saveSettingsToStorage, getShowQuizEditorPreference } from './settings.js';
 import { STORAGE_KEYS } from './state.js';
-import { getLearningProfile } from './learning.js?v=standalone-ui-3';
+import { getLearningProfile } from './learning.js?v=standalone-ai-4';
 
 // Keep reference to drag/drop wiring so re-init can dispose previous listeners
 let __topicAffixDragHandle = null;

@@ -1,7 +1,7 @@
 import { S } from './state.js';
-import { recordQuizAttempt, syncLearningStatus } from './learning.js?v=standalone-ui-3';
+import { recordQuizAttempt, syncLearningStatus } from './learning.js?v=standalone-ai-4';
 import { $, byQSA, clamp, formatDuration, escapeHTML, indexesToLetters, arraysEqual, formatTopicLabel, mmSsToMs, showUpdateBannerIfReady, bindOnce, showToastNear } from './utils.js';
-import { requestLazyExplanation } from './explain-api.js?v=standalone-ui-3';
+import { requestLazyExplanation } from './explain-api.js?v=standalone-ai-4';
 
 // Retake scope constants
 const RETAKE_MISSED = 'missed';
