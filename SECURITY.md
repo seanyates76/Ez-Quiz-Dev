@@ -18,7 +18,9 @@ EZ Quiz 4.0 adds a local standalone path. The latest main remains the developmen
 
 ## Hosted preview AI
 
-The web preview also accepts user-supplied Gemini/OpenAI keys without a passphrase. Remember key is checked by default and stores the key in that browser's localStorage; Forget key removes it. Hosted requests pass through the same-origin standalone-ai Netlify function to the fixed provider endpoints. The function uses only the key supplied with that request, does not log or persist its body, redacts provider errors, and returns no-store responses. The local launcher's Host/Origin/token boundary is unchanged; hosted requests instead require same-origin HTTPS JSON and have a 25-second provider deadline.
+The web preview also accepts user-supplied Gemini/OpenAI keys without a passphrase. Remember key is checked by default and stores the key in that browser's localStorage; Forget key removes it. Hosted requests pass through the same-origin standalone-ai Netlify function to the fixed provider endpoints. The function uses the key supplied with that request, or the server-only shared OpenAI key on Preview #84, does not log or persist its body, redacts provider errors, and returns no-store responses. The local launcher's Host/Origin/token boundary is unchanged; hosted requests instead require same-origin HTTPS JSON and have a 25-second provider deadline.
+
+Shared preview access reads `ezq_bmok_shared` from the function runtime only. The build bundles a non-secret policy enabled solely for deploy-preview PR 84 on `preview/adaptive-learning-profile`; requests must also target its exact preview hostname. Production, branch deploys, and other PR previews cannot use this key. `/api/connection` exposes only availability, provider, and model. Visitors never receive or store the shared key.
 
 ## What these controls do not promise
 

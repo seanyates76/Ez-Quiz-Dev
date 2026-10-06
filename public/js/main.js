@@ -1,12 +1,12 @@
 import { S } from './state.js';
-import { wireStandalone } from './standalone.js?v=standalone-ai-4';
+import { wireStandalone } from './standalone.js?v=standalone-shared-5';
 import { $, byQSA, showUpdateBannerIfReady } from './utils.js';
 import { loadSettingsFromStorage, applyTheme, reflectSettingsIntoUI, wireSettingsPanel } from './settings.js';
 import { wireModals } from './modals.js';
-import { wireGenerator } from './generator.js?v=standalone-ai-4';
-import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=standalone-ai-4';
-import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=standalone-ai-4';
-import { syncLearningStatus, resetLearningProfile } from './learning.js?v=standalone-ai-4';
+import { wireGenerator } from './generator.js?v=standalone-shared-5';
+import { dismissLandingIntro, wireLandingIntro } from './landing-intro.js?v=standalone-shared-5';
+import { setMode, beginQuiz, renderCurrentQuestion, updateNavButtons, updateProgress, wireQuizControls, wireResultsControls, pauseTimerIfQuiz, resumeTimerIfQuiz, syncSettingsFromUI, syncExplainButtonsVisibility } from './quiz.js?v=standalone-shared-5';
+import { syncLearningStatus, resetLearningProfile } from './learning.js?v=standalone-shared-5';
 import { has as hasFlag, hasCookie as hasCookieFlag } from './flags.js';
 
 function debugLog(message){

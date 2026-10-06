@@ -7,12 +7,12 @@
   <meta name="description" content="Your own study space. Create, import, practice, and keep your quizzes. Optional AI with your own key." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" />
-  <script src="js/theme-preload.js?v=standalone-ai-4"></script>
-  <link rel="stylesheet" href="styles.css?v=standalone-ai-4" />
-  <link rel="stylesheet" href="/styles.tokens.css?v=standalone-ai-4">
-  <link rel="stylesheet" href="/styles.backdrop.css?v=standalone-ai-4">
-  <script src="js/boot-beta.js?v=standalone-ai-4"></script>
-  <link rel="stylesheet" href="styles.standalone.css?v=standalone-ai-4" />
+  <script src="js/theme-preload.js?v=standalone-shared-5"></script>
+  <link rel="stylesheet" href="styles.css?v=standalone-shared-5" />
+  <link rel="stylesheet" href="/styles.tokens.css?v=standalone-shared-5">
+  <link rel="stylesheet" href="/styles.backdrop.css?v=standalone-shared-5">
+  <script src="js/boot-beta.js?v=standalone-shared-5"></script>
+  <link rel="stylesheet" href="styles.standalone.css?v=standalone-shared-5" />
 </head>
 <body>
   <a class="skip-link" href="#generatorCard">Skip to quiz builder</a>
@@ -523,7 +523,7 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
       <div class="modal__body">
         <fieldset class="fieldgroup ai-fieldgroup">
           <legend>Your AI connection</legend>
-          <p class="muted small">Choose a provider and add your key to start creating quizzes. Remember key saves it in this browser. You can also run the <a href="standalone.html">local edition</a>.</p>
+          <p id="aiConnectionHelp" class="muted small">Choose a provider and add your key to start creating quizzes. Remember key saves it in this browser. You can also run the <a href="standalone.html">local edition</a>.</p>
           <div class="ai-fields">
             <label for="aiProvider">Provider<select id="aiProvider"><option value="gemini">Google Gemini</option><option value="openai">OpenAI</option></select></label>
             <label for="aiModel">Model<input id="aiModel" type="text" list="aiModels" autocomplete="off" spellcheck="false" /><datalist id="aiModels"></datalist></label>
@@ -745,9 +745,9 @@ MT|Prompt.|1) L1;2) L2|A) R1;B) R2|1-A,2-B</pre>
 
   
 
-  <script type="module" src="js/main.js?v=standalone-ai-4"></script>
-  <script type="module" src="js/auto-refresh.js?v=standalone-ai-4"></script>
-  <script type="module" src="js/patches.js?v=standalone-ai-4"></script>
+  <script type="module" src="js/main.js?v=standalone-shared-5"></script>
+  <script type="module" src="js/auto-refresh.js?v=standalone-shared-5"></script>
+  <script type="module" src="js/patches.js?v=standalone-shared-5"></script>
 
   <!-- Toast (status/live region) -->
   <div id="toast" role="status" aria-live="polite" hidden></div>

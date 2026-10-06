@@ -29,7 +29,7 @@ API usage is billed to your account according to provider terms. Generation uses
 
 ## Hosted preview
 
-The web preview now supports AI setup without a passphrase. Remember key is checked by default. Hosted requests forward your per-request key and study material through the EZ Quiz service to the chosen provider; the service does not log or persist request bodies. Running locally retains the local-only transport described below.
+The web preview now supports AI setup without a passphrase. Remember key is checked by default. Hosted requests forward your per-request key and study material through the EZ Quiz service to the chosen provider; the service does not log or persist request bodies. Preview #84 additionally offers shared OpenAI access without a visitor key. The shared key stays in the Netlify function; an explicitly saved personal key takes precedence. Running locally retains the local-only transport described below.
 
 ## Imports and offline use
 

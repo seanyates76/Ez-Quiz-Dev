@@ -1,6 +1,14 @@
 'use strict';
 
 const { handleApi } = require('../../standalone/server.cjs');
+const previewPolicy = require('./lib/shared-preview.json');
+
+function sharedConnection(host) {
+  if (!previewPolicy.enabled || host !== previewPolicy.hostname) return null;
+  const apiKey = (process.env.ezq_bmok_shared || '').trim();
+  if (!apiKey) return null;
+  return { provider: 'openai', model: 'gpt-4.1-mini', apiKey };
+}
 
 const ROUTES = new Set(['/api/models', '/api/generate', '/api/explain', '/api/import']);
 const MAX_BODY_BYTES = 6 * 1024 * 1024;
@@ -31,8 +39,16 @@ exports.handler = async (event) => {
   let payload;
   try { payload = JSON.parse(body); } catch { return reply(400, { error: 'The request is not valid JSON.' }); }
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return reply(400, { error: 'Expected an object.' });
-  const { route, ...input } = payload;
+  const { route, useShared, ...input } = payload;
+  const shared = sharedConnection(headers.host);
+  if (route === '/api/connection') {
+    return reply(200, { shared: shared ? { provider: shared.provider, model: shared.model } : null });
+  }
   if (!ROUTES.has(route)) return reply(404, { error: 'Endpoint not found.' });
+  if (useShared === true && !input.connection?.apiKey) {
+    if (!shared) return reply(403, { error: 'Shared AI is unavailable on this deployment. Add your own key in AI settings.' });
+    input.connection = shared;
+  }
   const signal = AbortSignal.timeout(25000);
   try {
     return reply(200, await handleApi(route, input, { fetchImpl: fetch, signal }));
