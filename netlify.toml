@@ -1,6 +1,5 @@
 [build]
   publish = "public"
-  command = "node standalone/prepare-preview.cjs"
   # Build every production mirror commit. Netlify's cached base ref is not
   # guaranteed to exist in a shallow production checkout, so an ignore command
   # can fail before the actual build starts.

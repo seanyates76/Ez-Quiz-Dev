@@ -4,8 +4,6 @@
 const { handler } = require('../standalone-ai.js');
 const connection = { provider: 'gemini', model: 'gemini-test', apiKey: 'fake-key-for-tests-only' };
 const originalFetch = global.fetch;
-const previewPolicy = require('../lib/shared-preview.json');
-const originalPolicy = { ...previewPolicy };
 const originalSharedKey = process.env.ezq_bmok_shared;
 const event = (payload, headers = {}) => ({
   httpMethod: 'POST',
@@ -13,14 +11,14 @@ const event = (payload, headers = {}) => ({
   body: JSON.stringify(payload),
 });
 
+beforeEach(() => { delete process.env.ezq_bmok_shared; });
+
 afterEach(() => {
   global.fetch = originalFetch;
-  Object.assign(previewPolicy, originalPolicy);
   if (originalSharedKey === undefined) delete process.env.ezq_bmok_shared;
   else process.env.ezq_bmok_shared = originalSharedKey;
 });
 function enableShared() {
-  previewPolicy.enabled = true;
   process.env.ezq_bmok_shared = 'sk-fake-shared-key-tests-only';
 }
 
@@ -108,16 +106,13 @@ test.each(['ez-quiz.netlify.app', 'ez-quiz.app', 'deploy-preview-85--ez-quiz.net
   expect(fetch).not.toHaveBeenCalled();
 });
 
-test('a non-preview build or absent runtime key disables shared access even on the preview host', async () => {
+test('an absent runtime key disables shared access on the preview host', async () => {
   enableShared();
   global.fetch = jest.fn();
-  previewPolicy.enabled = false;
-  expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body)).toMatchObject({ shared: null });
-  expect((await handler(event({ route: '/api/models', useShared: true }))).statusCode).toBe(403);
-  previewPolicy.enabled = true;
   delete process.env.ezq_bmok_shared;
   expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body)).toMatchObject({ shared: null });
   expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body).unavailable).toBe('missing-runtime-key');
+  expect((await handler(event({ route: '/api/models', useShared: true }))).statusCode).toBe(403);
   expect(fetch).not.toHaveBeenCalled();
 });
 

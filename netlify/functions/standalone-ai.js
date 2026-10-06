@@ -1,10 +1,10 @@
 'use strict';
 
 const { handleApi } = require('../../standalone/server.cjs');
-const previewPolicy = require('./lib/shared-preview.json');
+const SHARED_PREVIEW_HOST = 'deploy-preview-84--ez-quiz.netlify.app';
 
 function sharedConnection(host) {
-  if (!previewPolicy.enabled || host !== previewPolicy.hostname) return null;
+  if (host !== SHARED_PREVIEW_HOST) return null;
   const apiKey = (process.env.ezq_bmok_shared || '').trim();
   if (!apiKey) return null;
   return { provider: 'openai', model: 'gpt-4.1-mini', apiKey };
@@ -44,7 +44,7 @@ exports.handler = async (event) => {
   if (route === '/api/connection') {
     return reply(200, shared
       ? { shared: { provider: shared.provider, model: shared.model } }
-      : { shared: null, unavailable: !previewPolicy.enabled ? 'deployment-disabled' : headers.host !== previewPolicy.hostname ? 'outside-preview' : 'missing-runtime-key' });
+      : { shared: null, unavailable: headers.host !== SHARED_PREVIEW_HOST ? 'outside-preview' : 'missing-runtime-key' });
   }
   if (!ROUTES.has(route)) return reply(404, { error: 'Endpoint not found.' });
   if (useShared === true && !input.connection?.apiKey) {
