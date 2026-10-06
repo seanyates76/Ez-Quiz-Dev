@@ -42,7 +42,9 @@ exports.handler = async (event) => {
   const { route, useShared, ...input } = payload;
   const shared = sharedConnection(headers.host);
   if (route === '/api/connection') {
-    return reply(200, { shared: shared ? { provider: shared.provider, model: shared.model } : null });
+    return reply(200, shared
+      ? { shared: { provider: shared.provider, model: shared.model } }
+      : { shared: null, unavailable: !previewPolicy.enabled ? 'deployment-disabled' : headers.host !== previewPolicy.hostname ? 'outside-preview' : 'missing-runtime-key' });
   }
   if (!ROUTES.has(route)) return reply(404, { error: 'Endpoint not found.' });
   if (useShared === true && !input.connection?.apiKey) {

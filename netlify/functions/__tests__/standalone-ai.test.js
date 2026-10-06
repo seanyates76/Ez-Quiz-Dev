@@ -103,7 +103,7 @@ test.each(['ez-quiz.netlify.app', 'ez-quiz.app', 'deploy-preview-85--ez-quiz.net
   enableShared();
   global.fetch = jest.fn();
   const headers = { host, origin: 'https://' + host };
-  expect(JSON.parse((await handler(event({ route: '/api/connection' }, headers))).body)).toEqual({ shared: null });
+  expect(JSON.parse((await handler(event({ route: '/api/connection' }, headers))).body)).toMatchObject({ shared: null });
   expect((await handler(event({ route: '/api/models', useShared: true }, headers))).statusCode).toBe(403);
   expect(fetch).not.toHaveBeenCalled();
 });
@@ -112,11 +112,12 @@ test('a non-preview build or absent runtime key disables shared access even on t
   enableShared();
   global.fetch = jest.fn();
   previewPolicy.enabled = false;
-  expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body)).toEqual({ shared: null });
+  expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body)).toMatchObject({ shared: null });
   expect((await handler(event({ route: '/api/models', useShared: true }))).statusCode).toBe(403);
   previewPolicy.enabled = true;
   delete process.env.ezq_bmok_shared;
-  expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body)).toEqual({ shared: null });
+  expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body)).toMatchObject({ shared: null });
+  expect(JSON.parse((await handler(event({ route: '/api/connection' }))).body).unavailable).toBe('missing-runtime-key');
   expect(fetch).not.toHaveBeenCalled();
 });
 
